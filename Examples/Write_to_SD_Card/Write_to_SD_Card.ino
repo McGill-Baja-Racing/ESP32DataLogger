@@ -58,6 +58,19 @@ void setup(){
     
     Serial.printf("Total space: %lluMB\r\n", SD_MMC.totalBytes() / (1024 * 1024));
     Serial.printf("Used space: %lluMB\r\n", SD_MMC.usedBytes() / (1024 * 1024));
+
+    Serial.printf("Writing file: %s\n", "data.txt");
+
+    File file = SD_MMC.open("/data.txt", FILE_WRITE);
+    if (!file) {
+      Serial.println("Failed to open file for writing");
+      return;
+    }
+    if (file.print("Test!")) {
+      Serial.println("File written");
+    } else {
+      Serial.println("Write failed");
+    }
 }
 
 void loop(){
