@@ -114,7 +114,6 @@ void loop() {
 
 void openNewFile() {
 // closing old file
-  //logFile.close();
 
   fileNumber++;
   filename[5] = fileNumber / 100 + '0';
