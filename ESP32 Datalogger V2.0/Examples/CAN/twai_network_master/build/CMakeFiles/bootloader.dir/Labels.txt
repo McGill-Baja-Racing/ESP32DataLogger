@@ -1,0 +1,13 @@
+# Target labels
+ bootloader
+# Source files and their labels
+/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/build/CMakeFiles/bootloader
+/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/build/CMakeFiles/bootloader.rule
+/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/build/CMakeFiles/bootloader-complete.rule
+/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/build/bootloader-prefix/src/bootloader-stamp/bootloader-build.rule
+/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/build/bootloader-prefix/src/bootloader-stamp/bootloader-configure.rule
+/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/build/bootloader-prefix/src/bootloader-stamp/bootloader-download.rule
+/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/build/bootloader-prefix/src/bootloader-stamp/bootloader-install.rule
+/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/build/bootloader-prefix/src/bootloader-stamp/bootloader-mkdir.rule
+/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/build/bootloader-prefix/src/bootloader-stamp/bootloader-patch.rule
+/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/build/bootloader-prefix/src/bootloader-stamp/bootloader-update.rule
