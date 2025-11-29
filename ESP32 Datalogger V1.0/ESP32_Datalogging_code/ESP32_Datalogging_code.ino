@@ -118,7 +118,6 @@ void loop() {
 }
 
 void openNewFile() {
-
   fileNumber++;
   filename[5] = fileNumber / 100 + '0';
   filename[6] = fileNumber % 100 / 10 + '0';
