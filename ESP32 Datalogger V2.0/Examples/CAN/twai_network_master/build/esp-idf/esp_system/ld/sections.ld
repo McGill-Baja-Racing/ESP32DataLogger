@@ -1,6 +1,6 @@
 /* Automatically generated file; DO NOT EDIT */
 /* Espressif IoT Development Framework Linker Script */
-/* Generated from: /Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/build/esp-idf/esp_system/ld/sections.ld.in */
+/* Generated from: /Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_master/build/esp-idf/esp_system/ld/sections.ld.in */
 
 /*
  * SPDX-FileCopyrightText: 2022 Espressif Systems (Shanghai) CO LTD

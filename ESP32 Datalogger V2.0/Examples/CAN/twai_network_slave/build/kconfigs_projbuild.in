@@ -3,4 +3,4 @@ source "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_app_format/Kconf
 source "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_rom/Kconfig.projbuild"
 source "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esptool_py/Kconfig.projbuild"
 source "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/partition_table/Kconfig.projbuild"
-source "/Users/remylaurendeau/twai_network_slave/main/Kconfig.projbuild"
+source "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_slave/main/Kconfig.projbuild"

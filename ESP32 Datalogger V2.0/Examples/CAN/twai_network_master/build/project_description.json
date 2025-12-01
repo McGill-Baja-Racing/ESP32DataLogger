@@ -1,13 +1,13 @@
 {
     "version":            "1.2",
     "project_name":       "twai_network_master",
-    "project_version":    "1",
-    "project_path":       "/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master",
+    "project_version":    "7d1f385-dirty",
+    "project_path":       "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_master",
     "idf_path":           "/Users/remylaurendeau/esp/v5.5.1/esp-idf",
-    "build_dir":          "/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/build",
-    "config_file":        "/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/sdkconfig",
+    "build_dir":          "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_master/build",
+    "config_file":        "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_master/sdkconfig",
     "config_defaults":    "",
-    "bootloader_elf":     "/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/build/bootloader/bootloader.elf",
+    "bootloader_elf":     "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_master/build/bootloader/bootloader.elf",
     "app_elf":            "twai_network_master.elf",
     "app_bin":            "twai_network_master.bin",
     "build_type":         "flash_app",
@@ -22,11 +22,11 @@
     "c_compiler":         "/Users/remylaurendeau/.espressif/tools/riscv32-esp-elf/esp-14.2.0_20241119/riscv32-esp-elf/bin/riscv32-esp-elf-gcc",
     "config_environment" : {
         "COMPONENT_KCONFIGS" : "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/driver/Kconfig;/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/efuse/Kconfig;/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_common/Kconfig;/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_ana_cmpr/Kconfig;/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_bitscrambler/Kconfig;/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_dac/Kconfig;/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_gpio/Kconfig;/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_gptimer/Kconfig;/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_i2c/Kconfig;/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_i2s/Kconfig;/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_ledc/Kconfig;/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_mcpwm/Kconfig;/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_parlio/Kconfig;/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_pcnt/Kconfig;/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_rmt/Kconfig;/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_sdm/Kconfig;/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_spi/Kconfig;/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_tsens/Kconfig;/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_twai/Kconfig;/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_uart/Kconfig;/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_usb_serial_jtag/Kconfig;/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_hw_support/Kconfig;/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_mm/Kconfig;/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_partition/Kconfig;/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_pm/Kconfig;/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_ringbuf/Kconfig;/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_rom/Kconfig;/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_security/Kconfig;/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_system/Kconfig;/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_timer/Kconfig;/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/freertos/Kconfig;/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal/Kconfig;/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/heap/Kconfig;/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/log/Kconfig;/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/mbedtls/Kconfig;/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/newlib/Kconfig;/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/pthread/Kconfig;/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/soc/Kconfig;/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/spi_flash/Kconfig",
-        "COMPONENT_KCONFIGS_PROJBUILD" : "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/bootloader/Kconfig.projbuild;/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_app_format/Kconfig.projbuild;/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_rom/Kconfig.projbuild;/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esptool_py/Kconfig.projbuild;/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/partition_table/Kconfig.projbuild;/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/main/Kconfig.projbuild"
+        "COMPONENT_KCONFIGS_PROJBUILD" : "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/bootloader/Kconfig.projbuild;/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_app_format/Kconfig.projbuild;/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_rom/Kconfig.projbuild;/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esptool_py/Kconfig.projbuild;/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/partition_table/Kconfig.projbuild;/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_master/main/Kconfig.projbuild"
     },
     "common_component_reqs": [ "cxx", "newlib", "freertos", "esp_hw_support", "heap", "log", "soc", "hal", "esp_rom", "esp_common", "esp_system", "riscv" ],
     "build_components" : [ "app_update", "bootloader", "bootloader_support", "cxx", "driver", "efuse", "esp_app_format", "esp_bootloader_format", "esp_common", "esp_driver_ana_cmpr", "esp_driver_bitscrambler", "esp_driver_dac", "esp_driver_gpio", "esp_driver_gptimer", "esp_driver_i2c", "esp_driver_i2s", "esp_driver_ledc", "esp_driver_mcpwm", "esp_driver_parlio", "esp_driver_pcnt", "esp_driver_rmt", "esp_driver_sdio", "esp_driver_sdm", "esp_driver_sdmmc", "esp_driver_sdspi", "esp_driver_spi", "esp_driver_tsens", "esp_driver_twai", "esp_driver_uart", "esp_driver_usb_serial_jtag", "esp_hw_support", "esp_mm", "esp_partition", "esp_pm", "esp_ringbuf", "esp_rom", "esp_security", "esp_system", "esp_timer", "esptool_py", "freertos", "hal", "heap", "log", "main", "mbedtls", "newlib", "partition_table", "pthread", "riscv", "sdmmc", "soc", "spi_flash", "" ],
-    "build_component_paths" : [ "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/app_update", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/bootloader", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/bootloader_support", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/cxx", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/driver", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/efuse", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_app_format", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_bootloader_format", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_common", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_ana_cmpr", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_bitscrambler", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_dac", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_gpio", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_gptimer", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_i2c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_i2s", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_ledc", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_mcpwm", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_parlio", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_pcnt", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_rmt", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_sdio", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_sdm", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_sdmmc", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_sdspi", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_spi", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_tsens", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_twai", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_uart", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_usb_serial_jtag", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_hw_support", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_mm", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_partition", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_pm", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_ringbuf", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_rom", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_security", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_system", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_timer", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esptool_py", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/freertos", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/heap", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/log", "/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/main", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/mbedtls", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/newlib", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/partition_table", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/pthread", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/riscv", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/sdmmc", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/soc", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/spi_flash", "" ],
+    "build_component_paths" : [ "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/app_update", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/bootloader", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/bootloader_support", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/cxx", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/driver", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/efuse", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_app_format", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_bootloader_format", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_common", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_ana_cmpr", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_bitscrambler", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_dac", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_gpio", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_gptimer", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_i2c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_i2s", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_ledc", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_mcpwm", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_parlio", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_pcnt", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_rmt", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_sdio", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_sdm", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_sdmmc", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_sdspi", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_spi", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_tsens", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_twai", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_uart", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_usb_serial_jtag", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_hw_support", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_mm", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_partition", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_pm", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_ringbuf", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_rom", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_security", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_system", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_timer", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esptool_py", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/freertos", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/heap", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/log", "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_master/main", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/mbedtls", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/newlib", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/partition_table", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/pthread", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/riscv", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/sdmmc", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/soc", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/spi_flash", "" ],
     "build_component_info" : {
         "app_update": {
             "alias": "idf::app_update",
@@ -39,7 +39,7 @@
             "priv_reqs": [ "esptool_py", "efuse", "spi_flash" ],
             "managed_reqs": [],
             "managed_priv_reqs": [],
-            "file": "/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/build/esp-idf/app_update/libapp_update.a",
+            "file": "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_master/build/esp-idf/app_update/libapp_update.a",
             "sources": [ "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/app_update/esp_ota_ops.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/app_update/esp_ota_app_desc.c" ],
             "include_dirs": [ "include" ]
         },
@@ -69,7 +69,7 @@
             "priv_reqs": [ "spi_flash", "mbedtls", "efuse", "heap", "esp_bootloader_format", "esp_app_format" ],
             "managed_reqs": [],
             "managed_priv_reqs": [],
-            "file": "/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/build/esp-idf/bootloader_support/libbootloader_support.a",
+            "file": "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_master/build/esp-idf/bootloader_support/libbootloader_support.a",
             "sources": [ "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/bootloader_support/src/bootloader_common.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/bootloader_support/src/bootloader_common_loader.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/bootloader_support/src/bootloader_clock_init.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/bootloader_support/src/bootloader_mem.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/bootloader_support/src/bootloader_random.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/bootloader_support/src/bootloader_efuse.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/bootloader_support/src/flash_encrypt.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/bootloader_support/src/secure_boot.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/bootloader_support/src/bootloader_random_esp32p4.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/bootloader_support/bootloader_flash/src/bootloader_flash.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/bootloader_support/bootloader_flash/src/flash_qio_mode.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/bootloader_support/bootloader_flash/src/bootloader_flash_config_esp32p4.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/bootloader_support/src/bootloader_utility.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/bootloader_support/src/flash_partitions.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/bootloader_support/src/esp_image_format.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/bootloader_support/src/bootloader_sha.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/bootloader_support/src/esp32p4/secure_boot_secure_features.c" ],
             "include_dirs": [ "include", "bootloader_flash/include" ]
         },
@@ -84,7 +84,7 @@
             "priv_reqs": [ "esp_system", "pthread" ],
             "managed_reqs": [],
             "managed_priv_reqs": [],
-            "file": "/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/build/esp-idf/cxx/libcxx.a",
+            "file": "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_master/build/esp-idf/cxx/libcxx.a",
             "sources": [ "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/cxx/cxx_exception_stubs.cpp", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/cxx/cxx_guards.cpp", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/cxx/cxx_init.cpp" ],
             "include_dirs": []
         },
@@ -99,7 +99,7 @@
             "priv_reqs": [ "efuse", "esp_timer", "esp_mm" ],
             "managed_reqs": [],
             "managed_priv_reqs": [],
-            "file": "/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/build/esp-idf/driver/libdriver.a",
+            "file": "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_master/build/esp-idf/driver/libdriver.a",
             "sources": [ "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/driver/deprecated/adc_legacy.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/driver/deprecated/adc_dma_legacy.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/driver/deprecated/timer_legacy.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/driver/i2c/i2c.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/driver/deprecated/i2s_legacy.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/driver/deprecated/mcpwm_legacy.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/driver/deprecated/pcnt_legacy.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/driver/deprecated/rmt_legacy.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/driver/deprecated/sigma_delta_legacy.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/driver/deprecated/rtc_temperature_legacy.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/driver/twai/twai.c" ],
             "include_dirs": [ "deprecated", "i2c/include", "touch_sensor/include", "twai/include" ]
         },
@@ -114,7 +114,7 @@
             "priv_reqs": [ "bootloader_support", "soc", "spi_flash", "esp_system", "esp_partition", "esp_app_format" ],
             "managed_reqs": [],
             "managed_priv_reqs": [],
-            "file": "/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/build/esp-idf/efuse/libefuse.a",
+            "file": "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_master/build/esp-idf/efuse/libefuse.a",
             "sources": [ "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/efuse/esp32p4/esp_efuse_table.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/efuse/esp32p4/esp_efuse_fields.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/efuse/esp32p4/esp_efuse_rtc_calib.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/efuse/esp32p4/esp_efuse_utility.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/efuse/src/esp_efuse_api.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/efuse/src/esp_efuse_fields.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/efuse/src/esp_efuse_utility.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/efuse/src/efuse_controller/keys/with_key_purposes/esp_efuse_api_key.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/efuse/src/esp_efuse_startup.c" ],
             "include_dirs": [ "include", "esp32p4/include" ]
         },
@@ -129,7 +129,7 @@
             "priv_reqs": [],
             "managed_reqs": [],
             "managed_priv_reqs": [],
-            "file": "/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/build/esp-idf/esp_app_format/libesp_app_format.a",
+            "file": "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_master/build/esp-idf/esp_app_format/libesp_app_format.a",
             "sources": [ "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_app_format/esp_app_desc.c" ],
             "include_dirs": [ "include" ]
         },
@@ -144,7 +144,7 @@
             "priv_reqs": [],
             "managed_reqs": [],
             "managed_priv_reqs": [],
-            "file": "/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/build/esp-idf/esp_bootloader_format/libesp_bootloader_format.a",
+            "file": "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_master/build/esp-idf/esp_bootloader_format/libesp_bootloader_format.a",
             "sources": [ "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_bootloader_format/esp_bootloader_desc.c" ],
             "include_dirs": [ "include" ]
         },
@@ -159,7 +159,7 @@
             "priv_reqs": [],
             "managed_reqs": [],
             "managed_priv_reqs": [],
-            "file": "/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/build/esp-idf/esp_common/libesp_common.a",
+            "file": "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_master/build/esp-idf/esp_common/libesp_common.a",
             "sources": [ "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_common/src/esp_err_to_name.c" ],
             "include_dirs": [ "include" ]
         },
@@ -174,7 +174,7 @@
             "priv_reqs": [ "esp_pm", "esp_driver_gpio" ],
             "managed_reqs": [],
             "managed_priv_reqs": [],
-            "file": "/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/build/esp-idf/esp_driver_ana_cmpr/libesp_driver_ana_cmpr.a",
+            "file": "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_master/build/esp-idf/esp_driver_ana_cmpr/libesp_driver_ana_cmpr.a",
             "sources": [ "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_ana_cmpr/ana_cmpr.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_ana_cmpr/ana_cmpr_etm.c" ],
             "include_dirs": [ "include" ]
         },
@@ -189,7 +189,7 @@
             "priv_reqs": [ "esp_mm" ],
             "managed_reqs": [],
             "managed_priv_reqs": [],
-            "file": "/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/build/esp-idf/esp_driver_bitscrambler/libesp_driver_bitscrambler.a",
+            "file": "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_master/build/esp-idf/esp_driver_bitscrambler/libesp_driver_bitscrambler.a",
             "sources": [ "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_bitscrambler/src/bitscrambler.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_bitscrambler/src/bitscrambler_loopback.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_bitscrambler/src/bitscrambler_esp32p4.c" ],
             "include_dirs": [ "include" ]
         },
@@ -219,7 +219,7 @@
             "priv_reqs": [ "esp_pm" ],
             "managed_reqs": [],
             "managed_priv_reqs": [],
-            "file": "/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/build/esp-idf/esp_driver_gpio/libesp_driver_gpio.a",
+            "file": "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_master/build/esp-idf/esp_driver_gpio/libesp_driver_gpio.a",
             "sources": [ "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_gpio/src/gpio.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_gpio/src/gpio_glitch_filter_ops.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_gpio/src/rtc_io.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_gpio/src/dedic_gpio.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_gpio/src/gpio_pin_glitch_filter.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_gpio/src/gpio_flex_glitch_filter.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_gpio/src/gpio_etm.c" ],
             "include_dirs": [ "include" ]
         },
@@ -234,7 +234,7 @@
             "priv_reqs": [],
             "managed_reqs": [],
             "managed_priv_reqs": [],
-            "file": "/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/build/esp-idf/esp_driver_gptimer/libesp_driver_gptimer.a",
+            "file": "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_master/build/esp-idf/esp_driver_gptimer/libesp_driver_gptimer.a",
             "sources": [ "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_gptimer/src/gptimer.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_gptimer/src/gptimer_common.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_gptimer/src/gptimer_etm.c" ],
             "include_dirs": [ "include" ]
         },
@@ -249,7 +249,7 @@
             "priv_reqs": [ "esp_driver_gpio", "esp_pm", "esp_ringbuf" ],
             "managed_reqs": [],
             "managed_priv_reqs": [],
-            "file": "/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/build/esp-idf/esp_driver_i2c/libesp_driver_i2c.a",
+            "file": "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_master/build/esp-idf/esp_driver_i2c/libesp_driver_i2c.a",
             "sources": [ "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_i2c/i2c_master.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_i2c/i2c_common.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_i2c/i2c_slave.c" ],
             "include_dirs": [ "include" ]
         },
@@ -264,7 +264,7 @@
             "priv_reqs": [ "esp_driver_gpio", "esp_pm", "esp_mm" ],
             "managed_reqs": [],
             "managed_priv_reqs": [],
-            "file": "/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/build/esp-idf/esp_driver_i2s/libesp_driver_i2s.a",
+            "file": "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_master/build/esp-idf/esp_driver_i2s/libesp_driver_i2s.a",
             "sources": [ "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_i2s/i2s_common.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_i2s/i2s_std.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_i2s/i2s_pdm.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_i2s/i2s_tdm.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_i2s/i2s_etm.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_i2s/i2s_platform.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_i2s/lp_i2s.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_i2s/lp_i2s_std.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_i2s/lp_i2s_pdm.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_i2s/lp_i2s_vad.c" ],
             "include_dirs": [ "include" ]
         },
@@ -279,7 +279,7 @@
             "priv_reqs": [ "esp_pm" ],
             "managed_reqs": [],
             "managed_priv_reqs": [],
-            "file": "/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/build/esp-idf/esp_driver_ledc/libesp_driver_ledc.a",
+            "file": "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_master/build/esp-idf/esp_driver_ledc/libesp_driver_ledc.a",
             "sources": [ "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_ledc/src/ledc.c" ],
             "include_dirs": [ "include" ]
         },
@@ -294,7 +294,7 @@
             "priv_reqs": [ "esp_pm", "esp_driver_gpio" ],
             "managed_reqs": [],
             "managed_priv_reqs": [],
-            "file": "/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/build/esp-idf/esp_driver_mcpwm/libesp_driver_mcpwm.a",
+            "file": "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_master/build/esp-idf/esp_driver_mcpwm/libesp_driver_mcpwm.a",
             "sources": [ "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_mcpwm/src/mcpwm_cap.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_mcpwm/src/mcpwm_cmpr.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_mcpwm/src/mcpwm_com.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_mcpwm/src/mcpwm_fault.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_mcpwm/src/mcpwm_gen.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_mcpwm/src/mcpwm_oper.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_mcpwm/src/mcpwm_sync.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_mcpwm/src/mcpwm_timer.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_mcpwm/src/mcpwm_etm.c" ],
             "include_dirs": [ "include" ]
         },
@@ -309,7 +309,7 @@
             "priv_reqs": [ "esp_pm", "esp_driver_gpio", "esp_mm", "esp_driver_bitscrambler" ],
             "managed_reqs": [],
             "managed_priv_reqs": [],
-            "file": "/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/build/esp-idf/esp_driver_parlio/libesp_driver_parlio.a",
+            "file": "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_master/build/esp-idf/esp_driver_parlio/libesp_driver_parlio.a",
             "sources": [ "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_parlio/src/parlio_common.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_parlio/src/parlio_tx.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_parlio/src/parlio_rx.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_parlio/src/parlio_bitscrambler.c" ],
             "include_dirs": [ "include" ]
         },
@@ -324,7 +324,7 @@
             "priv_reqs": [ "esp_pm", "esp_driver_gpio" ],
             "managed_reqs": [],
             "managed_priv_reqs": [],
-            "file": "/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/build/esp-idf/esp_driver_pcnt/libesp_driver_pcnt.a",
+            "file": "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_master/build/esp-idf/esp_driver_pcnt/libesp_driver_pcnt.a",
             "sources": [ "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_pcnt/src/pulse_cnt.c" ],
             "include_dirs": [ "include" ]
         },
@@ -339,7 +339,7 @@
             "priv_reqs": [ "esp_pm", "esp_driver_gpio", "esp_driver_bitscrambler", "esp_mm" ],
             "managed_reqs": [],
             "managed_priv_reqs": [],
-            "file": "/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/build/esp-idf/esp_driver_rmt/libesp_driver_rmt.a",
+            "file": "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_master/build/esp-idf/esp_driver_rmt/libesp_driver_rmt.a",
             "sources": [ "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_rmt/src/rmt_common.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_rmt/src/rmt_encoder.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_rmt/src/rmt_encoder_bytes.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_rmt/src/rmt_encoder_copy.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_rmt/src/rmt_encoder_simple.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_rmt/src/rmt_rx.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_rmt/src/rmt_tx.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_rmt/src/rmt_encoder_bs.c" ],
             "include_dirs": [ "include" ]
         },
@@ -369,7 +369,7 @@
             "priv_reqs": [ "esp_pm", "esp_driver_gpio" ],
             "managed_reqs": [],
             "managed_priv_reqs": [],
-            "file": "/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/build/esp-idf/esp_driver_sdm/libesp_driver_sdm.a",
+            "file": "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_master/build/esp-idf/esp_driver_sdm/libesp_driver_sdm.a",
             "sources": [ "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_sdm/src/sdm.c" ],
             "include_dirs": [ "include" ]
         },
@@ -384,7 +384,7 @@
             "priv_reqs": [ "esp_timer", "esp_pm", "esp_mm" ],
             "managed_reqs": [],
             "managed_priv_reqs": [],
-            "file": "/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/build/esp-idf/esp_driver_sdmmc/libesp_driver_sdmmc.a",
+            "file": "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_master/build/esp-idf/esp_driver_sdmmc/libesp_driver_sdmmc.a",
             "sources": [ "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_sdmmc/src/sdmmc_transaction.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_sdmmc/src/sdmmc_host.c" ],
             "include_dirs": [ "include" ]
         },
@@ -399,7 +399,7 @@
             "priv_reqs": [ "esp_timer", "esp_mm" ],
             "managed_reqs": [],
             "managed_priv_reqs": [],
-            "file": "/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/build/esp-idf/esp_driver_sdspi/libesp_driver_sdspi.a",
+            "file": "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_master/build/esp-idf/esp_driver_sdspi/libesp_driver_sdspi.a",
             "sources": [ "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_sdspi/src/sdspi_crc.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_sdspi/src/sdspi_host.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_sdspi/src/sdspi_transaction.c" ],
             "include_dirs": [ "include" ]
         },
@@ -414,7 +414,7 @@
             "priv_reqs": [ "esp_timer", "esp_mm", "esp_driver_gpio" ],
             "managed_reqs": [],
             "managed_priv_reqs": [],
-            "file": "/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/build/esp-idf/esp_driver_spi/libesp_driver_spi.a",
+            "file": "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_master/build/esp-idf/esp_driver_spi/libesp_driver_spi.a",
             "sources": [ "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_spi/src/gpspi/spi_common.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_spi/src/gpspi/spi_master.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_spi/src/gpspi/spi_slave.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_spi/src/gpspi/spi_slave_hd.c" ],
             "include_dirs": [ "include" ]
         },
@@ -429,7 +429,7 @@
             "priv_reqs": [ "efuse" ],
             "managed_reqs": [],
             "managed_priv_reqs": [],
-            "file": "/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/build/esp-idf/esp_driver_tsens/libesp_driver_tsens.a",
+            "file": "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_master/build/esp-idf/esp_driver_tsens/libesp_driver_tsens.a",
             "sources": [ "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_tsens/src/temperature_sensor.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_tsens/src/temperature_sensor_etm.c" ],
             "include_dirs": [ "include" ]
         },
@@ -444,7 +444,7 @@
             "priv_reqs": [ "esp_driver_gpio", "esp_pm" ],
             "managed_reqs": [],
             "managed_priv_reqs": [],
-            "file": "/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/build/esp-idf/esp_driver_twai/libesp_driver_twai.a",
+            "file": "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_master/build/esp-idf/esp_driver_twai/libesp_driver_twai.a",
             "sources": [ "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_twai/esp_twai.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_twai/esp_twai_onchip.c" ],
             "include_dirs": [ "include" ]
         },
@@ -459,7 +459,7 @@
             "priv_reqs": [ "esp_pm", "esp_driver_gpio", "esp_ringbuf", "esp_mm" ],
             "managed_reqs": [],
             "managed_priv_reqs": [],
-            "file": "/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/build/esp-idf/esp_driver_uart/libesp_driver_uart.a",
+            "file": "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_master/build/esp-idf/esp_driver_uart/libesp_driver_uart.a",
             "sources": [ "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_uart/src/uart.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_uart/src/uart_wakeup.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_uart/src/uhci.c" ],
             "include_dirs": [ "include" ]
         },
@@ -474,7 +474,7 @@
             "priv_reqs": [ "esp_driver_gpio", "esp_ringbuf", "esp_pm", "esp_timer" ],
             "managed_reqs": [],
             "managed_priv_reqs": [],
-            "file": "/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/build/esp-idf/esp_driver_usb_serial_jtag/libesp_driver_usb_serial_jtag.a",
+            "file": "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_master/build/esp-idf/esp_driver_usb_serial_jtag/libesp_driver_usb_serial_jtag.a",
             "sources": [ "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_usb_serial_jtag/src/usb_serial_jtag.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_driver_usb_serial_jtag/src/usb_serial_jtag_connection_monitor.c" ],
             "include_dirs": [ "include" ]
         },
@@ -489,7 +489,7 @@
             "priv_reqs": [ "efuse", "spi_flash", "bootloader_support", "esp_security", "esp_driver_gpio", "esp_timer", "esp_pm", "esp_mm" ],
             "managed_reqs": [],
             "managed_priv_reqs": [],
-            "file": "/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/build/esp-idf/esp_hw_support/libesp_hw_support.a",
+            "file": "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_master/build/esp-idf/esp_hw_support/libesp_hw_support.a",
             "sources": [ "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_hw_support/cpu.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_hw_support/port/esp32p4/esp_cpu_intr.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_hw_support/esp_memory_utils.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_hw_support/port/esp32p4/cpu_region_protect.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_hw_support/esp_clk.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_hw_support/clk_ctrl_os.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_hw_support/hw_random.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_hw_support/intr_alloc.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_hw_support/mac_addr.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_hw_support/periph_ctrl.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_hw_support/revision.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_hw_support/rtc_module.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_hw_support/regi2c_ctrl.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_hw_support/esp_gpio_reserve.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_hw_support/sar_periph_ctrl_common.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_hw_support/port/esp32p4/io_mux.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_hw_support/port/esp32p4/esp_clk_tree.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_hw_support/dma/esp_dma_utils.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_hw_support/dma/gdma_link.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_hw_support/spi_bus_lock.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_hw_support/clk_utils.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_hw_support/port/esp_clk_tree_common.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_hw_support/spi_share_hw_ctrl.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_hw_support/adc_share_hw_ctrl.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_hw_support/mipi_csi_share_hw_ctrl.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_hw_support/sleep_retention.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_hw_support/sleep_modem.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_hw_support/sleep_modes.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_hw_support/sleep_console.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_hw_support/sleep_usb.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_hw_support/sleep_gpio.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_hw_support/sleep_event.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_hw_support/sleep_system_peripheral.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_hw_support/dma/gdma.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_hw_support/deprecated/gdma_legacy.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_hw_support/dma/gdma_sleep_retention.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_hw_support/dma/gdma_etm.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_hw_support/dma/gdma_crc.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_hw_support/ldo/esp_ldo_regulator.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_hw_support/debug_probe/debug_probe.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_hw_support/dma/esp_async_memcpy.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_hw_support/dma/async_memcpy_gdma.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_hw_support/dma/dw_gdma.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_hw_support/dma/dma2d.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_hw_support/port/esp32p4/systimer.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_hw_support/esp_etm.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_hw_support/port/pau_regdma.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_hw_support/port/regdma_link.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_hw_support/mspi_timing_tuning/mspi_timing_tuning.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_hw_support/mspi_timing_tuning/tuning_scheme_impl/mspi_timing_by_dqs.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_hw_support/mspi_timing_tuning/tuning_scheme_impl/mspi_timing_by_flash_delay.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_hw_support/esp_clock_output.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_hw_support/power_supply/brownout.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_hw_support/power_supply/vbat.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_hw_support/port/esp32p4/rtc_clk_init.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_hw_support/port/esp32p4/rtc_clk.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_hw_support/port/esp32p4/pmu_param.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_hw_support/port/esp32p4/pmu_init.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_hw_support/port/esp32p4/pmu_sleep.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_hw_support/port/esp32p4/rtc_time.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_hw_support/port/esp32p4/chip_info.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_hw_support/port/esp32p4/sar_periph_ctrl.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_hw_support/port/esp32p4/pmu_pvt.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_hw_support/mspi_timing_tuning/port/esp32p4/mspi_timing_config.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_hw_support/lowpower/port/esp32p4/sleep_clock.c" ],
             "include_dirs": [ "include", "include/soc", "include/soc/esp32p4", "dma/include", "ldo/include", "debug_probe/include", "mspi_timing_tuning/include", "mspi_timing_tuning/tuning_scheme_impl/include", "power_supply/include" ]
         },
@@ -504,7 +504,7 @@
             "priv_reqs": [ "heap", "spi_flash" ],
             "managed_reqs": [],
             "managed_priv_reqs": [],
-            "file": "/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/build/esp-idf/esp_mm/libesp_mm.a",
+            "file": "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_master/build/esp-idf/esp_mm/libesp_mm.a",
             "sources": [ "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_mm/esp_mmu_map.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_mm/port/esp32p4/ext_mem_layout.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_mm/esp_cache_msync.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_mm/esp_cache_utils.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_mm/heap_align_hw.c" ],
             "include_dirs": [ "include" ]
         },
@@ -519,7 +519,7 @@
             "priv_reqs": [ "esp_system", "spi_flash", "partition_table", "bootloader_support", "app_update" ],
             "managed_reqs": [],
             "managed_priv_reqs": [],
-            "file": "/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/build/esp-idf/esp_partition/libesp_partition.a",
+            "file": "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_master/build/esp-idf/esp_partition/libesp_partition.a",
             "sources": [ "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_partition/partition.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_partition/partition_target.c" ],
             "include_dirs": [ "include" ]
         },
@@ -534,7 +534,7 @@
             "priv_reqs": [ "esp_system", "esp_driver_gpio", "esp_timer" ],
             "managed_reqs": [],
             "managed_priv_reqs": [],
-            "file": "/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/build/esp-idf/esp_pm/libesp_pm.a",
+            "file": "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_master/build/esp-idf/esp_pm/libesp_pm.a",
             "sources": [ "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_pm/pm_locks.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_pm/pm_trace.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_pm/pm_impl.c" ],
             "include_dirs": [ "include" ]
         },
@@ -549,7 +549,7 @@
             "priv_reqs": [],
             "managed_reqs": [],
             "managed_priv_reqs": [],
-            "file": "/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/build/esp-idf/esp_ringbuf/libesp_ringbuf.a",
+            "file": "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_master/build/esp-idf/esp_ringbuf/libesp_ringbuf.a",
             "sources": [ "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_ringbuf/ringbuf.c" ],
             "include_dirs": [ "include" ]
         },
@@ -564,7 +564,7 @@
             "priv_reqs": [ "soc", "hal" ],
             "managed_reqs": [],
             "managed_priv_reqs": [],
-            "file": "/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/build/esp-idf/esp_rom/libesp_rom.a",
+            "file": "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_master/build/esp-idf/esp_rom/libesp_rom.a",
             "sources": [ "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_rom/patches/esp_rom_sys.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_rom/patches/esp_rom_print.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_rom/patches/esp_rom_crc.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_rom/patches/esp_rom_uart.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_rom/patches/esp_rom_spiflash.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_rom/patches/esp_rom_efuse.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_rom/patches/esp_rom_gpio.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_rom/patches/esp_rom_regi2c_esp32p4.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_rom/patches/esp_rom_systimer.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_rom/patches/esp_rom_wdt.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_rom/patches/esp_rom_clic.c" ],
             "include_dirs": [ "include", "esp32p4/include", "esp32p4/include/esp32p4", "esp32p4" ]
         },
@@ -579,7 +579,7 @@
             "priv_reqs": [ "efuse", "esp_hw_support", "esp_system", "esp_timer" ],
             "managed_reqs": [],
             "managed_priv_reqs": [],
-            "file": "/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/build/esp-idf/esp_security/libesp_security.a",
+            "file": "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_master/build/esp-idf/esp_security/libesp_security.a",
             "sources": [ "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_security/src/init.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_security/src/esp_hmac.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_security/src/esp_ds.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_security/src/esp_crypto_lock.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_security/src/esp_crypto_periph_clk.c" ],
             "include_dirs": [ "include" ]
         },
@@ -594,7 +594,7 @@
             "priv_reqs": [ "spi_flash", "esp_timer", "esp_mm", "bootloader_support", "esp_pm" ],
             "managed_reqs": [],
             "managed_priv_reqs": [],
-            "file": "/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/build/esp-idf/esp_system/libesp_system.a",
+            "file": "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_master/build/esp-idf/esp_system/libesp_system.a",
             "sources": [ "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_system/esp_err.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_system/crosscore_int.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_system/esp_ipc.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_system/esp_system_console.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_system/freertos_hooks.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_system/int_wdt.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_system/panic.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_system/esp_system.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_system/startup.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_system/startup_funcs.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_system/system_time.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_system/stack_check.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_system/ubsan.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_system/xt_wdt.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_system/task_wdt/task_wdt.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_system/task_wdt/task_wdt_impl_timergroup.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_system/systick_etm.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_system/hw_stack_guard.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_system/port/cpu_start.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_system/port/panic_handler.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_system/port/esp_system_chip.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_system/port/image_process.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_system/port/esp_ipc_isr.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_system/port/arch/riscv/esp_ipc_isr_port.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_system/port/arch/riscv/esp_ipc_isr_handler.S", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_system/port/arch/riscv/esp_ipc_isr_routines.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_system/port/arch/riscv/expression_with_stack.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_system/port/arch/riscv/panic_arch.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_system/port/arch/riscv/debug_helpers.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_system/port/arch/riscv/debug_stubs.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_system/port/soc/esp32p4/clk.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_system/port/soc/esp32p4/reset_reason.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_system/port/soc/esp32p4/system_internal.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_system/port/soc/esp32p4/cache_err_int.c" ],
             "include_dirs": [ "include" ]
         },
@@ -609,7 +609,7 @@
             "priv_reqs": [],
             "managed_reqs": [],
             "managed_priv_reqs": [],
-            "file": "/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/build/esp-idf/esp_timer/libesp_timer.a",
+            "file": "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_master/build/esp-idf/esp_timer/libesp_timer.a",
             "sources": [ "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_timer/src/esp_timer.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_timer/src/esp_timer_init.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_timer/src/ets_timer_legacy.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_timer/src/system_time.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_timer/src/esp_timer_impl_common.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_timer/src/esp_timer_impl_systimer.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/esp_timer/src/esp_timer_etm.c" ],
             "include_dirs": [ "include" ]
         },
@@ -639,7 +639,7 @@
             "priv_reqs": [],
             "managed_reqs": [],
             "managed_priv_reqs": [],
-            "file": "/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/build/esp-idf/freertos/libfreertos.a",
+            "file": "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_master/build/esp-idf/freertos/libfreertos.a",
             "sources": [ "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/freertos/heap_idf.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/freertos/app_startup.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/freertos/port_common.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/freertos/port_systick.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/freertos/FreeRTOS-Kernel/list.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/freertos/FreeRTOS-Kernel/queue.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/freertos/FreeRTOS-Kernel/tasks.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/freertos/FreeRTOS-Kernel/timers.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/freertos/FreeRTOS-Kernel/event_groups.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/freertos/FreeRTOS-Kernel/stream_buffer.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/freertos/FreeRTOS-Kernel/portable/riscv/port.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/freertos/FreeRTOS-Kernel/portable/riscv/portasm.S", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/freertos/esp_additions/freertos_compatibility.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/freertos/esp_additions/idf_additions_event_groups.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/freertos/esp_additions/idf_additions.c" ],
             "include_dirs": [ "config/include", "config/include/freertos", "config/riscv/include", "FreeRTOS-Kernel/include", "FreeRTOS-Kernel/portable/riscv/include", "FreeRTOS-Kernel/portable/riscv/include/freertos", "esp_additions/include" ]
         },
@@ -654,7 +654,7 @@
             "priv_reqs": [],
             "managed_reqs": [],
             "managed_priv_reqs": [],
-            "file": "/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/build/esp-idf/hal/libhal.a",
+            "file": "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_master/build/esp-idf/hal/libhal.a",
             "sources": [ "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal/hal_utils.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal/efuse_hal.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal/esp32p4/efuse_hal.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal/lp_timer_hal.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal/mmu_hal.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal/cache_hal.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal/color_hal.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal/spi_flash_hal.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal/spi_flash_hal_iram.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal/spi_flash_encrypt_hal_iram.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal/esp32p4/clk_tree_hal.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal/uart_hal.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal/uart_hal_iram.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal/gpio_hal.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal/rtc_io_hal.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal/timer_hal.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal/ledc_hal.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal/ledc_hal_iram.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal/i2c_hal.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal/i2c_hal_iram.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal/i3c_master_hal.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal/isp_hal.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal/lp_i2s_hal.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal/rmt_hal.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal/pcnt_hal.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal/mcpwm_hal.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal/uhci_hal.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal/twai_hal_sja1000.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal/gdma_hal_top.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal/gdma_hal_crc_gen.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal/gdma_hal_ahb_v2.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal/gdma_hal_axi.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal/dw_gdma_hal.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal/dma2d_hal.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal/i2s_hal.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal/sdm_hal.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal/sdmmc_hal.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal/etm_hal.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal/parlio_hal.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal/adc_hal_common.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal/adc_oneshot_hal.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal/adc_hal.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal/lcd_hal.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal/mipi_dsi_hal.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal/mipi_csi_hal.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal/ecc_hal.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal/mpi_hal.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal/sha_hal.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal/aes_hal.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal/esp32p4/pau_hal.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal/brownout_hal.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal/vbat_hal.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal/jpeg_hal.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal/ppa_hal.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal/spi_hal.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal/spi_hal_iram.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal/spi_slave_hal.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal/spi_slave_hal_iram.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal/spi_slave_hd_hal.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal/spi_flash_hal_gpspi.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal/esp32p4/pmu_hal.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal/apm_hal.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal/hmac_hal.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal/ds_hal.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal/cam_hal.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal/usb_serial_jtag_hal.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal/usb_utmi_hal.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal/usb_dwc_hal.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal/usb_wrap_hal.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/hal/touch_sens_hal.c" ],
             "include_dirs": [ "platform_port/include", "esp32p4/include", "include" ]
         },
@@ -669,7 +669,7 @@
             "priv_reqs": [ "soc" ],
             "managed_reqs": [],
             "managed_priv_reqs": [],
-            "file": "/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/build/esp-idf/heap/libheap.a",
+            "file": "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_master/build/esp-idf/heap/libheap.a",
             "sources": [ "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/heap/heap_caps_base.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/heap/heap_caps.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/heap/heap_caps_init.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/heap/multi_heap.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/heap/tlsf/tlsf.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/heap/port/memory_layout_utils.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/heap/port/esp32p4/memory_layout.c" ],
             "include_dirs": [ "include", "tlsf" ]
         },
@@ -684,7 +684,7 @@
             "priv_reqs": [ "hal", "soc", "esp_hw_support" ],
             "managed_reqs": [],
             "managed_priv_reqs": [],
-            "file": "/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/build/esp-idf/log/liblog.a",
+            "file": "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_master/build/esp-idf/log/liblog.a",
             "sources": [ "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/log/src/os/log_timestamp.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/log/src/log_timestamp_common.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/log/src/os/log_lock.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/log/src/buffer/log_buffers.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/log/src/os/util.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/log/src/util.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/log/src/log_format_text.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/log/src/log_print.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/log/src/log.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/log/src/os/log_write.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/log/src/log_level/log_level.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/log/src/log_level/tag_log_level/tag_log_level.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/log/src/log_level/tag_log_level/linked_list/log_linked_list.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/log/src/log_level/tag_log_level/cache/log_binary_heap.c" ],
             "include_dirs": [ "include" ]
         },
@@ -692,15 +692,15 @@
             "alias": "idf::main",
             "target": "___idf_main",
             "prefix": "idf",
-            "dir": "/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/main",
+            "dir": "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_master/main",
             "type": "LIBRARY",
             "lib": "__idf_main",
             "reqs": [ "driver" ],
             "priv_reqs": [],
             "managed_reqs": [],
             "managed_priv_reqs": [],
-            "file": "/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/build/esp-idf/main/libmain.a",
-            "sources": [ "/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/main/twai_network_example_master_main.c" ],
+            "file": "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_master/build/esp-idf/main/libmain.a",
+            "sources": [ "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_master/main/twai_network_example_master_main.c" ],
             "include_dirs": [ "." ]
         },
         "mbedtls": {
@@ -714,8 +714,8 @@
             "priv_reqs": [ "soc", "esp_hw_support", "esp_pm" ],
             "managed_reqs": [],
             "managed_priv_reqs": [],
-            "file": "/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/build/esp-idf/mbedtls/libmbedtls.a",
-            "sources": [ "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/mbedtls/esp_crt_bundle/esp_crt_bundle.c", "/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/build/x509_crt_bundle.S" ],
+            "file": "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_master/build/esp-idf/mbedtls/libmbedtls.a",
+            "sources": [ "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/mbedtls/esp_crt_bundle/esp_crt_bundle.c", "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_master/build/x509_crt_bundle.S" ],
             "include_dirs": [ "port/include", "mbedtls/include", "mbedtls/library", "esp_crt_bundle/include" ]
         },
         "newlib": {
@@ -729,7 +729,7 @@
             "priv_reqs": [ "soc", "spi_flash" ],
             "managed_reqs": [],
             "managed_priv_reqs": [],
-            "file": "/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/build/esp-idf/newlib/libnewlib.a",
+            "file": "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_master/build/esp-idf/newlib/libnewlib.a",
             "sources": [ "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/newlib/src/init.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/newlib/src/abort.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/newlib/src/assert.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/newlib/src/heap.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/newlib/src/locks.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/newlib/src/poll.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/newlib/src/pthread.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/newlib/src/random.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/newlib/src/getentropy.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/newlib/src/termios.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/newlib/src/stdatomic.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/newlib/src/time.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/newlib/src/sysconf.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/newlib/src/realpath.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/newlib/src/scandir.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/newlib/src/syscalls.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/newlib/src/reent_syscalls.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/newlib/src/port/esp_time_impl.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/newlib/src/flockfile.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/newlib/src/reent_init.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/newlib/src/newlib_init.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/newlib/src/port/esp_time_impl.c" ],
             "include_dirs": [ "platform_include" ]
         },
@@ -759,7 +759,7 @@
             "priv_reqs": [],
             "managed_reqs": [],
             "managed_priv_reqs": [],
-            "file": "/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/build/esp-idf/pthread/libpthread.a",
+            "file": "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_master/build/esp-idf/pthread/libpthread.a",
             "sources": [ "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/pthread/pthread.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/pthread/pthread_cond_var.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/pthread/pthread_local_storage.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/pthread/pthread_rwlock.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/pthread/pthread_semaphore.c" ],
             "include_dirs": [ "include" ]
         },
@@ -774,7 +774,7 @@
             "priv_reqs": [ "soc", "hal" ],
             "managed_reqs": [],
             "managed_priv_reqs": [],
-            "file": "/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/build/esp-idf/riscv/libriscv.a",
+            "file": "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_master/build/esp-idf/riscv/libriscv.a",
             "sources": [ "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/riscv/instruction_decode.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/riscv/interrupt.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/riscv/rv_utils.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/riscv/vectors.S", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/riscv/interrupt_clic.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/riscv/vectors_clic.S" ],
             "include_dirs": [ "include" ]
         },
@@ -789,7 +789,7 @@
             "priv_reqs": [ "soc", "esp_timer", "esp_mm" ],
             "managed_reqs": [],
             "managed_priv_reqs": [],
-            "file": "/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/build/esp-idf/sdmmc/libsdmmc.a",
+            "file": "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_master/build/esp-idf/sdmmc/libsdmmc.a",
             "sources": [ "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/sdmmc/sdmmc_cmd.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/sdmmc/sdmmc_common.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/sdmmc/sdmmc_init.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/sdmmc/sdmmc_io.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/sdmmc/sdmmc_mmc.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/sdmmc/sdmmc_sd.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/sdmmc/sd_pwr_ctrl/sd_pwr_ctrl.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/sdmmc/sd_pwr_ctrl/sd_pwr_ctrl_by_on_chip_ldo.c" ],
             "include_dirs": [ "include" ]
         },
@@ -804,7 +804,7 @@
             "priv_reqs": [],
             "managed_reqs": [],
             "managed_priv_reqs": [],
-            "file": "/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/build/esp-idf/soc/libsoc.a",
+            "file": "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_master/build/esp-idf/soc/libsoc.a",
             "sources": [ "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/soc/lldesc.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/soc/dport_access_common.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/soc/esp32p4/interrupts.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/soc/esp32p4/gpio_periph.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/soc/esp32p4/uart_periph.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/soc/esp32p4/adc_periph.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/soc/esp32p4/ana_cmpr_periph.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/soc/esp32p4/dedic_gpio_periph.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/soc/esp32p4/debug_probe_periph.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/soc/esp32p4/emac_periph.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/soc/esp32p4/etm_periph.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/soc/esp32p4/gdma_periph.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/soc/esp32p4/dma2d_periph.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/soc/esp32p4/spi_periph.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/soc/esp32p4/ledc_periph.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/soc/esp32p4/pcnt_periph.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/soc/esp32p4/rmt_periph.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/soc/esp32p4/sdm_periph.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/soc/esp32p4/isp_periph.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/soc/esp32p4/i2s_periph.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/soc/esp32p4/i2c_periph.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/soc/esp32p4/i3c_master_periph.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/soc/esp32p4/temperature_sensor_periph.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/soc/esp32p4/timer_periph.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/soc/esp32p4/lcd_periph.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/soc/esp32p4/mipi_dsi_periph.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/soc/esp32p4/mipi_csi_periph.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/soc/esp32p4/parlio_periph.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/soc/esp32p4/mcpwm_periph.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/soc/esp32p4/mpi_periph.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/soc/esp32p4/sdmmc_periph.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/soc/esp32p4/touch_sensor_periph.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/soc/esp32p4/twai_periph.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/soc/esp32p4/wdt_periph.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/soc/esp32p4/usb_dwc_periph.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/soc/esp32p4/rtc_io_periph.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/soc/esp32p4/system_retention_periph.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/soc/esp32p4/cam_periph.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/soc/esp32p4/power_supply_periph.c" ],
             "include_dirs": [ "include", "esp32p4", "esp32p4/include", "esp32p4/register" ]
         },
@@ -819,7 +819,7 @@
             "priv_reqs": [ "bootloader_support", "app_update", "soc", "esp_mm", "esp_driver_gpio" ],
             "managed_reqs": [],
             "managed_priv_reqs": [],
-            "file": "/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/build/esp-idf/spi_flash/libspi_flash.a",
+            "file": "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_master/build/esp-idf/spi_flash/libspi_flash.a",
             "sources": [ "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/spi_flash/flash_brownout_hook.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/spi_flash/spi_flash_hpm_enable.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/spi_flash/spi_flash_chip_drivers.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/spi_flash/spi_flash_chip_generic.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/spi_flash/spi_flash_chip_issi.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/spi_flash/spi_flash_chip_mxic.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/spi_flash/spi_flash_chip_gd.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/spi_flash/spi_flash_chip_winbond.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/spi_flash/spi_flash_chip_boya.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/spi_flash/spi_flash_chip_mxic_opi.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/spi_flash/spi_flash_chip_th.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/spi_flash/memspi_host_driver.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/spi_flash/cache_utils.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/spi_flash/flash_mmap.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/spi_flash/flash_ops.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/spi_flash/spi_flash_wrap.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/spi_flash/esp_flash_api.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/spi_flash/esp_flash_spi_init.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/spi_flash/spi_flash_os_func_app.c", "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/spi_flash/spi_flash_os_func_noos.c" ],
             "include_dirs": [ "include" ]
         }
@@ -907,7 +907,7 @@
             "priv_reqs": [ "esp_driver_uart", "esp_driver_usb_serial_jtag" ],
             "managed_reqs": [],
             "managed_priv_reqs": [],
-            "include_dirs": [ "/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/build" ]
+            "include_dirs": [ "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32", "Datalogger", "V2.0/Examples/CAN/twai_network_master/build" ]
         },
         "cxx": {
             "alias": "idf::cxx",
@@ -955,7 +955,7 @@
             "priv_reqs": [ "http_parser", "esp_timer", "lwip" ],
             "managed_reqs": [],
             "managed_priv_reqs": [],
-            "include_dirs": [ "/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/build", "esp-tls-crypto" ]
+            "include_dirs": [ "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32", "Datalogger", "V2.0/Examples/CAN/twai_network_master/build", "esp-tls-crypto" ]
         },
         "esp_adc": {
             "alias": "idf::esp_adc",
@@ -2125,7 +2125,7 @@
             "alias": "idf::main",
             "target": "___idf_main",
             "prefix": "idf",
-            "dir": "/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/main",
+            "dir": "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_master/main",
             "lib": "__idf_main",
             "reqs": [ "driver" ],
             "priv_reqs": [],
@@ -2136,10 +2136,10 @@
     },
     "debug_prefix_map_gdbinit": "",
     "gdbinit_files": {
-        "01_symbols": "/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/build/gdbinit/symbols",
-        "02_prefix_map": "/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/build/gdbinit/prefix_map",
-        "03_py_extensions": "/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/build/gdbinit/py_extensions",
-        "04_connect": "/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/build/gdbinit/connect"
+        "01_symbols": "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_master/build/gdbinit/symbols",
+        "02_prefix_map": "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_master/build/gdbinit/prefix_map",
+        "03_py_extensions": "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_master/build/gdbinit/py_extensions",
+        "04_connect": "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_master/build/gdbinit/connect"
     },
     "debug_arguments_openocd": "-f board/esp32p4-builtin.cfg"
 }

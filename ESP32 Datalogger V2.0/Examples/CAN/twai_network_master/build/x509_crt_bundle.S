@@ -1,4 +1,4 @@
-/* * Data converted from /Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/build/esp-idf/mbedtls/x509_crt_bundle
+/* * Data converted from /Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_master/build/esp-idf/mbedtls/x509_crt_bundle
  */
 .data
 #if !defined (__APPLE__) && !defined (__linux__)

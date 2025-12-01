@@ -1,1 +1,0 @@
-Command: cmake -G Ninja -DPYTHON_DEPS_CHECKED=1 -DPYTHON=/Users/remylaurendeau/.espressif/python_env/idf5.5_py3.13_env/bin/python -DESP_PLATFORM=1 -DSDKCONFIG='/Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master/sdkconfig' -DCCACHE_ENABLE=0 /Users/remylaurendeau/Documents/Baja/VSCode/twai_network_master

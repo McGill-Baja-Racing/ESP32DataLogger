@@ -10,18 +10,18 @@ if(NOT EXISTS "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/bootloader/su
   file(MAKE_DIRECTORY "/Users/remylaurendeau/esp/v5.5.1/esp-idf/components/bootloader/subproject")
 endif()
 file(MAKE_DIRECTORY
-  "/Users/remylaurendeau/twai_network_slave/build/bootloader"
-  "/Users/remylaurendeau/twai_network_slave/build/bootloader-prefix"
-  "/Users/remylaurendeau/twai_network_slave/build/bootloader-prefix/tmp"
-  "/Users/remylaurendeau/twai_network_slave/build/bootloader-prefix/src/bootloader-stamp"
-  "/Users/remylaurendeau/twai_network_slave/build/bootloader-prefix/src"
-  "/Users/remylaurendeau/twai_network_slave/build/bootloader-prefix/src/bootloader-stamp"
+  "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_slave/build/bootloader"
+  "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_slave/build/bootloader-prefix"
+  "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_slave/build/bootloader-prefix/tmp"
+  "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_slave/build/bootloader-prefix/src/bootloader-stamp"
+  "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_slave/build/bootloader-prefix/src"
+  "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_slave/build/bootloader-prefix/src/bootloader-stamp"
 )
 
 set(configSubDirs )
 foreach(subDir IN LISTS configSubDirs)
-    file(MAKE_DIRECTORY "/Users/remylaurendeau/twai_network_slave/build/bootloader-prefix/src/bootloader-stamp/${subDir}")
+    file(MAKE_DIRECTORY "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_slave/build/bootloader-prefix/src/bootloader-stamp/${subDir}")
 endforeach()
 if(cfgdir)
-  file(MAKE_DIRECTORY "/Users/remylaurendeau/twai_network_slave/build/bootloader-prefix/src/bootloader-stamp${cfgdir}") # cfgdir has leading slash
+  file(MAKE_DIRECTORY "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32 Datalogger V2.0/Examples/CAN/twai_network_slave/build/bootloader-prefix/src/bootloader-stamp${cfgdir}") # cfgdir has leading slash
 endif()
