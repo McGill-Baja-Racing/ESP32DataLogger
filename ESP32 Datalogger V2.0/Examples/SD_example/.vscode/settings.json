@@ -1,0 +1,25 @@
+{
+  "C_Cpp.intelliSenseEngine": "default",
+  "idf.espIdfPath": "/Users/remylaurendeau/esp/v5.5.1/esp-idf",
+  "idf.pythonInstallPath": "/opt/homebrew/bin/python3",
+  "idf.openOcdConfigs": [
+    "board/esp32p4-builtin.cfg"
+  ],
+  "idf.port": "/dev/tty.usbmodem5AE70690461",
+  "idf.toolsPath": "/Users/remylaurendeau/.espressif",
+  "idf.customExtraVars": {
+    "IDF_TARGET": "esp32p4"
+  },
+  "clangd.path": "/Users/remylaurendeau/.espressif/tools/esp-clang/esp-19.1.2_20250312/esp-clang/bin/clangd",
+  "clangd.arguments": [
+    "--background-index",
+    "--query-driver=/Users/remylaurendeau/.espressif/tools/riscv32-esp-elf/esp-14.2.0_20241119/riscv32-esp-elf/bin/riscv32-esp-elf-gcc",
+    "--compile-commands-dir=/Users/remylaurendeau/SD_example/build"
+  ],
+  "idf.flashType": "UART",
+  "C_Cpp.default.compileCommands": "${workspaceFolder}/build/compile_commands.json",
+  "files.associations": {
+    "sdmmc_host.h": "c",
+    "sdmmc_cmd.h": "c"
+  }
+}

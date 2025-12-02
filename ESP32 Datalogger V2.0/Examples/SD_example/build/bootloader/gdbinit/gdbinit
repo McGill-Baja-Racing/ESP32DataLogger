@@ -1,0 +1,2 @@
+source /Users/remylaurendeau/SD_example/build/bootloader/gdbinit/symbols
+source /Users/remylaurendeau/SD_example/build/bootloader/gdbinit/connect
