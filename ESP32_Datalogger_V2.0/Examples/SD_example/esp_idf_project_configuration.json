@@ -1,0 +1,24 @@
+{
+  "SD": {
+    "build": {
+      "compileArgs": [],
+      "ninjaArgs": [],
+      "sdkconfigDefaults": []
+    },
+    "env": {},
+    "idfTarget": "esp32p4",
+    "flashBaudRate": "",
+    "monitorBaudRate": "",
+    "openOCD": {
+      "debugLevel": -1,
+      "configs": [],
+      "args": []
+    },
+    "tasks": {
+      "preBuild": "",
+      "preFlash": "",
+      "postBuild": "",
+      "postFlash": ""
+    }
+  }
+}
