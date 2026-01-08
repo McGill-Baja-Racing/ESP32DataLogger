@@ -7,6 +7,8 @@
 #include "esp_err.h"
 #include "esp_log.h"
 #include <inttypes.h>
+#include "esp_timer.h"
+#include <string.h>
 
 #include "esp_twai.h"
 #include "esp_twai_onchip.h"
@@ -17,8 +19,8 @@
 /* --------------------- Definitions and static variables ------------------ */
 
 
-#define TX_GPIO_NUM             5               // CAN TX Pin
-#define RX_GPIO_NUM             4               // CAN RX Pin
+#define TX_GPIO_NUM             20              // CAN TX Pin
+#define RX_GPIO_NUM             21              // CAN RX Pin
 #define TRANSM_RATE             1000000         // Bitrate bps
 #define TX_QUEUE_DEPTH          5               // TX queue depth
 #define RX_QUEUE_LENGTH         16              // RX queue depth
@@ -28,6 +30,7 @@
 
 #define ID_STOP_CMD             0x0A0
 #define ID_START_CMD            0x0A1
+#define ID_MASTER_TIME_BEACON   0x0A2
 
 #define ID_DATA                 (0x0B1 + NODE_ID)
 
@@ -75,7 +78,7 @@ static bool twai_rx_cb(twai_node_handle_t node,
 
         can_rx_word_t msg;
         msg.id  = frame.header.id;
-        msg.dlc = frame.buffer_len;
+        msg.dlc = frame.header.dlc;
         msg.data = 0;
 
         // Pack into uint64_t (little-endian)
@@ -125,7 +128,14 @@ twai_event_callbacks_t cbs = {
     .on_rx_done = twai_rx_cb,
 };
 
+static volatile int64_t g_offset_us;
 
+static inline void handle_time_beacon(const can_rx_word_t *rx){
+    uint64_t t_main_us = rx ->data;
+    int64_t t_local_us = esp_timer_get_time();
+
+    g_offset_us = (int64_t)t_main_us - t_local_us;
+}
 
 
 /* --------------------------- Tasks and Functions -------------------------- */
@@ -143,7 +153,10 @@ static void sample_task(void *arg)
     {
         xSemaphoreTake(sample_task_sem, portMAX_DELAY);
 
-        int32_t timestamp = (int32_t)xTaskGetTickCount();
+        int64_t t_local_sample_us = esp_timer_get_time();
+        int64_t t_main_sample_us = t_local_sample_us + g_offset_us;
+        int32_t timestamp = (int32_t)t_main_sample_us/1000 ; // Convert it from us to ms
+        
         int32_t value = timestamp + 100;   // example payload
 
         data =
@@ -191,10 +204,46 @@ static void send_task(void *arg)
         // Send data
         twai_node_transmit(node_hdl, &tx, portMAX_DELAY);
 
+        int32_t value = (int32_t)( data    & 0xFFFFFFFF );
+        int32_t timestamp = (int32_t)((data >> 32) & 0xFFFFFFFF );
+         ESP_LOGI(EXAMPLE_TAG,
+                         "TX Data | ts=%" PRIi32 " val=%" PRIi32,
+                         timestamp, value);
+
         vTaskDelay(pdMS_TO_TICKS(SAMPLING_SPEED_MS));
 
 
     }
+
+}
+
+static void receive_task(void *arg)
+{
+    /*
+    This task will sample the needed data, buffer it (and add a timestamp if it has
+    P4 timestamp) and wait for the data to be sent before sampling again.
+
+    Data is packaged as:
+        - 1st 32 bits: Timestamp
+        - 2nd 32 bits: Value
+    */
+    while (1)
+    {
+        can_rx_word_t rx_msg;
+        xQueueReceive(twai_rx_queue, &rx_msg, portMAX_DELAY);
+        if (rx_msg.id == ID_MASTER_TIME_BEACON) {
+            
+            handle_time_beacon(&rx_msg);
+
+        }
+        ESP_LOGI(EXAMPLE_TAG,
+                "RX | ID: 0x%03" PRIX32 " | Timestamp: %" PRIi32,
+                rx_msg.id,
+                (uint32_t)rx_msg.data);
+        
+    }
+    
+
 
 }
 
@@ -204,6 +253,8 @@ void app_main(void)
 
     //Create tasks, queues, and semaphores
     twai_rx_queue = xQueueCreate(RX_QUEUE_LENGTH, sizeof(can_rx_word_t));
+    sample_task_sem = xSemaphoreCreateBinary();
+    send_task_sem = xSemaphoreCreateBinary();
 
     //Install TWAI driver
     ESP_ERROR_CHECK(twai_new_node_onchip(&node_config, &node_hdl));
@@ -212,6 +263,11 @@ void app_main(void)
     // Handle CAN receive ISR
     ESP_ERROR_CHECK(twai_node_register_event_callbacks(node_hdl, &cbs, NULL));
 
-    sample_task_sem = xSemaphoreCreateBinary();
-    send_task_sem = xSemaphoreCreateBinary();
+    /* ---------- Enable / start TWAI ---------- */
+    ESP_ERROR_CHECK(twai_node_enable(node_hdl));
+    ESP_LOGI(EXAMPLE_TAG, "TWAI node enabled");
+
+    xTaskCreatePinnedToCore(send_task, "send", 4096, NULL, 8, NULL, tskNO_AFFINITY);
+    xTaskCreatePinnedToCore(sample_task, "sample", 4096, NULL, 8, NULL, tskNO_AFFINITY);
+    //xTaskCreatePinnedToCore(receive_task, "receive", 4096, NULL, 8, NULL, tskNO_AFFINITY);
 }

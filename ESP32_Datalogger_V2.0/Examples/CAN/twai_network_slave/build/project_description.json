@@ -1,7 +1,7 @@
 {
     "version":            "1.2",
     "project_name":       "twai_network_slave",
-    "project_version":    "db5e4af-dirty",
+    "project_version":    "c4991f6-dirty",
     "project_path":       "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32_Datalogger_V2.0/Examples/CAN/twai_network_slave",
     "idf_path":           "/Users/remylaurendeau/esp/v5.5.1/esp-idf",
     "build_dir":          "/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32_Datalogger_V2.0/Examples/CAN/twai_network_slave/build",

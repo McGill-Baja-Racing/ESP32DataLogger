@@ -1,0 +1,12 @@
+{
+	"folders": [
+		{
+			"path": "../Examples/CAN/p4_lab_test"
+		},
+		{
+			"name": "Node",
+			"path": "."
+		}
+	],
+	"settings": {}
+}

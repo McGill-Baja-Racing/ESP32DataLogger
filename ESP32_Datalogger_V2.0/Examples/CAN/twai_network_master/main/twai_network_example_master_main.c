@@ -96,7 +96,7 @@ static bool twai_rx_cb(twai_node_handle_t node,
 
         can_rx_word_t msg;
         msg.id  = frame.header.id;
-        msg.dlc = frame.buffer_len;
+        msg.dlc = frame.header.dlc;
         msg.data = 0;
 
         // Pack into uint64_t (little-endian)
@@ -191,8 +191,8 @@ static void twai_receive_task(void *arg)
                 twai_receive(&rx_msg, portMAX_DELAY);
                 if (rx_msg.id == ID_SLAVE_DATA) {
                     
-                    int32_t timestamp = (int32_t)( rx_msg.data    & 0xFFFFFFFF );
-                    int32_t value = (int32_t)((rx_msg.data >> 32) & 0xFFFFFFFF );
+                    int32_t value       = (int32_t)( rx_msg.data    & 0xFFFFFFFF );
+                    int32_t timestamp   = (int32_t)((rx_msg.data >> 32) & 0xFFFFFFFF );
 
                     ESP_LOGI(EXAMPLE_TAG,
                         "RX | ID: 0x%03" PRIX32 " | Timestamp: %" PRIi32 " | Value: %" PRIi32,
