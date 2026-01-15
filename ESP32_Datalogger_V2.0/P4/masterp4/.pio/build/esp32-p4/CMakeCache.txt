@@ -611,7 +611,7 @@ C_COMPILER_SUPPORTS_WFORMAT_SIGNEDNESS:INTERNAL=1
 //Details about finding Git
 FIND_PACKAGE_MESSAGE_DETAILS_Git:INTERNAL=[/usr/bin/git][v2.43.0()]
 //Details about finding Python3
-FIND_PACKAGE_MESSAGE_DETAILS_Python3:INTERNAL=[/home/alex/.platformio/penv/.espidf-5.5.1/bin/python][found components: Interpreter ][v3.12.3()]
+FIND_PACKAGE_MESSAGE_DETAILS_Python3:INTERNAL=[/home/alex/.platformio/penv/.espidf-5.5.1/bin/python][found components: Interpreter ][v3.13.11()]
 //Details about finding Threads
 FIND_PACKAGE_MESSAGE_DETAILS_Threads:INTERNAL=[TRUE][v()]
 //ADVANCED property for variable: GIT_EXECUTABLE
@@ -624,7 +624,7 @@ _Python3_Compiler_REASON_FAILURE:INTERNAL=
 _Python3_Development_REASON_FAILURE:INTERNAL=
 _Python3_EXECUTABLE:INTERNAL=/home/alex/.platformio/penv/.espidf-5.5.1/bin/python
 //Python3 Properties
-_Python3_INTERPRETER_PROPERTIES:INTERNAL=Python;3;12;3;32;64;;;abi3;/usr/lib/python3.12;/home/alex/.platformio/penv/.espidf-5.5.1/lib/python3.12;/home/alex/.platformio/penv/.espidf-5.5.1/lib/python3.12/site-packages;/home/alex/.platformio/penv/.espidf-5.5.1/lib/python3.12/site-packages
+_Python3_INTERPRETER_PROPERTIES:INTERNAL=Python;3;13;11;32;64;;;abi3;/home/alex/.local/share/uv/python/cpython-3.13.11-linux-x86_64-gnu/lib/python3.13;/home/alex/.platformio/penv/.espidf-5.5.1/lib/python3.13;/home/alex/.platformio/penv/.espidf-5.5.1/lib/python3.13/site-packages;/home/alex/.platformio/penv/.espidf-5.5.1/lib/python3.13/site-packages
 _Python3_INTERPRETER_SIGNATURE:INTERNAL=e78f6b808e4812352fa1d4b1d7d5e7d9
 //NumPy reason failure
 _Python3_NumPy_REASON_FAILURE:INTERNAL=

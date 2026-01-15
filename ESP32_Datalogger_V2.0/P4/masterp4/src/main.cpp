@@ -175,7 +175,9 @@ twai_event_callbacks_t cbs = {
 
 
 
-
+extern "C"{
+    void app_main();
+}
 void app_main(void)
 {
   ESP_LOGI(TAG, "Initializing SD card...");
@@ -235,6 +237,8 @@ void app_main(void)
     ESP_ERROR_CHECK(twai_node_register_event_callbacks(node_hdl, &cbs, NULL));
 
 }
+
+
 
 // -------------------------------------------------------
 // HARDWARE TIMER ISR (1 kHz)

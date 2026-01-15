@@ -1,6 +1,6 @@
-set(CMAKE_HOST_SYSTEM "Linux-6.8.0-88-generic")
+set(CMAKE_HOST_SYSTEM "Linux-6.8.0-90-generic")
 set(CMAKE_HOST_SYSTEM_NAME "Linux")
-set(CMAKE_HOST_SYSTEM_VERSION "6.8.0-88-generic")
+set(CMAKE_HOST_SYSTEM_VERSION "6.8.0-90-generic")
 set(CMAKE_HOST_SYSTEM_PROCESSOR "x86_64")
 
 include("/home/alex/.platformio/packages/framework-espidf/tools/cmake/toolchain-esp32p4.cmake")

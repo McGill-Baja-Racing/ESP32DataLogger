@@ -9,7 +9,7 @@ events:
       - "CMakeLists.txt:3 (project)"
     message: |
       The target system is: Generic -  - 
-      The host system is: Linux - 6.8.0-88-generic - x86_64
+      The host system is: Linux - 6.8.0-90-generic - x86_64
   -
     kind: "message-v1"
     backtrace:
@@ -100,8 +100,8 @@ events:
     checks:
       - "Detecting C compiler ABI info"
     directories:
-      source: "/home/alex/Coding/Baja/ESP32DataLogger/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/CMakeFiles/CMakeScratch/TryCompile-B8VU5Z"
-      binary: "/home/alex/Coding/Baja/ESP32DataLogger/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/CMakeFiles/CMakeScratch/TryCompile-B8VU5Z"
+      source: "/home/alex/Coding/Baja/ESP32DataLogger/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/CMakeFiles/CMakeScratch/TryCompile-gzPMQR"
+      binary: "/home/alex/Coding/Baja/ESP32DataLogger/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/CMakeFiles/CMakeScratch/TryCompile-gzPMQR"
     cmakeVariables:
       CMAKE_C_FLAGS: "-march=rv32imafc_zicsr_zifencei_xesppie -mabi=ilp32f "
       CMAKE_C_FLAGS_DEBUG: "-g"
@@ -111,10 +111,10 @@ events:
       variable: "CMAKE_C_ABI_COMPILED"
       cached: true
       stdout: |
-        Change Dir: '/home/alex/Coding/Baja/ESP32DataLogger/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/CMakeFiles/CMakeScratch/TryCompile-B8VU5Z'
+        Change Dir: '/home/alex/Coding/Baja/ESP32DataLogger/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/CMakeFiles/CMakeScratch/TryCompile-gzPMQR'
         
-        Run Build Command(s): /home/alex/.platformio/packages/tool-ninja/ninja -v cmTC_a7652
-        [1/2] /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/riscv32-esp-elf-gcc   -march=rv32imafc_zicsr_zifencei_xesppie -mabi=ilp32f     -v -o CMakeFiles/cmTC_a7652.dir/CMakeCCompilerABI.c.obj -c /home/alex/.platformio/packages/tool-cmake/share/cmake-4.0/Modules/CMakeCCompilerABI.c
+        Run Build Command(s): /home/alex/.platformio/packages/tool-ninja/ninja -v cmTC_82597
+        [1/2] /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/riscv32-esp-elf-gcc   -march=rv32imafc_zicsr_zifencei_xesppie -mabi=ilp32f     -v -o CMakeFiles/cmTC_82597.dir/CMakeCCompilerABI.c.obj -c /home/alex/.platformio/packages/tool-cmake/share/cmake-4.0/Modules/CMakeCCompilerABI.c
         Using built-in specs.
         COLLECT_GCC=/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/riscv32-esp-elf-gcc
         Target: riscv32-esp-elf
@@ -122,8 +122,8 @@ events:
         Thread model: posix
         Supported LTO compression algorithms: zlib zstd
         gcc version 14.2.0 (crosstool-NG esp-14.2.0_20250730) 
-        COLLECT_GCC_OPTIONS='-march=rv32imafc_zicsr_zifencei_xesppie' '-mabi=ilp32f' '-v' '-o' 'CMakeFiles/cmTC_a7652.dir/CMakeCCompilerABI.c.obj' '-c' '-misa-spec=20191213' '-march=rv32imafc_zicsr_zifencei_xesppie' '-dumpdir' 'CMakeFiles/cmTC_a7652.dir/'
-         /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../libexec/gcc/riscv32-esp-elf/14.2.0/cc1 -quiet -v -imultilib rv32imafc_zicsr_zifencei/ilp32f -iprefix /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/ -isysroot /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf /home/alex/.platformio/packages/tool-cmake/share/cmake-4.0/Modules/CMakeCCompilerABI.c -quiet -dumpdir CMakeFiles/cmTC_a7652.dir/ -dumpbase CMakeCCompilerABI.c.c -dumpbase-ext .c -march=rv32imafc_zicsr_zifencei_xesppie -mabi=ilp32f -misa-spec=20191213 -march=rv32imafc_zicsr_zifencei_xesppie -version -o /tmp/ccn1Ernr.s
+        COLLECT_GCC_OPTIONS='-march=rv32imafc_zicsr_zifencei_xesppie' '-mabi=ilp32f' '-v' '-o' 'CMakeFiles/cmTC_82597.dir/CMakeCCompilerABI.c.obj' '-c' '-misa-spec=20191213' '-march=rv32imafc_zicsr_zifencei_xesppie' '-dumpdir' 'CMakeFiles/cmTC_82597.dir/'
+         /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../libexec/gcc/riscv32-esp-elf/14.2.0/cc1 -quiet -v -imultilib rv32imafc_zicsr_zifencei/ilp32f -iprefix /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/ -isysroot /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf /home/alex/.platformio/packages/tool-cmake/share/cmake-4.0/Modules/CMakeCCompilerABI.c -quiet -dumpdir CMakeFiles/cmTC_82597.dir/ -dumpbase CMakeCCompilerABI.c.c -dumpbase-ext .c -march=rv32imafc_zicsr_zifencei_xesppie -mabi=ilp32f -misa-spec=20191213 -march=rv32imafc_zicsr_zifencei_xesppie -version -o /tmp/ccy5xGbX.s
         GNU C17 (crosstool-NG esp-14.2.0_20250730) version 14.2.0 (riscv32-esp-elf)
         	compiled by GNU C version 4.9.2, GMP version 6.2.1, MPFR version 4.2.1, MPC version 1.2.1, isl version isl-0.26-GMP
         
@@ -140,13 +140,13 @@ events:
          /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/../../../../riscv32-esp-elf/include
         End of search list.
         Compiler executable checksum: 4c48eaed6aacff8ef0037594dac4ba51
-        COLLECT_GCC_OPTIONS='-march=rv32imafc_zicsr_zifencei_xesppie' '-mabi=ilp32f' '-v' '-o' 'CMakeFiles/cmTC_a7652.dir/CMakeCCompilerABI.c.obj' '-c' '-misa-spec=20191213' '-march=rv32imafc_zicsr_zifencei_xesppie' '-dumpdir' 'CMakeFiles/cmTC_a7652.dir/'
-         /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/../../../../riscv32-esp-elf/bin/as -v --traditional-format -march=rv32imafc_zicsr_zifencei_xesppie -march=rv32imafc_zicsr_zifencei_xesppie -mabi=ilp32f -misa-spec=20191213 -o CMakeFiles/cmTC_a7652.dir/CMakeCCompilerABI.c.obj /tmp/ccn1Ernr.s
+        COLLECT_GCC_OPTIONS='-march=rv32imafc_zicsr_zifencei_xesppie' '-mabi=ilp32f' '-v' '-o' 'CMakeFiles/cmTC_82597.dir/CMakeCCompilerABI.c.obj' '-c' '-misa-spec=20191213' '-march=rv32imafc_zicsr_zifencei_xesppie' '-dumpdir' 'CMakeFiles/cmTC_82597.dir/'
+         /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/../../../../riscv32-esp-elf/bin/as -v --traditional-format -march=rv32imafc_zicsr_zifencei_xesppie -march=rv32imafc_zicsr_zifencei_xesppie -mabi=ilp32f -misa-spec=20191213 -o CMakeFiles/cmTC_82597.dir/CMakeCCompilerABI.c.obj /tmp/ccy5xGbX.s
         GNU assembler version 2.43.1 (riscv32-esp-elf) using BFD version (crosstool-NG esp-14.2.0_20250730) 2.43.1
         COMPILER_PATH=/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../libexec/gcc/riscv32-esp-elf/14.2.0/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../libexec/gcc/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/../../../../riscv32-esp-elf/bin/
         LIBRARY_PATH=/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/rv32imafc_zicsr_zifencei/ilp32f/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/../../../../riscv32-esp-elf/lib/rv32imafc_zicsr_zifencei/ilp32f/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf/lib/rv32imafc_zicsr_zifencei/ilp32f/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/../../../../riscv32-esp-elf/lib/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf/lib/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf/usr/lib/
-        COLLECT_GCC_OPTIONS='-march=rv32imafc_zicsr_zifencei_xesppie' '-mabi=ilp32f' '-v' '-o' 'CMakeFiles/cmTC_a7652.dir/CMakeCCompilerABI.c.obj' '-c' '-misa-spec=20191213' '-march=rv32imafc_zicsr_zifencei_xesppie' '-dumpdir' 'CMakeFiles/cmTC_a7652.dir/CMakeCCompilerABI.c.'
-        [2/2] : && /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/riscv32-esp-elf-gcc -march=rv32imafc_zicsr_zifencei_xesppie -mabi=ilp32f -nostartfiles -march=rv32imafc_zicsr_zifencei_xesppie -mabi=ilp32f -Wl,-Map=/home/alex/Coding/Baja/ESP32DataLogger/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/firmware.map -v CMakeFiles/cmTC_a7652.dir/CMakeCCompilerABI.c.obj -o cmTC_a7652   && :
+        COLLECT_GCC_OPTIONS='-march=rv32imafc_zicsr_zifencei_xesppie' '-mabi=ilp32f' '-v' '-o' 'CMakeFiles/cmTC_82597.dir/CMakeCCompilerABI.c.obj' '-c' '-misa-spec=20191213' '-march=rv32imafc_zicsr_zifencei_xesppie' '-dumpdir' 'CMakeFiles/cmTC_82597.dir/CMakeCCompilerABI.c.'
+        [2/2] : && /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/riscv32-esp-elf-gcc -march=rv32imafc_zicsr_zifencei_xesppie -mabi=ilp32f -nostartfiles -march=rv32imafc_zicsr_zifencei_xesppie -mabi=ilp32f -Wl,-Map=/home/alex/Coding/Baja/ESP32DataLogger/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/firmware.map -v CMakeFiles/cmTC_82597.dir/CMakeCCompilerABI.c.obj -o cmTC_82597   && :
         Using built-in specs.
         COLLECT_GCC=/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/riscv32-esp-elf-gcc
         COLLECT_LTO_WRAPPER=/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../libexec/gcc/riscv32-esp-elf/14.2.0/lto-wrapper
@@ -157,10 +157,10 @@ events:
         gcc version 14.2.0 (crosstool-NG esp-14.2.0_20250730) 
         COMPILER_PATH=/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../libexec/gcc/riscv32-esp-elf/14.2.0/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../libexec/gcc/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/../../../../riscv32-esp-elf/bin/
         LIBRARY_PATH=/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/rv32imafc_zicsr_zifencei/ilp32f/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/../../../../riscv32-esp-elf/lib/rv32imafc_zicsr_zifencei/ilp32f/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf/lib/rv32imafc_zicsr_zifencei/ilp32f/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/../../../../riscv32-esp-elf/lib/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf/lib/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf/usr/lib/
-        COLLECT_GCC_OPTIONS='-nostartfiles' '-march=rv32imafc_zicsr_zifencei_xesppie' '-mabi=ilp32f' '-v' '-o' 'cmTC_a7652' '-misa-spec=20191213' '-march=rv32imafc_zicsr_zifencei_xesppie' '-dumpdir' 'cmTC_a7652.'
-         /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../libexec/gcc/riscv32-esp-elf/14.2.0/collect2 -plugin /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../libexec/gcc/riscv32-esp-elf/14.2.0/liblto_plugin.so -plugin-opt=/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../libexec/gcc/riscv32-esp-elf/14.2.0/lto-wrapper -plugin-opt=-fresolution=/tmp/cc2SIqSz.res -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lnosys -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lgcc --sysroot=/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf -melf32lriscv -X -o cmTC_a7652 -L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/rv32imafc_zicsr_zifencei/ilp32f -L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/../../../../riscv32-esp-elf/lib/rv32imafc_zicsr_zifencei/ilp32f -L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf/lib/rv32imafc_zicsr_zifencei/ilp32f -L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0 -L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc -L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/../../../../riscv32-esp-elf/lib -L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf/lib -L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf/usr/lib -Map=/home/alex/Coding/Baja/ESP32DataLogger/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/firmware.map CMakeFiles/cmTC_a7652.dir/CMakeCCompilerABI.c.obj -lgcc -lc -lnosys -lc -lgcc
+        COLLECT_GCC_OPTIONS='-nostartfiles' '-march=rv32imafc_zicsr_zifencei_xesppie' '-mabi=ilp32f' '-v' '-o' 'cmTC_82597' '-misa-spec=20191213' '-march=rv32imafc_zicsr_zifencei_xesppie' '-dumpdir' 'cmTC_82597.'
+         /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../libexec/gcc/riscv32-esp-elf/14.2.0/collect2 -plugin /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../libexec/gcc/riscv32-esp-elf/14.2.0/liblto_plugin.so -plugin-opt=/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../libexec/gcc/riscv32-esp-elf/14.2.0/lto-wrapper -plugin-opt=-fresolution=/tmp/ccqYtu6E.res -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lnosys -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lgcc --sysroot=/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf -melf32lriscv -X -o cmTC_82597 -L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/rv32imafc_zicsr_zifencei/ilp32f -L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/../../../../riscv32-esp-elf/lib/rv32imafc_zicsr_zifencei/ilp32f -L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf/lib/rv32imafc_zicsr_zifencei/ilp32f -L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0 -L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc -L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/../../../../riscv32-esp-elf/lib -L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf/lib -L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf/usr/lib -Map=/home/alex/Coding/Baja/ESP32DataLogger/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/firmware.map CMakeFiles/cmTC_82597.dir/CMakeCCompilerABI.c.obj -lgcc -lc -lnosys -lc -lgcc
         /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/../../../../riscv32-esp-elf/bin/ld: warning: cannot find entry symbol _start; defaulting to 00010094
-        COLLECT_GCC_OPTIONS='-nostartfiles' '-march=rv32imafc_zicsr_zifencei_xesppie' '-mabi=ilp32f' '-v' '-o' 'cmTC_a7652' '-misa-spec=20191213' '-march=rv32imafc_zicsr_zifencei_xesppie' '-dumpdir' 'cmTC_a7652.'
+        COLLECT_GCC_OPTIONS='-nostartfiles' '-march=rv32imafc_zicsr_zifencei_xesppie' '-mabi=ilp32f' '-v' '-o' 'cmTC_82597' '-misa-spec=20191213' '-march=rv32imafc_zicsr_zifencei_xesppie' '-dumpdir' 'cmTC_82597.'
         
       exitCode: 0
   -
@@ -195,10 +195,10 @@ events:
       Parsed C implicit link information:
         link line regex: [^( *|.*[/\\])(ld[0-9]*(|\\.[a-rt-z][a-z]*|\\.s[a-np-z][a-z]*|\\.so[a-z]+)|CMAKE_LINK_STARTFILE-NOTFOUND|([^/\\]+-)?ld|collect2)[^/\\]*( |$)]
         linker tool regex: [^[ 	]*(->|")?[ 	]*(([^"]*[/\\])?(ld[0-9]*(|\\.[a-rt-z][a-z]*|\\.s[a-np-z][a-z]*|\\.so[a-z]+)))("|,| |$)]
-        ignore line: [Change Dir: '/home/alex/Coding/Baja/ESP32DataLogger/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/CMakeFiles/CMakeScratch/TryCompile-B8VU5Z']
+        ignore line: [Change Dir: '/home/alex/Coding/Baja/ESP32DataLogger/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/CMakeFiles/CMakeScratch/TryCompile-gzPMQR']
         ignore line: []
-        ignore line: [Run Build Command(s): /home/alex/.platformio/packages/tool-ninja/ninja -v cmTC_a7652]
-        ignore line: [[1/2] /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/riscv32-esp-elf-gcc   -march=rv32imafc_zicsr_zifencei_xesppie -mabi=ilp32f     -v -o CMakeFiles/cmTC_a7652.dir/CMakeCCompilerABI.c.obj -c /home/alex/.platformio/packages/tool-cmake/share/cmake-4.0/Modules/CMakeCCompilerABI.c]
+        ignore line: [Run Build Command(s): /home/alex/.platformio/packages/tool-ninja/ninja -v cmTC_82597]
+        ignore line: [[1/2] /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/riscv32-esp-elf-gcc   -march=rv32imafc_zicsr_zifencei_xesppie -mabi=ilp32f     -v -o CMakeFiles/cmTC_82597.dir/CMakeCCompilerABI.c.obj -c /home/alex/.platformio/packages/tool-cmake/share/cmake-4.0/Modules/CMakeCCompilerABI.c]
         ignore line: [Using built-in specs.]
         ignore line: [COLLECT_GCC=/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/riscv32-esp-elf-gcc]
         ignore line: [Target: riscv32-esp-elf]
@@ -206,8 +206,8 @@ events:
         ignore line: [Thread model: posix]
         ignore line: [Supported LTO compression algorithms: zlib zstd]
         ignore line: [gcc version 14.2.0 (crosstool-NG esp-14.2.0_20250730) ]
-        ignore line: [COLLECT_GCC_OPTIONS='-march=rv32imafc_zicsr_zifencei_xesppie' '-mabi=ilp32f' '-v' '-o' 'CMakeFiles/cmTC_a7652.dir/CMakeCCompilerABI.c.obj' '-c' '-misa-spec=20191213' '-march=rv32imafc_zicsr_zifencei_xesppie' '-dumpdir' 'CMakeFiles/cmTC_a7652.dir/']
-        ignore line: [ /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../libexec/gcc/riscv32-esp-elf/14.2.0/cc1 -quiet -v -imultilib rv32imafc_zicsr_zifencei/ilp32f -iprefix /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/ -isysroot /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf /home/alex/.platformio/packages/tool-cmake/share/cmake-4.0/Modules/CMakeCCompilerABI.c -quiet -dumpdir CMakeFiles/cmTC_a7652.dir/ -dumpbase CMakeCCompilerABI.c.c -dumpbase-ext .c -march=rv32imafc_zicsr_zifencei_xesppie -mabi=ilp32f -misa-spec=20191213 -march=rv32imafc_zicsr_zifencei_xesppie -version -o /tmp/ccn1Ernr.s]
+        ignore line: [COLLECT_GCC_OPTIONS='-march=rv32imafc_zicsr_zifencei_xesppie' '-mabi=ilp32f' '-v' '-o' 'CMakeFiles/cmTC_82597.dir/CMakeCCompilerABI.c.obj' '-c' '-misa-spec=20191213' '-march=rv32imafc_zicsr_zifencei_xesppie' '-dumpdir' 'CMakeFiles/cmTC_82597.dir/']
+        ignore line: [ /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../libexec/gcc/riscv32-esp-elf/14.2.0/cc1 -quiet -v -imultilib rv32imafc_zicsr_zifencei/ilp32f -iprefix /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/ -isysroot /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf /home/alex/.platformio/packages/tool-cmake/share/cmake-4.0/Modules/CMakeCCompilerABI.c -quiet -dumpdir CMakeFiles/cmTC_82597.dir/ -dumpbase CMakeCCompilerABI.c.c -dumpbase-ext .c -march=rv32imafc_zicsr_zifencei_xesppie -mabi=ilp32f -misa-spec=20191213 -march=rv32imafc_zicsr_zifencei_xesppie -version -o /tmp/ccy5xGbX.s]
         ignore line: [GNU C17 (crosstool-NG esp-14.2.0_20250730) version 14.2.0 (riscv32-esp-elf)]
         ignore line: [	compiled by GNU C version 4.9.2  GMP version 6.2.1  MPFR version 4.2.1  MPC version 1.2.1  isl version isl-0.26-GMP]
         ignore line: []
@@ -224,13 +224,13 @@ events:
         ignore line: [ /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/../../../../riscv32-esp-elf/include]
         ignore line: [End of search list.]
         ignore line: [Compiler executable checksum: 4c48eaed6aacff8ef0037594dac4ba51]
-        ignore line: [COLLECT_GCC_OPTIONS='-march=rv32imafc_zicsr_zifencei_xesppie' '-mabi=ilp32f' '-v' '-o' 'CMakeFiles/cmTC_a7652.dir/CMakeCCompilerABI.c.obj' '-c' '-misa-spec=20191213' '-march=rv32imafc_zicsr_zifencei_xesppie' '-dumpdir' 'CMakeFiles/cmTC_a7652.dir/']
-        ignore line: [ /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/../../../../riscv32-esp-elf/bin/as -v --traditional-format -march=rv32imafc_zicsr_zifencei_xesppie -march=rv32imafc_zicsr_zifencei_xesppie -mabi=ilp32f -misa-spec=20191213 -o CMakeFiles/cmTC_a7652.dir/CMakeCCompilerABI.c.obj /tmp/ccn1Ernr.s]
+        ignore line: [COLLECT_GCC_OPTIONS='-march=rv32imafc_zicsr_zifencei_xesppie' '-mabi=ilp32f' '-v' '-o' 'CMakeFiles/cmTC_82597.dir/CMakeCCompilerABI.c.obj' '-c' '-misa-spec=20191213' '-march=rv32imafc_zicsr_zifencei_xesppie' '-dumpdir' 'CMakeFiles/cmTC_82597.dir/']
+        ignore line: [ /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/../../../../riscv32-esp-elf/bin/as -v --traditional-format -march=rv32imafc_zicsr_zifencei_xesppie -march=rv32imafc_zicsr_zifencei_xesppie -mabi=ilp32f -misa-spec=20191213 -o CMakeFiles/cmTC_82597.dir/CMakeCCompilerABI.c.obj /tmp/ccy5xGbX.s]
         ignore line: [GNU assembler version 2.43.1 (riscv32-esp-elf) using BFD version (crosstool-NG esp-14.2.0_20250730) 2.43.1]
         ignore line: [COMPILER_PATH=/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../libexec/gcc/riscv32-esp-elf/14.2.0/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../libexec/gcc/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/../../../../riscv32-esp-elf/bin/]
         ignore line: [LIBRARY_PATH=/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/rv32imafc_zicsr_zifencei/ilp32f/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/../../../../riscv32-esp-elf/lib/rv32imafc_zicsr_zifencei/ilp32f/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf/lib/rv32imafc_zicsr_zifencei/ilp32f/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/../../../../riscv32-esp-elf/lib/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf/lib/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf/usr/lib/]
-        ignore line: [COLLECT_GCC_OPTIONS='-march=rv32imafc_zicsr_zifencei_xesppie' '-mabi=ilp32f' '-v' '-o' 'CMakeFiles/cmTC_a7652.dir/CMakeCCompilerABI.c.obj' '-c' '-misa-spec=20191213' '-march=rv32imafc_zicsr_zifencei_xesppie' '-dumpdir' 'CMakeFiles/cmTC_a7652.dir/CMakeCCompilerABI.c.']
-        ignore line: [[2/2] : && /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/riscv32-esp-elf-gcc -march=rv32imafc_zicsr_zifencei_xesppie -mabi=ilp32f -nostartfiles -march=rv32imafc_zicsr_zifencei_xesppie -mabi=ilp32f -Wl -Map=/home/alex/Coding/Baja/ESP32DataLogger/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/firmware.map -v CMakeFiles/cmTC_a7652.dir/CMakeCCompilerABI.c.obj -o cmTC_a7652   && :]
+        ignore line: [COLLECT_GCC_OPTIONS='-march=rv32imafc_zicsr_zifencei_xesppie' '-mabi=ilp32f' '-v' '-o' 'CMakeFiles/cmTC_82597.dir/CMakeCCompilerABI.c.obj' '-c' '-misa-spec=20191213' '-march=rv32imafc_zicsr_zifencei_xesppie' '-dumpdir' 'CMakeFiles/cmTC_82597.dir/CMakeCCompilerABI.c.']
+        ignore line: [[2/2] : && /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/riscv32-esp-elf-gcc -march=rv32imafc_zicsr_zifencei_xesppie -mabi=ilp32f -nostartfiles -march=rv32imafc_zicsr_zifencei_xesppie -mabi=ilp32f -Wl -Map=/home/alex/Coding/Baja/ESP32DataLogger/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/firmware.map -v CMakeFiles/cmTC_82597.dir/CMakeCCompilerABI.c.obj -o cmTC_82597   && :]
         ignore line: [Using built-in specs.]
         ignore line: [COLLECT_GCC=/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/riscv32-esp-elf-gcc]
         ignore line: [COLLECT_LTO_WRAPPER=/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../libexec/gcc/riscv32-esp-elf/14.2.0/lto-wrapper]
@@ -241,13 +241,13 @@ events:
         ignore line: [gcc version 14.2.0 (crosstool-NG esp-14.2.0_20250730) ]
         ignore line: [COMPILER_PATH=/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../libexec/gcc/riscv32-esp-elf/14.2.0/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../libexec/gcc/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/../../../../riscv32-esp-elf/bin/]
         ignore line: [LIBRARY_PATH=/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/rv32imafc_zicsr_zifencei/ilp32f/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/../../../../riscv32-esp-elf/lib/rv32imafc_zicsr_zifencei/ilp32f/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf/lib/rv32imafc_zicsr_zifencei/ilp32f/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/../../../../riscv32-esp-elf/lib/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf/lib/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf/usr/lib/]
-        ignore line: [COLLECT_GCC_OPTIONS='-nostartfiles' '-march=rv32imafc_zicsr_zifencei_xesppie' '-mabi=ilp32f' '-v' '-o' 'cmTC_a7652' '-misa-spec=20191213' '-march=rv32imafc_zicsr_zifencei_xesppie' '-dumpdir' 'cmTC_a7652.']
-        link line: [ /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../libexec/gcc/riscv32-esp-elf/14.2.0/collect2 -plugin /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../libexec/gcc/riscv32-esp-elf/14.2.0/liblto_plugin.so -plugin-opt=/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../libexec/gcc/riscv32-esp-elf/14.2.0/lto-wrapper -plugin-opt=-fresolution=/tmp/cc2SIqSz.res -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lnosys -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lgcc --sysroot=/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf -melf32lriscv -X -o cmTC_a7652 -L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/rv32imafc_zicsr_zifencei/ilp32f -L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/../../../../riscv32-esp-elf/lib/rv32imafc_zicsr_zifencei/ilp32f -L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf/lib/rv32imafc_zicsr_zifencei/ilp32f -L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0 -L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc -L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/../../../../riscv32-esp-elf/lib -L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf/lib -L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf/usr/lib -Map=/home/alex/Coding/Baja/ESP32DataLogger/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/firmware.map CMakeFiles/cmTC_a7652.dir/CMakeCCompilerABI.c.obj -lgcc -lc -lnosys -lc -lgcc]
+        ignore line: [COLLECT_GCC_OPTIONS='-nostartfiles' '-march=rv32imafc_zicsr_zifencei_xesppie' '-mabi=ilp32f' '-v' '-o' 'cmTC_82597' '-misa-spec=20191213' '-march=rv32imafc_zicsr_zifencei_xesppie' '-dumpdir' 'cmTC_82597.']
+        link line: [ /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../libexec/gcc/riscv32-esp-elf/14.2.0/collect2 -plugin /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../libexec/gcc/riscv32-esp-elf/14.2.0/liblto_plugin.so -plugin-opt=/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../libexec/gcc/riscv32-esp-elf/14.2.0/lto-wrapper -plugin-opt=-fresolution=/tmp/ccqYtu6E.res -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lnosys -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lgcc --sysroot=/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf -melf32lriscv -X -o cmTC_82597 -L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/rv32imafc_zicsr_zifencei/ilp32f -L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/../../../../riscv32-esp-elf/lib/rv32imafc_zicsr_zifencei/ilp32f -L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf/lib/rv32imafc_zicsr_zifencei/ilp32f -L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0 -L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc -L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/../../../../riscv32-esp-elf/lib -L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf/lib -L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf/usr/lib -Map=/home/alex/Coding/Baja/ESP32DataLogger/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/firmware.map CMakeFiles/cmTC_82597.dir/CMakeCCompilerABI.c.obj -lgcc -lc -lnosys -lc -lgcc]
           arg [/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../libexec/gcc/riscv32-esp-elf/14.2.0/collect2] ==> ignore
           arg [-plugin] ==> ignore
           arg [/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../libexec/gcc/riscv32-esp-elf/14.2.0/liblto_plugin.so] ==> ignore
           arg [-plugin-opt=/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../libexec/gcc/riscv32-esp-elf/14.2.0/lto-wrapper] ==> ignore
-          arg [-plugin-opt=-fresolution=/tmp/cc2SIqSz.res] ==> ignore
+          arg [-plugin-opt=-fresolution=/tmp/ccqYtu6E.res] ==> ignore
           arg [-plugin-opt=-pass-through=-lgcc] ==> ignore
           arg [-plugin-opt=-pass-through=-lc] ==> ignore
           arg [-plugin-opt=-pass-through=-lnosys] ==> ignore
@@ -257,7 +257,7 @@ events:
           arg [-melf32lriscv] ==> ignore
           arg [-X] ==> ignore
           arg [-o] ==> ignore
-          arg [cmTC_a7652] ==> ignore
+          arg [cmTC_82597] ==> ignore
           arg [-L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/rv32imafc_zicsr_zifencei/ilp32f] ==> dir [/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/rv32imafc_zicsr_zifencei/ilp32f]
           arg [-L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/../../../../riscv32-esp-elf/lib/rv32imafc_zicsr_zifencei/ilp32f] ==> dir [/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/../../../../riscv32-esp-elf/lib/rv32imafc_zicsr_zifencei/ilp32f]
           arg [-L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf/lib/rv32imafc_zicsr_zifencei/ilp32f] ==> dir [/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf/lib/rv32imafc_zicsr_zifencei/ilp32f]
@@ -267,7 +267,7 @@ events:
           arg [-L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf/lib] ==> dir [/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf/lib]
           arg [-L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf/usr/lib] ==> dir [/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf/usr/lib]
           arg [-Map=/home/alex/Coding/Baja/ESP32DataLogger/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/firmware.map] ==> ignore
-          arg [CMakeFiles/cmTC_a7652.dir/CMakeCCompilerABI.c.obj] ==> ignore
+          arg [CMakeFiles/cmTC_82597.dir/CMakeCCompilerABI.c.obj] ==> ignore
           arg [-lgcc] ==> lib [gcc]
           arg [-lc] ==> lib [c]
           arg [-lnosys] ==> lib [nosys]
@@ -275,7 +275,7 @@ events:
           arg [-lgcc] ==> lib [gcc]
         ignore line: [/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/../../../../riscv32-esp-elf/bin/ld: warning: cannot find entry symbol _start]
         ignore line: [ defaulting to 00010094]
-        ignore line: [COLLECT_GCC_OPTIONS='-nostartfiles' '-march=rv32imafc_zicsr_zifencei_xesppie' '-mabi=ilp32f' '-v' '-o' 'cmTC_a7652' '-misa-spec=20191213' '-march=rv32imafc_zicsr_zifencei_xesppie' '-dumpdir' 'cmTC_a7652.']
+        ignore line: [COLLECT_GCC_OPTIONS='-nostartfiles' '-march=rv32imafc_zicsr_zifencei_xesppie' '-mabi=ilp32f' '-v' '-o' 'cmTC_82597' '-misa-spec=20191213' '-march=rv32imafc_zicsr_zifencei_xesppie' '-dumpdir' 'cmTC_82597.']
         ignore line: []
         ignore line: []
         collapse library dir [/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/rv32imafc_zicsr_zifencei/ilp32f] ==> [/home/alex/.platformio/packages/toolchain-riscv32-esp/lib/gcc/riscv32-esp-elf/14.2.0/rv32imafc_zicsr_zifencei/ilp32f]
@@ -302,8 +302,8 @@ events:
     checks:
       - "Detecting CXX compiler ABI info"
     directories:
-      source: "/home/alex/Coding/Baja/ESP32DataLogger/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/CMakeFiles/CMakeScratch/TryCompile-iRGd6R"
-      binary: "/home/alex/Coding/Baja/ESP32DataLogger/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/CMakeFiles/CMakeScratch/TryCompile-iRGd6R"
+      source: "/home/alex/Coding/Baja/ESP32DataLogger/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/CMakeFiles/CMakeScratch/TryCompile-QukoAe"
+      binary: "/home/alex/Coding/Baja/ESP32DataLogger/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/CMakeFiles/CMakeScratch/TryCompile-QukoAe"
     cmakeVariables:
       CMAKE_CXX_FLAGS: "-march=rv32imafc_zicsr_zifencei_xesppie -mabi=ilp32f "
       CMAKE_CXX_FLAGS_DEBUG: "-g"
@@ -314,10 +314,10 @@ events:
       variable: "CMAKE_CXX_ABI_COMPILED"
       cached: true
       stdout: |
-        Change Dir: '/home/alex/Coding/Baja/ESP32DataLogger/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/CMakeFiles/CMakeScratch/TryCompile-iRGd6R'
+        Change Dir: '/home/alex/Coding/Baja/ESP32DataLogger/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/CMakeFiles/CMakeScratch/TryCompile-QukoAe'
         
-        Run Build Command(s): /home/alex/.platformio/packages/tool-ninja/ninja -v cmTC_53cef
-        [1/2] /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/riscv32-esp-elf-g++   -march=rv32imafc_zicsr_zifencei_xesppie -mabi=ilp32f     -v -o CMakeFiles/cmTC_53cef.dir/CMakeCXXCompilerABI.cpp.obj -c /home/alex/.platformio/packages/tool-cmake/share/cmake-4.0/Modules/CMakeCXXCompilerABI.cpp
+        Run Build Command(s): /home/alex/.platformio/packages/tool-ninja/ninja -v cmTC_7e7df
+        [1/2] /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/riscv32-esp-elf-g++   -march=rv32imafc_zicsr_zifencei_xesppie -mabi=ilp32f     -v -o CMakeFiles/cmTC_7e7df.dir/CMakeCXXCompilerABI.cpp.obj -c /home/alex/.platformio/packages/tool-cmake/share/cmake-4.0/Modules/CMakeCXXCompilerABI.cpp
         Using built-in specs.
         COLLECT_GCC=/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/riscv32-esp-elf-g++
         Target: riscv32-esp-elf
@@ -325,8 +325,8 @@ events:
         Thread model: posix
         Supported LTO compression algorithms: zlib zstd
         gcc version 14.2.0 (crosstool-NG esp-14.2.0_20250730) 
-        COLLECT_GCC_OPTIONS='-march=rv32imafc_zicsr_zifencei_xesppie' '-mabi=ilp32f' '-v' '-o' 'CMakeFiles/cmTC_53cef.dir/CMakeCXXCompilerABI.cpp.obj' '-c' '-misa-spec=20191213' '-march=rv32imafc_zicsr_zifencei_xesppie' '-dumpdir' 'CMakeFiles/cmTC_53cef.dir/'
-         /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../libexec/gcc/riscv32-esp-elf/14.2.0/cc1plus -quiet -v -imultilib rv32imafc_zicsr_zifencei/ilp32f -iprefix /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/ -isysroot /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf /home/alex/.platformio/packages/tool-cmake/share/cmake-4.0/Modules/CMakeCXXCompilerABI.cpp -quiet -dumpdir CMakeFiles/cmTC_53cef.dir/ -dumpbase CMakeCXXCompilerABI.cpp.cpp -dumpbase-ext .cpp -march=rv32imafc_zicsr_zifencei_xesppie -mabi=ilp32f -misa-spec=20191213 -march=rv32imafc_zicsr_zifencei_xesppie -version -o /tmp/ccriJttu.s
+        COLLECT_GCC_OPTIONS='-march=rv32imafc_zicsr_zifencei_xesppie' '-mabi=ilp32f' '-v' '-o' 'CMakeFiles/cmTC_7e7df.dir/CMakeCXXCompilerABI.cpp.obj' '-c' '-misa-spec=20191213' '-march=rv32imafc_zicsr_zifencei_xesppie' '-dumpdir' 'CMakeFiles/cmTC_7e7df.dir/'
+         /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../libexec/gcc/riscv32-esp-elf/14.2.0/cc1plus -quiet -v -imultilib rv32imafc_zicsr_zifencei/ilp32f -iprefix /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/ -isysroot /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf /home/alex/.platformio/packages/tool-cmake/share/cmake-4.0/Modules/CMakeCXXCompilerABI.cpp -quiet -dumpdir CMakeFiles/cmTC_7e7df.dir/ -dumpbase CMakeCXXCompilerABI.cpp.cpp -dumpbase-ext .cpp -march=rv32imafc_zicsr_zifencei_xesppie -mabi=ilp32f -misa-spec=20191213 -march=rv32imafc_zicsr_zifencei_xesppie -version -o /tmp/ccMJUw5m.s
         GNU C++17 (crosstool-NG esp-14.2.0_20250730) version 14.2.0 (riscv32-esp-elf)
         	compiled by GNU C version 4.9.2, GMP version 6.2.1, MPFR version 4.2.1, MPC version 1.2.1, isl version isl-0.26-GMP
         
@@ -349,13 +349,13 @@ events:
          /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/../../../../riscv32-esp-elf/include
         End of search list.
         Compiler executable checksum: b5182f9ea28ccf65f3a7d0e163c3fe7a
-        COLLECT_GCC_OPTIONS='-march=rv32imafc_zicsr_zifencei_xesppie' '-mabi=ilp32f' '-v' '-o' 'CMakeFiles/cmTC_53cef.dir/CMakeCXXCompilerABI.cpp.obj' '-c' '-misa-spec=20191213' '-march=rv32imafc_zicsr_zifencei_xesppie' '-dumpdir' 'CMakeFiles/cmTC_53cef.dir/'
-         /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/../../../../riscv32-esp-elf/bin/as -v --traditional-format -march=rv32imafc_zicsr_zifencei_xesppie -march=rv32imafc_zicsr_zifencei_xesppie -mabi=ilp32f -misa-spec=20191213 -o CMakeFiles/cmTC_53cef.dir/CMakeCXXCompilerABI.cpp.obj /tmp/ccriJttu.s
+        COLLECT_GCC_OPTIONS='-march=rv32imafc_zicsr_zifencei_xesppie' '-mabi=ilp32f' '-v' '-o' 'CMakeFiles/cmTC_7e7df.dir/CMakeCXXCompilerABI.cpp.obj' '-c' '-misa-spec=20191213' '-march=rv32imafc_zicsr_zifencei_xesppie' '-dumpdir' 'CMakeFiles/cmTC_7e7df.dir/'
+         /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/../../../../riscv32-esp-elf/bin/as -v --traditional-format -march=rv32imafc_zicsr_zifencei_xesppie -march=rv32imafc_zicsr_zifencei_xesppie -mabi=ilp32f -misa-spec=20191213 -o CMakeFiles/cmTC_7e7df.dir/CMakeCXXCompilerABI.cpp.obj /tmp/ccMJUw5m.s
         GNU assembler version 2.43.1 (riscv32-esp-elf) using BFD version (crosstool-NG esp-14.2.0_20250730) 2.43.1
         COMPILER_PATH=/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../libexec/gcc/riscv32-esp-elf/14.2.0/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../libexec/gcc/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/../../../../riscv32-esp-elf/bin/
         LIBRARY_PATH=/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/rv32imafc_zicsr_zifencei/ilp32f/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/../../../../riscv32-esp-elf/lib/rv32imafc_zicsr_zifencei/ilp32f/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf/lib/rv32imafc_zicsr_zifencei/ilp32f/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/../../../../riscv32-esp-elf/lib/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf/lib/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf/usr/lib/
-        COLLECT_GCC_OPTIONS='-march=rv32imafc_zicsr_zifencei_xesppie' '-mabi=ilp32f' '-v' '-o' 'CMakeFiles/cmTC_53cef.dir/CMakeCXXCompilerABI.cpp.obj' '-c' '-misa-spec=20191213' '-march=rv32imafc_zicsr_zifencei_xesppie' '-dumpdir' 'CMakeFiles/cmTC_53cef.dir/CMakeCXXCompilerABI.cpp.'
-        [2/2] : && /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/riscv32-esp-elf-g++ -march=rv32imafc_zicsr_zifencei_xesppie -mabi=ilp32f -nostartfiles -march=rv32imafc_zicsr_zifencei_xesppie -mabi=ilp32f -Wl,-Map=/home/alex/Coding/Baja/ESP32DataLogger/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/firmware.map -v CMakeFiles/cmTC_53cef.dir/CMakeCXXCompilerABI.cpp.obj -o cmTC_53cef   && :
+        COLLECT_GCC_OPTIONS='-march=rv32imafc_zicsr_zifencei_xesppie' '-mabi=ilp32f' '-v' '-o' 'CMakeFiles/cmTC_7e7df.dir/CMakeCXXCompilerABI.cpp.obj' '-c' '-misa-spec=20191213' '-march=rv32imafc_zicsr_zifencei_xesppie' '-dumpdir' 'CMakeFiles/cmTC_7e7df.dir/CMakeCXXCompilerABI.cpp.'
+        [2/2] : && /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/riscv32-esp-elf-g++ -march=rv32imafc_zicsr_zifencei_xesppie -mabi=ilp32f -nostartfiles -march=rv32imafc_zicsr_zifencei_xesppie -mabi=ilp32f -Wl,-Map=/home/alex/Coding/Baja/ESP32DataLogger/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/firmware.map -v CMakeFiles/cmTC_7e7df.dir/CMakeCXXCompilerABI.cpp.obj -o cmTC_7e7df   && :
         Using built-in specs.
         COLLECT_GCC=/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/riscv32-esp-elf-g++
         COLLECT_LTO_WRAPPER=/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../libexec/gcc/riscv32-esp-elf/14.2.0/lto-wrapper
@@ -366,10 +366,10 @@ events:
         gcc version 14.2.0 (crosstool-NG esp-14.2.0_20250730) 
         COMPILER_PATH=/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../libexec/gcc/riscv32-esp-elf/14.2.0/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../libexec/gcc/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/../../../../riscv32-esp-elf/bin/
         LIBRARY_PATH=/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/rv32imafc_zicsr_zifencei/ilp32f/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/../../../../riscv32-esp-elf/lib/rv32imafc_zicsr_zifencei/ilp32f/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf/lib/rv32imafc_zicsr_zifencei/ilp32f/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/../../../../riscv32-esp-elf/lib/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf/lib/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf/usr/lib/
-        COLLECT_GCC_OPTIONS='-nostartfiles' '-march=rv32imafc_zicsr_zifencei_xesppie' '-mabi=ilp32f' '-v' '-o' 'cmTC_53cef' '-misa-spec=20191213' '-march=rv32imafc_zicsr_zifencei_xesppie' '-dumpdir' 'cmTC_53cef.'
-         /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../libexec/gcc/riscv32-esp-elf/14.2.0/collect2 -plugin /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../libexec/gcc/riscv32-esp-elf/14.2.0/liblto_plugin.so -plugin-opt=/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../libexec/gcc/riscv32-esp-elf/14.2.0/lto-wrapper -plugin-opt=-fresolution=/tmp/ccuHiRKO.res -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lnosys -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lgcc --sysroot=/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf -melf32lriscv -X -o cmTC_53cef -L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/rv32imafc_zicsr_zifencei/ilp32f -L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/../../../../riscv32-esp-elf/lib/rv32imafc_zicsr_zifencei/ilp32f -L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf/lib/rv32imafc_zicsr_zifencei/ilp32f -L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0 -L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc -L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/../../../../riscv32-esp-elf/lib -L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf/lib -L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf/usr/lib -Map=/home/alex/Coding/Baja/ESP32DataLogger/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/firmware.map CMakeFiles/cmTC_53cef.dir/CMakeCXXCompilerABI.cpp.obj -lstdc++ -lm -lgcc -lc -lnosys -lc -lgcc
+        COLLECT_GCC_OPTIONS='-nostartfiles' '-march=rv32imafc_zicsr_zifencei_xesppie' '-mabi=ilp32f' '-v' '-o' 'cmTC_7e7df' '-misa-spec=20191213' '-march=rv32imafc_zicsr_zifencei_xesppie' '-dumpdir' 'cmTC_7e7df.'
+         /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../libexec/gcc/riscv32-esp-elf/14.2.0/collect2 -plugin /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../libexec/gcc/riscv32-esp-elf/14.2.0/liblto_plugin.so -plugin-opt=/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../libexec/gcc/riscv32-esp-elf/14.2.0/lto-wrapper -plugin-opt=-fresolution=/tmp/cci9xU8M.res -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lnosys -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lgcc --sysroot=/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf -melf32lriscv -X -o cmTC_7e7df -L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/rv32imafc_zicsr_zifencei/ilp32f -L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/../../../../riscv32-esp-elf/lib/rv32imafc_zicsr_zifencei/ilp32f -L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf/lib/rv32imafc_zicsr_zifencei/ilp32f -L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0 -L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc -L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/../../../../riscv32-esp-elf/lib -L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf/lib -L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf/usr/lib -Map=/home/alex/Coding/Baja/ESP32DataLogger/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/firmware.map CMakeFiles/cmTC_7e7df.dir/CMakeCXXCompilerABI.cpp.obj -lstdc++ -lm -lgcc -lc -lnosys -lc -lgcc
         /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/../../../../riscv32-esp-elf/bin/ld: warning: cannot find entry symbol _start; defaulting to 00010094
-        COLLECT_GCC_OPTIONS='-nostartfiles' '-march=rv32imafc_zicsr_zifencei_xesppie' '-mabi=ilp32f' '-v' '-o' 'cmTC_53cef' '-misa-spec=20191213' '-march=rv32imafc_zicsr_zifencei_xesppie' '-dumpdir' 'cmTC_53cef.'
+        COLLECT_GCC_OPTIONS='-nostartfiles' '-march=rv32imafc_zicsr_zifencei_xesppie' '-mabi=ilp32f' '-v' '-o' 'cmTC_7e7df' '-misa-spec=20191213' '-march=rv32imafc_zicsr_zifencei_xesppie' '-dumpdir' 'cmTC_7e7df.'
         
       exitCode: 0
   -
@@ -410,10 +410,10 @@ events:
       Parsed CXX implicit link information:
         link line regex: [^( *|.*[/\\])(ld[0-9]*(|\\.[a-rt-z][a-z]*|\\.s[a-np-z][a-z]*|\\.so[a-z]+)|CMAKE_LINK_STARTFILE-NOTFOUND|([^/\\]+-)?ld|collect2)[^/\\]*( |$)]
         linker tool regex: [^[ 	]*(->|")?[ 	]*(([^"]*[/\\])?(ld[0-9]*(|\\.[a-rt-z][a-z]*|\\.s[a-np-z][a-z]*|\\.so[a-z]+)))("|,| |$)]
-        ignore line: [Change Dir: '/home/alex/Coding/Baja/ESP32DataLogger/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/CMakeFiles/CMakeScratch/TryCompile-iRGd6R']
+        ignore line: [Change Dir: '/home/alex/Coding/Baja/ESP32DataLogger/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/CMakeFiles/CMakeScratch/TryCompile-QukoAe']
         ignore line: []
-        ignore line: [Run Build Command(s): /home/alex/.platformio/packages/tool-ninja/ninja -v cmTC_53cef]
-        ignore line: [[1/2] /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/riscv32-esp-elf-g++   -march=rv32imafc_zicsr_zifencei_xesppie -mabi=ilp32f     -v -o CMakeFiles/cmTC_53cef.dir/CMakeCXXCompilerABI.cpp.obj -c /home/alex/.platformio/packages/tool-cmake/share/cmake-4.0/Modules/CMakeCXXCompilerABI.cpp]
+        ignore line: [Run Build Command(s): /home/alex/.platformio/packages/tool-ninja/ninja -v cmTC_7e7df]
+        ignore line: [[1/2] /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/riscv32-esp-elf-g++   -march=rv32imafc_zicsr_zifencei_xesppie -mabi=ilp32f     -v -o CMakeFiles/cmTC_7e7df.dir/CMakeCXXCompilerABI.cpp.obj -c /home/alex/.platformio/packages/tool-cmake/share/cmake-4.0/Modules/CMakeCXXCompilerABI.cpp]
         ignore line: [Using built-in specs.]
         ignore line: [COLLECT_GCC=/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/riscv32-esp-elf-g++]
         ignore line: [Target: riscv32-esp-elf]
@@ -421,8 +421,8 @@ events:
         ignore line: [Thread model: posix]
         ignore line: [Supported LTO compression algorithms: zlib zstd]
         ignore line: [gcc version 14.2.0 (crosstool-NG esp-14.2.0_20250730) ]
-        ignore line: [COLLECT_GCC_OPTIONS='-march=rv32imafc_zicsr_zifencei_xesppie' '-mabi=ilp32f' '-v' '-o' 'CMakeFiles/cmTC_53cef.dir/CMakeCXXCompilerABI.cpp.obj' '-c' '-misa-spec=20191213' '-march=rv32imafc_zicsr_zifencei_xesppie' '-dumpdir' 'CMakeFiles/cmTC_53cef.dir/']
-        ignore line: [ /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../libexec/gcc/riscv32-esp-elf/14.2.0/cc1plus -quiet -v -imultilib rv32imafc_zicsr_zifencei/ilp32f -iprefix /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/ -isysroot /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf /home/alex/.platformio/packages/tool-cmake/share/cmake-4.0/Modules/CMakeCXXCompilerABI.cpp -quiet -dumpdir CMakeFiles/cmTC_53cef.dir/ -dumpbase CMakeCXXCompilerABI.cpp.cpp -dumpbase-ext .cpp -march=rv32imafc_zicsr_zifencei_xesppie -mabi=ilp32f -misa-spec=20191213 -march=rv32imafc_zicsr_zifencei_xesppie -version -o /tmp/ccriJttu.s]
+        ignore line: [COLLECT_GCC_OPTIONS='-march=rv32imafc_zicsr_zifencei_xesppie' '-mabi=ilp32f' '-v' '-o' 'CMakeFiles/cmTC_7e7df.dir/CMakeCXXCompilerABI.cpp.obj' '-c' '-misa-spec=20191213' '-march=rv32imafc_zicsr_zifencei_xesppie' '-dumpdir' 'CMakeFiles/cmTC_7e7df.dir/']
+        ignore line: [ /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../libexec/gcc/riscv32-esp-elf/14.2.0/cc1plus -quiet -v -imultilib rv32imafc_zicsr_zifencei/ilp32f -iprefix /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/ -isysroot /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf /home/alex/.platformio/packages/tool-cmake/share/cmake-4.0/Modules/CMakeCXXCompilerABI.cpp -quiet -dumpdir CMakeFiles/cmTC_7e7df.dir/ -dumpbase CMakeCXXCompilerABI.cpp.cpp -dumpbase-ext .cpp -march=rv32imafc_zicsr_zifencei_xesppie -mabi=ilp32f -misa-spec=20191213 -march=rv32imafc_zicsr_zifencei_xesppie -version -o /tmp/ccMJUw5m.s]
         ignore line: [GNU C++17 (crosstool-NG esp-14.2.0_20250730) version 14.2.0 (riscv32-esp-elf)]
         ignore line: [	compiled by GNU C version 4.9.2  GMP version 6.2.1  MPFR version 4.2.1  MPC version 1.2.1  isl version isl-0.26-GMP]
         ignore line: []
@@ -445,13 +445,13 @@ events:
         ignore line: [ /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/../../../../riscv32-esp-elf/include]
         ignore line: [End of search list.]
         ignore line: [Compiler executable checksum: b5182f9ea28ccf65f3a7d0e163c3fe7a]
-        ignore line: [COLLECT_GCC_OPTIONS='-march=rv32imafc_zicsr_zifencei_xesppie' '-mabi=ilp32f' '-v' '-o' 'CMakeFiles/cmTC_53cef.dir/CMakeCXXCompilerABI.cpp.obj' '-c' '-misa-spec=20191213' '-march=rv32imafc_zicsr_zifencei_xesppie' '-dumpdir' 'CMakeFiles/cmTC_53cef.dir/']
-        ignore line: [ /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/../../../../riscv32-esp-elf/bin/as -v --traditional-format -march=rv32imafc_zicsr_zifencei_xesppie -march=rv32imafc_zicsr_zifencei_xesppie -mabi=ilp32f -misa-spec=20191213 -o CMakeFiles/cmTC_53cef.dir/CMakeCXXCompilerABI.cpp.obj /tmp/ccriJttu.s]
+        ignore line: [COLLECT_GCC_OPTIONS='-march=rv32imafc_zicsr_zifencei_xesppie' '-mabi=ilp32f' '-v' '-o' 'CMakeFiles/cmTC_7e7df.dir/CMakeCXXCompilerABI.cpp.obj' '-c' '-misa-spec=20191213' '-march=rv32imafc_zicsr_zifencei_xesppie' '-dumpdir' 'CMakeFiles/cmTC_7e7df.dir/']
+        ignore line: [ /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/../../../../riscv32-esp-elf/bin/as -v --traditional-format -march=rv32imafc_zicsr_zifencei_xesppie -march=rv32imafc_zicsr_zifencei_xesppie -mabi=ilp32f -misa-spec=20191213 -o CMakeFiles/cmTC_7e7df.dir/CMakeCXXCompilerABI.cpp.obj /tmp/ccMJUw5m.s]
         ignore line: [GNU assembler version 2.43.1 (riscv32-esp-elf) using BFD version (crosstool-NG esp-14.2.0_20250730) 2.43.1]
         ignore line: [COMPILER_PATH=/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../libexec/gcc/riscv32-esp-elf/14.2.0/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../libexec/gcc/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/../../../../riscv32-esp-elf/bin/]
         ignore line: [LIBRARY_PATH=/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/rv32imafc_zicsr_zifencei/ilp32f/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/../../../../riscv32-esp-elf/lib/rv32imafc_zicsr_zifencei/ilp32f/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf/lib/rv32imafc_zicsr_zifencei/ilp32f/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/../../../../riscv32-esp-elf/lib/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf/lib/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf/usr/lib/]
-        ignore line: [COLLECT_GCC_OPTIONS='-march=rv32imafc_zicsr_zifencei_xesppie' '-mabi=ilp32f' '-v' '-o' 'CMakeFiles/cmTC_53cef.dir/CMakeCXXCompilerABI.cpp.obj' '-c' '-misa-spec=20191213' '-march=rv32imafc_zicsr_zifencei_xesppie' '-dumpdir' 'CMakeFiles/cmTC_53cef.dir/CMakeCXXCompilerABI.cpp.']
-        ignore line: [[2/2] : && /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/riscv32-esp-elf-g++ -march=rv32imafc_zicsr_zifencei_xesppie -mabi=ilp32f -nostartfiles -march=rv32imafc_zicsr_zifencei_xesppie -mabi=ilp32f -Wl -Map=/home/alex/Coding/Baja/ESP32DataLogger/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/firmware.map -v CMakeFiles/cmTC_53cef.dir/CMakeCXXCompilerABI.cpp.obj -o cmTC_53cef   && :]
+        ignore line: [COLLECT_GCC_OPTIONS='-march=rv32imafc_zicsr_zifencei_xesppie' '-mabi=ilp32f' '-v' '-o' 'CMakeFiles/cmTC_7e7df.dir/CMakeCXXCompilerABI.cpp.obj' '-c' '-misa-spec=20191213' '-march=rv32imafc_zicsr_zifencei_xesppie' '-dumpdir' 'CMakeFiles/cmTC_7e7df.dir/CMakeCXXCompilerABI.cpp.']
+        ignore line: [[2/2] : && /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/riscv32-esp-elf-g++ -march=rv32imafc_zicsr_zifencei_xesppie -mabi=ilp32f -nostartfiles -march=rv32imafc_zicsr_zifencei_xesppie -mabi=ilp32f -Wl -Map=/home/alex/Coding/Baja/ESP32DataLogger/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/firmware.map -v CMakeFiles/cmTC_7e7df.dir/CMakeCXXCompilerABI.cpp.obj -o cmTC_7e7df   && :]
         ignore line: [Using built-in specs.]
         ignore line: [COLLECT_GCC=/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/riscv32-esp-elf-g++]
         ignore line: [COLLECT_LTO_WRAPPER=/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../libexec/gcc/riscv32-esp-elf/14.2.0/lto-wrapper]
@@ -462,13 +462,13 @@ events:
         ignore line: [gcc version 14.2.0 (crosstool-NG esp-14.2.0_20250730) ]
         ignore line: [COMPILER_PATH=/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../libexec/gcc/riscv32-esp-elf/14.2.0/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../libexec/gcc/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/../../../../riscv32-esp-elf/bin/]
         ignore line: [LIBRARY_PATH=/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/rv32imafc_zicsr_zifencei/ilp32f/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/../../../../riscv32-esp-elf/lib/rv32imafc_zicsr_zifencei/ilp32f/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf/lib/rv32imafc_zicsr_zifencei/ilp32f/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/../../../../riscv32-esp-elf/lib/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf/lib/:/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf/usr/lib/]
-        ignore line: [COLLECT_GCC_OPTIONS='-nostartfiles' '-march=rv32imafc_zicsr_zifencei_xesppie' '-mabi=ilp32f' '-v' '-o' 'cmTC_53cef' '-misa-spec=20191213' '-march=rv32imafc_zicsr_zifencei_xesppie' '-dumpdir' 'cmTC_53cef.']
-        link line: [ /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../libexec/gcc/riscv32-esp-elf/14.2.0/collect2 -plugin /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../libexec/gcc/riscv32-esp-elf/14.2.0/liblto_plugin.so -plugin-opt=/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../libexec/gcc/riscv32-esp-elf/14.2.0/lto-wrapper -plugin-opt=-fresolution=/tmp/ccuHiRKO.res -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lnosys -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lgcc --sysroot=/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf -melf32lriscv -X -o cmTC_53cef -L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/rv32imafc_zicsr_zifencei/ilp32f -L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/../../../../riscv32-esp-elf/lib/rv32imafc_zicsr_zifencei/ilp32f -L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf/lib/rv32imafc_zicsr_zifencei/ilp32f -L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0 -L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc -L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/../../../../riscv32-esp-elf/lib -L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf/lib -L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf/usr/lib -Map=/home/alex/Coding/Baja/ESP32DataLogger/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/firmware.map CMakeFiles/cmTC_53cef.dir/CMakeCXXCompilerABI.cpp.obj -lstdc++ -lm -lgcc -lc -lnosys -lc -lgcc]
+        ignore line: [COLLECT_GCC_OPTIONS='-nostartfiles' '-march=rv32imafc_zicsr_zifencei_xesppie' '-mabi=ilp32f' '-v' '-o' 'cmTC_7e7df' '-misa-spec=20191213' '-march=rv32imafc_zicsr_zifencei_xesppie' '-dumpdir' 'cmTC_7e7df.']
+        link line: [ /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../libexec/gcc/riscv32-esp-elf/14.2.0/collect2 -plugin /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../libexec/gcc/riscv32-esp-elf/14.2.0/liblto_plugin.so -plugin-opt=/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../libexec/gcc/riscv32-esp-elf/14.2.0/lto-wrapper -plugin-opt=-fresolution=/tmp/cci9xU8M.res -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lnosys -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lgcc --sysroot=/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf -melf32lriscv -X -o cmTC_7e7df -L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/rv32imafc_zicsr_zifencei/ilp32f -L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/../../../../riscv32-esp-elf/lib/rv32imafc_zicsr_zifencei/ilp32f -L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf/lib/rv32imafc_zicsr_zifencei/ilp32f -L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0 -L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc -L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/../../../../riscv32-esp-elf/lib -L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf/lib -L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf/usr/lib -Map=/home/alex/Coding/Baja/ESP32DataLogger/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/firmware.map CMakeFiles/cmTC_7e7df.dir/CMakeCXXCompilerABI.cpp.obj -lstdc++ -lm -lgcc -lc -lnosys -lc -lgcc]
           arg [/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../libexec/gcc/riscv32-esp-elf/14.2.0/collect2] ==> ignore
           arg [-plugin] ==> ignore
           arg [/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../libexec/gcc/riscv32-esp-elf/14.2.0/liblto_plugin.so] ==> ignore
           arg [-plugin-opt=/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../libexec/gcc/riscv32-esp-elf/14.2.0/lto-wrapper] ==> ignore
-          arg [-plugin-opt=-fresolution=/tmp/ccuHiRKO.res] ==> ignore
+          arg [-plugin-opt=-fresolution=/tmp/cci9xU8M.res] ==> ignore
           arg [-plugin-opt=-pass-through=-lgcc] ==> ignore
           arg [-plugin-opt=-pass-through=-lc] ==> ignore
           arg [-plugin-opt=-pass-through=-lnosys] ==> ignore
@@ -478,7 +478,7 @@ events:
           arg [-melf32lriscv] ==> ignore
           arg [-X] ==> ignore
           arg [-o] ==> ignore
-          arg [cmTC_53cef] ==> ignore
+          arg [cmTC_7e7df] ==> ignore
           arg [-L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/rv32imafc_zicsr_zifencei/ilp32f] ==> dir [/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/rv32imafc_zicsr_zifencei/ilp32f]
           arg [-L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/../../../../riscv32-esp-elf/lib/rv32imafc_zicsr_zifencei/ilp32f] ==> dir [/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/../../../../riscv32-esp-elf/lib/rv32imafc_zicsr_zifencei/ilp32f]
           arg [-L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf/lib/rv32imafc_zicsr_zifencei/ilp32f] ==> dir [/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf/lib/rv32imafc_zicsr_zifencei/ilp32f]
@@ -488,7 +488,7 @@ events:
           arg [-L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf/lib] ==> dir [/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf/lib]
           arg [-L/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf/usr/lib] ==> dir [/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf/usr/lib]
           arg [-Map=/home/alex/Coding/Baja/ESP32DataLogger/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/firmware.map] ==> ignore
-          arg [CMakeFiles/cmTC_53cef.dir/CMakeCXXCompilerABI.cpp.obj] ==> ignore
+          arg [CMakeFiles/cmTC_7e7df.dir/CMakeCXXCompilerABI.cpp.obj] ==> ignore
           arg [-lstdc++] ==> lib [stdc++]
           arg [-lm] ==> lib [m]
           arg [-lgcc] ==> lib [gcc]
@@ -498,7 +498,7 @@ events:
           arg [-lgcc] ==> lib [gcc]
         ignore line: [/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/../../../../riscv32-esp-elf/bin/ld: warning: cannot find entry symbol _start]
         ignore line: [ defaulting to 00010094]
-        ignore line: [COLLECT_GCC_OPTIONS='-nostartfiles' '-march=rv32imafc_zicsr_zifencei_xesppie' '-mabi=ilp32f' '-v' '-o' 'cmTC_53cef' '-misa-spec=20191213' '-march=rv32imafc_zicsr_zifencei_xesppie' '-dumpdir' 'cmTC_53cef.']
+        ignore line: [COLLECT_GCC_OPTIONS='-nostartfiles' '-march=rv32imafc_zicsr_zifencei_xesppie' '-mabi=ilp32f' '-v' '-o' 'cmTC_7e7df' '-misa-spec=20191213' '-march=rv32imafc_zicsr_zifencei_xesppie' '-dumpdir' 'cmTC_7e7df.']
         ignore line: []
         ignore line: []
         collapse library dir [/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/rv32imafc_zicsr_zifencei/ilp32f] ==> [/home/alex/.platformio/packages/toolchain-riscv32-esp/lib/gcc/riscv32-esp-elf/14.2.0/rv32imafc_zicsr_zifencei/ilp32f]
@@ -526,8 +526,8 @@ events:
     checks:
       - "Performing Test CMAKE_HAVE_LIBC_PTHREAD"
     directories:
-      source: "/home/alex/Coding/Baja/ESP32DataLogger/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/CMakeFiles/CMakeScratch/TryCompile-1bmNeB"
-      binary: "/home/alex/Coding/Baja/ESP32DataLogger/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/CMakeFiles/CMakeScratch/TryCompile-1bmNeB"
+      source: "/home/alex/Coding/Baja/ESP32DataLogger/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/CMakeFiles/CMakeScratch/TryCompile-H9Tevz"
+      binary: "/home/alex/Coding/Baja/ESP32DataLogger/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/CMakeFiles/CMakeScratch/TryCompile-H9Tevz"
     cmakeVariables:
       CMAKE_C_FLAGS: "-march=rv32imafc_zicsr_zifencei_xesppie -mabi=ilp32f "
       CMAKE_C_FLAGS_DEBUG: "-g"
@@ -537,12 +537,12 @@ events:
       variable: "CMAKE_HAVE_LIBC_PTHREAD"
       cached: true
       stdout: |
-        Change Dir: '/home/alex/Coding/Baja/ESP32DataLogger/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/CMakeFiles/CMakeScratch/TryCompile-1bmNeB'
+        Change Dir: '/home/alex/Coding/Baja/ESP32DataLogger/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/CMakeFiles/CMakeScratch/TryCompile-H9Tevz'
         
-        Run Build Command(s): /home/alex/.platformio/packages/tool-ninja/ninja -v cmTC_20914
-        [1/2] /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/riscv32-esp-elf-gcc -DCMAKE_HAVE_LIBC_PTHREAD  -march=rv32imafc_zicsr_zifencei_xesppie -mabi=ilp32f -o CMakeFiles/cmTC_20914.dir/src.c.obj -c /home/alex/Coding/Baja/ESP32DataLogger/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/CMakeFiles/CMakeScratch/TryCompile-1bmNeB/src.c
-        [2/2] : && /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/riscv32-esp-elf-gcc -march=rv32imafc_zicsr_zifencei_xesppie -mabi=ilp32f -nostartfiles -march=rv32imafc_zicsr_zifencei_xesppie -mabi=ilp32f -Wl,-Map=/home/alex/Coding/Baja/ESP32DataLogger/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/firmware.map CMakeFiles/cmTC_20914.dir/src.c.obj -o cmTC_20914   && :
-        /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/../../../../riscv32-esp-elf/bin/ld: CMakeFiles/cmTC_20914.dir/src.c.obj: in function `main':
+        Run Build Command(s): /home/alex/.platformio/packages/tool-ninja/ninja -v cmTC_631f8
+        [1/2] /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/riscv32-esp-elf-gcc -DCMAKE_HAVE_LIBC_PTHREAD  -march=rv32imafc_zicsr_zifencei_xesppie -mabi=ilp32f -o CMakeFiles/cmTC_631f8.dir/src.c.obj -c /home/alex/Coding/Baja/ESP32DataLogger/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/CMakeFiles/CMakeScratch/TryCompile-H9Tevz/src.c
+        [2/2] : && /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/riscv32-esp-elf-gcc -march=rv32imafc_zicsr_zifencei_xesppie -mabi=ilp32f -nostartfiles -march=rv32imafc_zicsr_zifencei_xesppie -mabi=ilp32f -Wl,-Map=/home/alex/Coding/Baja/ESP32DataLogger/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/firmware.map CMakeFiles/cmTC_631f8.dir/src.c.obj -o cmTC_631f8   && :
+        /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/../../../../riscv32-esp-elf/bin/ld: CMakeFiles/cmTC_631f8.dir/src.c.obj: in function `main':
         src.c:(.text+0x6e): warning: pthread_atfork is not implemented and will always fail
         /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/../../../../riscv32-esp-elf/bin/ld: src.c:(.text+0x50): warning: pthread_cancel is not implemented and will always fail
         /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/../../../../riscv32-esp-elf/bin/ld: src.c:(.text+0x34): warning: pthread_create is not implemented and will always fail
@@ -562,8 +562,8 @@ events:
     checks:
       - "Performing Test C_COMPILER_SUPPORTS_WFORMAT_SIGNEDNESS"
     directories:
-      source: "/home/alex/Coding/Baja/ESP32DataLogger/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/CMakeFiles/CMakeScratch/TryCompile-nv5DVa"
-      binary: "/home/alex/Coding/Baja/ESP32DataLogger/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/CMakeFiles/CMakeScratch/TryCompile-nv5DVa"
+      source: "/home/alex/Coding/Baja/ESP32DataLogger/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/CMakeFiles/CMakeScratch/TryCompile-IDZ7CQ"
+      binary: "/home/alex/Coding/Baja/ESP32DataLogger/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/CMakeFiles/CMakeScratch/TryCompile-IDZ7CQ"
     cmakeVariables:
       CMAKE_C_FLAGS: "-march=rv32imafc_zicsr_zifencei_xesppie -mabi=ilp32f  -Wall -Wextra -Wwrite-strings -Wmissing-prototypes -Wformat=2 -Wno-format-nonliteral -Wvla -Wlogical-op -Wshadow"
       CMAKE_C_FLAGS_DEBUG: "-g"
@@ -573,11 +573,11 @@ events:
       variable: "C_COMPILER_SUPPORTS_WFORMAT_SIGNEDNESS"
       cached: true
       stdout: |
-        Change Dir: '/home/alex/Coding/Baja/ESP32DataLogger/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/CMakeFiles/CMakeScratch/TryCompile-nv5DVa'
+        Change Dir: '/home/alex/Coding/Baja/ESP32DataLogger/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/CMakeFiles/CMakeScratch/TryCompile-IDZ7CQ'
         
-        Run Build Command(s): /home/alex/.platformio/packages/tool-ninja/ninja -v cmTC_3476b
-        [1/2] /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/riscv32-esp-elf-gcc -DC_COMPILER_SUPPORTS_WFORMAT_SIGNEDNESS  -march=rv32imafc_zicsr_zifencei_xesppie -mabi=ilp32f  -Wall -Wextra -Wwrite-strings -Wmissing-prototypes -Wformat=2 -Wno-format-nonliteral -Wvla -Wlogical-op -Wshadow    -Wformat-signedness -o CMakeFiles/cmTC_3476b.dir/src.c.obj -c /home/alex/Coding/Baja/ESP32DataLogger/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/CMakeFiles/CMakeScratch/TryCompile-nv5DVa/src.c
-        [2/2] : && /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/riscv32-esp-elf-gcc -march=rv32imafc_zicsr_zifencei_xesppie -mabi=ilp32f  -Wall -Wextra -Wwrite-strings -Wmissing-prototypes -Wformat=2 -Wno-format-nonliteral -Wvla -Wlogical-op -Wshadow -nostartfiles -march=rv32imafc_zicsr_zifencei_xesppie -mabi=ilp32f -Wl,-Map=/home/alex/Coding/Baja/ESP32DataLogger/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/firmware.map CMakeFiles/cmTC_3476b.dir/src.c.obj -o cmTC_3476b   && :
+        Run Build Command(s): /home/alex/.platformio/packages/tool-ninja/ninja -v cmTC_63b87
+        [1/2] /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/riscv32-esp-elf-gcc -DC_COMPILER_SUPPORTS_WFORMAT_SIGNEDNESS  -march=rv32imafc_zicsr_zifencei_xesppie -mabi=ilp32f  -Wall -Wextra -Wwrite-strings -Wmissing-prototypes -Wformat=2 -Wno-format-nonliteral -Wvla -Wlogical-op -Wshadow    -Wformat-signedness -o CMakeFiles/cmTC_63b87.dir/src.c.obj -c /home/alex/Coding/Baja/ESP32DataLogger/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/CMakeFiles/CMakeScratch/TryCompile-IDZ7CQ/src.c
+        [2/2] : && /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/riscv32-esp-elf-gcc -march=rv32imafc_zicsr_zifencei_xesppie -mabi=ilp32f  -Wall -Wextra -Wwrite-strings -Wmissing-prototypes -Wformat=2 -Wno-format-nonliteral -Wvla -Wlogical-op -Wshadow -nostartfiles -march=rv32imafc_zicsr_zifencei_xesppie -mabi=ilp32f -Wl,-Map=/home/alex/Coding/Baja/ESP32DataLogger/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/firmware.map CMakeFiles/cmTC_63b87.dir/src.c.obj -o cmTC_63b87   && :
         /home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../lib/gcc/riscv32-esp-elf/14.2.0/../../../../riscv32-esp-elf/bin/ld: warning: cannot find entry symbol _start; defaulting to 00010094
         
       exitCode: 0
