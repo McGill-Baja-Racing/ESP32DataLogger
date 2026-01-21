@@ -1,9 +1,9 @@
-set(CMAKE_HOST_SYSTEM "Linux-6.8.0-90-generic")
-set(CMAKE_HOST_SYSTEM_NAME "Linux")
-set(CMAKE_HOST_SYSTEM_VERSION "6.8.0-90-generic")
-set(CMAKE_HOST_SYSTEM_PROCESSOR "x86_64")
+set(CMAKE_HOST_SYSTEM "Darwin-24.5.0")
+set(CMAKE_HOST_SYSTEM_NAME "Darwin")
+set(CMAKE_HOST_SYSTEM_VERSION "24.5.0")
+set(CMAKE_HOST_SYSTEM_PROCESSOR "arm64")
 
-include("/home/alex/.platformio/packages/framework-espidf/tools/cmake/toolchain-esp32p4.cmake")
+include("/Users/remylaurendeau/.platformio/packages/framework-espidf/tools/cmake/toolchain-esp32p4.cmake")
 
 set(CMAKE_SYSTEM "Generic")
 set(CMAKE_SYSTEM_NAME "Generic")

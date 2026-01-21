@@ -4,6 +4,6 @@
 
 method=source_dir
 command=
-source_dir=/home/alex/.platformio/packages/framework-espidf/components/bootloader/subproject
+source_dir=/Users/remylaurendeau/.platformio/packages/framework-espidf/components/bootloader/subproject
 work_dir=
 

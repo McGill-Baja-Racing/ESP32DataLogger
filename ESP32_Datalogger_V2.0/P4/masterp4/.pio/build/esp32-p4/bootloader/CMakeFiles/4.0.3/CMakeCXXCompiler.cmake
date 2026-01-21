@@ -1,4 +1,4 @@
-set(CMAKE_CXX_COMPILER "/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/riscv32-esp-elf-g++")
+set(CMAKE_CXX_COMPILER "/Users/remylaurendeau/.platformio/packages/toolchain-riscv32-esp/bin/riscv32-esp-elf-g++")
 set(CMAKE_CXX_COMPILER_ARG1 "")
 set(CMAKE_CXX_COMPILER_ID "GNU")
 set(CMAKE_CXX_COMPILER_VERSION "14.2.0")
@@ -22,15 +22,15 @@ set(CMAKE_CXX_COMPILER_FRONTEND_VARIANT "GNU")
 set(CMAKE_CXX_COMPILER_APPLE_SYSROOT "")
 set(CMAKE_CXX_SIMULATE_VERSION "")
 
-set(CMAKE_CXX_COMPILER_SYSROOT "/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf/usr")
-set(CMAKE_COMPILER_SYSROOT "/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf/usr")
+set(CMAKE_CXX_COMPILER_SYSROOT "/Users/remylaurendeau/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf/usr")
+set(CMAKE_COMPILER_SYSROOT "/Users/remylaurendeau/.platformio/packages/toolchain-riscv32-esp/bin/../riscv32-esp-elf/usr")
 
 
-set(CMAKE_AR "/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/riscv32-esp-elf-ar")
-set(CMAKE_CXX_COMPILER_AR "/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/riscv32-esp-elf-gcc-ar")
-set(CMAKE_RANLIB "/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/riscv32-esp-elf-ranlib")
-set(CMAKE_CXX_COMPILER_RANLIB "/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/riscv32-esp-elf-gcc-ranlib")
-set(CMAKE_LINKER "/home/alex/.platformio/packages/toolchain-riscv32-esp/bin/riscv32-esp-elf-ld")
+set(CMAKE_AR "/Users/remylaurendeau/.platformio/packages/toolchain-riscv32-esp/bin/riscv32-esp-elf-ar")
+set(CMAKE_CXX_COMPILER_AR "/Users/remylaurendeau/.platformio/packages/toolchain-riscv32-esp/bin/riscv32-esp-elf-gcc-ar")
+set(CMAKE_RANLIB "/Users/remylaurendeau/.platformio/packages/toolchain-riscv32-esp/bin/riscv32-esp-elf-ranlib")
+set(CMAKE_CXX_COMPILER_RANLIB "/Users/remylaurendeau/.platformio/packages/toolchain-riscv32-esp/bin/riscv32-esp-elf-gcc-ranlib")
+set(CMAKE_LINKER "/Users/remylaurendeau/.platformio/packages/toolchain-riscv32-esp/bin/riscv32-esp-elf-ld")
 set(CMAKE_LINKER_LINK "")
 set(CMAKE_LINKER_LLD "")
 set(CMAKE_CXX_COMPILER_LINKER "NOTFOUND")
@@ -91,9 +91,9 @@ endif()
 
 
 
-set(CMAKE_CXX_IMPLICIT_INCLUDE_DIRECTORIES "/home/alex/.platformio/packages/toolchain-riscv32-esp/riscv32-esp-elf/include/c++/14.2.0;/home/alex/.platformio/packages/toolchain-riscv32-esp/riscv32-esp-elf/include/c++/14.2.0/riscv32-esp-elf/rv32imafc_zicsr_zifencei/ilp32f;/home/alex/.platformio/packages/toolchain-riscv32-esp/riscv32-esp-elf/include/c++/14.2.0/backward;/home/alex/.platformio/packages/toolchain-riscv32-esp/lib/gcc/riscv32-esp-elf/14.2.0/include;/home/alex/.platformio/packages/toolchain-riscv32-esp/lib/gcc/riscv32-esp-elf/14.2.0/include-fixed;/home/alex/.platformio/packages/toolchain-riscv32-esp/riscv32-esp-elf/include")
+set(CMAKE_CXX_IMPLICIT_INCLUDE_DIRECTORIES "/Users/remylaurendeau/.platformio/packages/toolchain-riscv32-esp/riscv32-esp-elf/include/c++/14.2.0;/Users/remylaurendeau/.platformio/packages/toolchain-riscv32-esp/riscv32-esp-elf/include/c++/14.2.0/riscv32-esp-elf/rv32imafc_zicsr_zifencei/ilp32f;/Users/remylaurendeau/.platformio/packages/toolchain-riscv32-esp/riscv32-esp-elf/include/c++/14.2.0/backward;/Users/remylaurendeau/.platformio/packages/toolchain-riscv32-esp/lib/gcc/riscv32-esp-elf/14.2.0/include;/Users/remylaurendeau/.platformio/packages/toolchain-riscv32-esp/lib/gcc/riscv32-esp-elf/14.2.0/include-fixed;/Users/remylaurendeau/.platformio/packages/toolchain-riscv32-esp/riscv32-esp-elf/include")
 set(CMAKE_CXX_IMPLICIT_LINK_LIBRARIES "stdc++;m;gcc;c;nosys;c;gcc")
-set(CMAKE_CXX_IMPLICIT_LINK_DIRECTORIES "/home/alex/.platformio/packages/toolchain-riscv32-esp/lib/gcc/riscv32-esp-elf/14.2.0/rv32imafc_zicsr_zifencei/ilp32f;/home/alex/.platformio/packages/toolchain-riscv32-esp/riscv32-esp-elf/lib/rv32imafc_zicsr_zifencei/ilp32f;/home/alex/.platformio/packages/toolchain-riscv32-esp/lib/gcc/riscv32-esp-elf/14.2.0;/home/alex/.platformio/packages/toolchain-riscv32-esp/lib/gcc;/home/alex/.platformio/packages/toolchain-riscv32-esp/riscv32-esp-elf/lib;/home/alex/.platformio/packages/toolchain-riscv32-esp/riscv32-esp-elf/usr/lib")
+set(CMAKE_CXX_IMPLICIT_LINK_DIRECTORIES "/Users/remylaurendeau/.platformio/packages/toolchain-riscv32-esp/lib/gcc/riscv32-esp-elf/14.2.0/rv32imafc_zicsr_zifencei/ilp32f;/Users/remylaurendeau/.platformio/packages/toolchain-riscv32-esp/riscv32-esp-elf/lib/rv32imafc_zicsr_zifencei/ilp32f;/Users/remylaurendeau/.platformio/packages/toolchain-riscv32-esp/lib/gcc/riscv32-esp-elf/14.2.0;/Users/remylaurendeau/.platformio/packages/toolchain-riscv32-esp/lib/gcc;/Users/remylaurendeau/.platformio/packages/toolchain-riscv32-esp/riscv32-esp-elf/lib;/Users/remylaurendeau/.platformio/packages/toolchain-riscv32-esp/riscv32-esp-elf/usr/lib")
 set(CMAKE_CXX_IMPLICIT_LINK_FRAMEWORK_DIRECTORIES "")
 set(CMAKE_CXX_COMPILER_CLANG_RESOURCE_DIR "")
 

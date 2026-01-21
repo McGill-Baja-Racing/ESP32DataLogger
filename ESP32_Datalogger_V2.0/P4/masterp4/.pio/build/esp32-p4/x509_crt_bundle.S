@@ -1,4 +1,4 @@
-/* * Data converted from /home/alex/Coding/Baja/ESP32DataLogger/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/x509_crt_bundle
+/* * Data converted from /Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/x509_crt_bundle
  */
 .data
 #if !defined (__APPLE__) && !defined (__linux__)

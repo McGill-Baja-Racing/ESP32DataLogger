@@ -1,0 +1,16 @@
+{
+	"folders": [
+		{
+			"path": ".."
+		},
+		{
+			"name": "BAJA_ECVT",
+			"path": "../../../../ESP32_ECVT/BAJA_ECVT"
+		},
+		{
+			"name": "masterp4",
+			"path": "../../P4/masterp4"
+		}
+	],
+	"settings": {}
+}

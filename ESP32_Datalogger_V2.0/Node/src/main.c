@@ -19,8 +19,8 @@
 /* --------------------- Definitions and static variables ------------------ */
 
 
-#define TX_GPIO_NUM             20              // CAN TX Pin
-#define RX_GPIO_NUM             21              // CAN RX Pin
+#define TX_GPIO_NUM             21              // CAN TX Pin
+#define RX_GPIO_NUM             20              // CAN RX Pin
 #define TRANSM_RATE             1000000         // Bitrate bps
 #define TX_QUEUE_DEPTH          5               // TX queue depth
 #define RX_QUEUE_LENGTH         16              // RX queue depth
