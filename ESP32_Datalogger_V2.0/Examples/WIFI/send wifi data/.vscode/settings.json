@@ -1,0 +1,20 @@
+{
+  "C_Cpp.intelliSenseEngine": "default",
+  "idf.espIdfPathWin": "d:\\ESP\\v5.5.2\\esp-idf",
+  "idf.pythonInstallPath": "C:\\Users\\youss\\.espressif\\tools\\idf-python\\3.11.2\\python.exe",
+  "idf.openOcdConfigs": [
+    "board/esp32-wrover-kit-3.3v.cfg"
+  ],
+  "idf.portWin": "COM18",
+  "idf.toolsPathWin": "C:\\Users\\youss\\.espressif",
+  "idf.customExtraVars": {
+    "IDF_TARGET": "esp32"
+  },
+  "clangd.path": "C:\\Users\\youss\\.espressif\\tools\\esp-clang\\esp-19.1.2_20250312\\esp-clang\\bin\\clangd.exe",
+  "clangd.arguments": [
+    "--background-index",
+    "--query-driver=**",
+    "--compile-commands-dir=d:\\Projects\\Baja\\ESP32DataLogger\\ESP32_Datalogger_V2.0\\Examples\\WIFI\\send wifi data\\build"
+  ],
+  "idf.flashType": "UART"
+}
