@@ -25,8 +25,8 @@
 #define TX_QUEUE_DEPTH          5               // TX queue depth
 #define RX_QUEUE_LENGTH         16              // RX queue depth
 #define EXAMPLE_TAG             "Node"
-#define NODE_ID                 0               // CHANGE TO NODE ID
-#define SAMPLING_SPEED_MS       100           
+#define NODE_ID                 2              // CHANGE TO NODE ID
+#define SAMPLING_SPEED_MS       50           
 
 #define ID_STOP_CMD             0x0A0
 #define ID_START_CMD            0x0A1
@@ -234,12 +234,13 @@ static void receive_task(void *arg)
         if (rx_msg.id == ID_MASTER_TIME_BEACON) {
             
             handle_time_beacon(&rx_msg);
-
-        }
-        ESP_LOGI(EXAMPLE_TAG,
+            ESP_LOGI(EXAMPLE_TAG,
                 "RX | ID: 0x%03" PRIX32 " | Timestamp: %" PRIi32,
                 rx_msg.id,
                 (uint32_t)rx_msg.data);
+
+        }
+        
         
     }
     
@@ -269,5 +270,5 @@ void app_main(void)
 
     xTaskCreatePinnedToCore(send_task, "send", 4096, NULL, 8, NULL, tskNO_AFFINITY);
     xTaskCreatePinnedToCore(sample_task, "sample", 4096, NULL, 8, NULL, tskNO_AFFINITY);
-    //xTaskCreatePinnedToCore(receive_task, "receive", 4096, NULL, 8, NULL, tskNO_AFFINITY);
+    xTaskCreatePinnedToCore(receive_task, "receive", 4096, NULL, 8, NULL, tskNO_AFFINITY);
 }

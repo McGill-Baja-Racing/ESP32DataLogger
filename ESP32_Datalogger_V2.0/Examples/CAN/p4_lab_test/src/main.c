@@ -222,6 +222,6 @@ void app_main(void)
     ESP_LOGI(EXAMPLE_TAG, "TWAI node enabled");
 
     /* ---------- Tasks LAST ---------- */
-    //xTaskCreatePinnedToCore(time_beacon_task, "time_beacon", 4096, NULL, 8, NULL, tskNO_AFFINITY);
+    xTaskCreatePinnedToCore(time_beacon_task, "time_beacon", 4096, NULL, 8, NULL, tskNO_AFFINITY);
     xTaskCreatePinnedToCore(receive_task,     "receive",     4096, NULL, 8, NULL, tskNO_AFFINITY);
 }

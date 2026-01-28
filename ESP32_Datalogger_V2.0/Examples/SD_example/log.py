@@ -11,7 +11,7 @@ import csv
 NUM_FIELDS_PER_SAMPLE = 5  
 
 # Column headers for CSV (must match fields)
-COLUMN_TITLES = ["t_ms", "val1", "val2", "val3", "val4"]
+COLUMN_TITLES = ["t_ms", "raw", "mv", "val3", "val4"]
 
 # Folder where log_*.bin files are located
 LOG_DIR = "./output/"
