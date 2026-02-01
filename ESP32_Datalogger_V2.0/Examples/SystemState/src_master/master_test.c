@@ -30,6 +30,7 @@
 #define LED_GPIO_NUM            52
 
 bool is_sampling = false;
+bool on_rising_edge = false;
 
 // Node Setup
 twai_node_handle_t node_hdl = NULL; // pointer to TWAI node (TWAI instance)
@@ -63,7 +64,7 @@ void record_data(void *args){
     }
 }
 
-void read_button(void *args, bool on_rising_edge){
+void read_button(void *args){\
     set_button_config(BTN_GPIO_NUM);
     int prev_state = 0;
     int curr_state = 0;
@@ -91,9 +92,14 @@ void read_button(void *args, bool on_rising_edge){
 
 
 
-void send_control_cmd(control_cmd_t state){
-    control_msg_data[0] = state;
+void send_control_cmd(void *args ){
+    while(1){
+
+    control_msg_data[0] = (control_cmd_t)args;
     ESP_ERROR_CHECK(twai_node_transmit(node_hdl, &control_message, 0));  // Timeout = 0: returns immediately if queue is full
+    ESP_ERROR_CHECK(twai_node_transmit_wait_all_done(node_hdl, -1));  // Wait for transmission to finish
+    }
+
 }
 
 void init_node(void){
@@ -101,8 +107,7 @@ void init_node(void){
     ESP_ERROR_CHECK(twai_new_node_onchip(&node_config, &node_hdl));
     // Start the TWAI controller
     ESP_ERROR_CHECK(twai_node_enable(node_hdl));
-
-    ESP_ERROR_CHECK(twai_node_disable(node_hdl));
+    //ESP_ERROR_CHECK(twai_node_disable(node_hdl));
     // ESP_ERROR_CHECK must alwasy be insde a scope { }
 }
 
@@ -114,61 +119,9 @@ void init_control_panel(void){
     set_LED_config(LED_GPIO_NUM);
 }
 
-// Task Notification System
-static TaskHandle_t xTaskToNotify = NULL;
-const UBaseType_t xArrayIndex = 0; // Task notification array
-/* The peripheral driver's transmit function. */
-void StartTransmission( uint8_t *pcData, size_t xDataLength )
-{
-    /* At this point xTaskToNotify should be NULL as no transmission
-       is in progress. A mutex can be used to guard access to the
-       peripheral if necessary. */
-    configASSERT( xTaskToNotify == NULL );
-
-    /* Store the handle of the calling task. */
-    xTaskToNotify = xTaskGetCurrentTaskHandle();
-
-    /* Start the transmission - an interrupt is generated when the
-       transmission is complete. */
-    vStartTransmit( pcData, xDataLength );
-}
-/* The task that initiates the transmission, then enters the
-   Blocked state (so not consuming any CPU time) to wait for it
-   to complete. */
-void vAFunctionCalledFromATask( uint8_t ucDataToTransmit,
-                                size_t xDataLength ){
-uint32_t ulNotificationValue;
-const TickType_t xMaxBlockTime = pdMS_TO_TICKS( 200 );
-
-    /* Start the transmission by calling the function shown above. */
-    StartTransmission( ucDataToTransmit, xDataLength );
-
-    /* Wait to be notified that the transmission is complete. Note
-       the first parameter is pdTRUE, which has the effect of clearing
-       the task's notification value back to 0, making the notification
-       value act like a binary (rather than a counting) semaphore. */
-    ulNotificationValue = ulTaskNotifyTakeIndexed( xArrayIndex,pdTRUE,xMaxBlockTime );
-
-    if( ulNotificationValue == 1 )
-    {
-        /* The transmission ended as expected. */
-    }
-    else
-    {
-        /* The call to ulTaskNotifyTake() timed out. */
-    }
-}
-void LedNotifyTask(void *arg)
-{
-  for (;;)
-  {
-    ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-    ToggleLed();
-  }
-}
 void app_main(void)
 {
-    int test = 2;
+    int test = 4;
     init_node();
     init_control_panel();
     // Code that ask for user input
@@ -201,13 +154,15 @@ void app_main(void)
         xTaskCreate(read_button,"Button Panel", 4096, NULL,tskIDLE_PRIORITY,NULL);
         break;
     case 4:
+        ESP_LOGI("TEST 4","Send Message vi CAN bus");
+        xTaskCreate(send_control_cmd,"Start Sampling",4096,(void *) STOP_CMD,tskIDLE_PRIORITY,NULL);
+        break;
+    case 5:
         is_sampling = false;
         ESP_LOGI("TEST 3","Sampling Control on esp32p4 with TaskNotification");
         // Make sure configUSE_TASK_NOTIFICATIONS = 1;
-        xTaskCreate(record_data,"Record Data 2", 4096, NULL,tskIDLE_PRIORITY,xTaskToNotify);
-
         break;
-    case 5:
+    case 6:
         ESP_LOGI("TEST 4","CAN Sampling Control with esp32c3");
         break;
 

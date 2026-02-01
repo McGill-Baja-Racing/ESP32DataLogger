@@ -4,6 +4,11 @@
 
 ### Notes
 
+- void * parameters --> void pointer input means it accepts any parameter type
+        - see [geeksforgeeks](https://www.geeksforgeeks.org/c/void-pointer-c-cpp/)
+        - A void pointer is a pointer that has no associated data type with it. A void pointer can hold an address of any type and can be typecasted to any type.
+- xTaskCreate: pass parameters by casting ( void * ) 1,
+
 ### Todo
 
 - Start Stop

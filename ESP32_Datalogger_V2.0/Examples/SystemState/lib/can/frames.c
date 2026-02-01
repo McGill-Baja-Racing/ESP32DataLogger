@@ -16,7 +16,7 @@ typedef enum {
 } can_id_t;
 
 typedef enum {
-    START_CMD = 0,
+    START_CMD = 1,
     STOP_CMD  = 0,
 } control_cmd_t;
 
