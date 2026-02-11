@@ -20,6 +20,7 @@
 
 #include "esp_twai.h"
 #include "esp_twai_onchip.h"
+#include "../lib/can/frames.c"
 
 #if SOC_SDMMC_IO_POWER_EXTERNAL
 #include "sd_pwr_ctrl_by_on_chip_ldo.h"
@@ -61,6 +62,10 @@ static TaskHandle_t sd_task_handle     = NULL;
 #define TX_QUEUE_DEPTH          5
 #define RX_QUEUE_LENGTH         256
 
+/* --------------------- BTN config ------------------ */
+#define CTRL_BTN_GPIO_NUM       12
+#define ISR_BTN_QUEUE_LENGTH    2
+
 typedef struct {
     uint32_t id;
     uint8_t  dlc;
@@ -92,6 +97,31 @@ static void create_unique_log_filename(char *out_path, size_t max_len)
     }
 }
 
+/* ---------------------- Button Params -------------------- */
+static QueueHandle_t isr_queue;
+static volatile status = 0; // control state
+
+static void IRAM_ATTR ctlr_btn_handler(void* arg) // IRAM_ATTR is to ensure code is placed in internal RAW
+{
+    int gpio_num = (int)arg;  // pin number passed as argument
+    status = !status;
+    xQueueSendFromISR(isr_queue, &status, NULL); // send to task
+}
+// Acts as interrupt for the button Press
+void ctrl_btn_init(void){
+    // NOTE: Please do not use the interrupt of GPIO36 and GPIO39 when using ADC or Wi-Fi and Bluetooth with sleep mode enabled. 
+    // Look into circuit component to better understand rising edge
+    gpio_config_t button_config = {
+        .pin_bit_mask = (1ULL << CTRL_BTN_GPIO_NUM),
+        .mode = GPIO_MODE_INPUT,
+        .pull_up_en = GPIO_PULLUP_ENABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type = GPIO_INTR_NEGEDGE
+    };
+
+    ESP_ERROR_CHECK(gpio_config(&button_config));
+    ESP_LOGI("Btn","Config Activated");
+}
 /* --------------------- TWAI RX callback ------------------ */
 static bool twai_rx_cb(twai_node_handle_t node,
                        const twai_rx_done_event_data_t *edata,
@@ -300,10 +330,29 @@ static void time_beacon_task(void *arg)
  
     vTaskDelete(NULL);
 }
+/* --------------------- Button Control ------------------ */
+
+
+/* ------------------- Start and Stop ---------------------- */
+void v_send_control_cmd(void *args ){
+    while(1){
+        if (xQueueReceive(isr_queue, &status, portMAX_DELAY)) {
+            ESP_LOGI("btn-Task", "ISR Received");
+            control_msg_data[0] = (control_cmd_t)status;
+            ESP_ERROR_CHECK(twai_node_transmit(node_hdl, &control_message, 0));  // Timeout = 0: returns immediately if queue is full
+            ESP_ERROR_CHECK(twai_node_transmit_wait_all_done(node_hdl, -1));  // Wait for transmission to finish
+        }
+    }
+}
 
 /* --------------------- app_main ------------------ */
 void app_main(void)
-{
+{   
+    ESP_LOGI(TAG, "Control Button Initialisation");
+    ctrl_btn_init();
+    gpio_install_isr_service(0);
+    gpio_isr_handler_add(CTRL_BTN_GPIO_NUM,ctlr_btn_handler,(void*)status);
+
     ESP_LOGI(TAG, "Initializing SD card...");
 
     esp_vfs_fat_sdmmc_mount_config_t mount_config = {
