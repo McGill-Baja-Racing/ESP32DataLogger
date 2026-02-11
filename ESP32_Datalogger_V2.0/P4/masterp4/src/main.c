@@ -55,8 +55,8 @@ static TaskHandle_t logger_task_handle = NULL;
 static TaskHandle_t sd_task_handle     = NULL;
 
 /* --------------------- TWAI config ------------------ */
-#define TX_GPIO_NUM             5
-#define RX_GPIO_NUM             4
+#define TX_GPIO_NUM             4
+#define RX_GPIO_NUM             5
 #define TRANSM_RATE             1000000
 #define TX_QUEUE_DEPTH          5
 #define RX_QUEUE_LENGTH         256

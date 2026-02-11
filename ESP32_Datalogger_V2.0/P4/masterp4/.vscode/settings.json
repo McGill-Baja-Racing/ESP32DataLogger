@@ -11,5 +11,6 @@
     "--background-index",
     "--query-driver=**",
     "--compile-commands-dir=/home/alex/Coding/Baja/ESP32DataLogger/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/build"
-  ]
+  ],
+  "idf.currentSetup": "/Users/remylaurendeau/esp/v5.5.1/esp-idf"
 }

@@ -14,6 +14,10 @@
 #include "esp_twai_onchip.h"
 #include <freertos/projdefs.h>
 
+#include "driver/adc.h"
+#include "esp_adc_cal.h"
+
+
 
 
 /* --------------------- Definitions and static variables ------------------ */
@@ -24,9 +28,13 @@
 #define TRANSM_RATE             1000000         // Bitrate bps
 #define TX_QUEUE_DEPTH          5               // TX queue depth
 #define RX_QUEUE_LENGTH         16              // RX queue depth
-#define EXAMPLE_TAG             "Node"
-#define NODE_ID                 2              // CHANGE TO NODE ID
-#define SAMPLING_SPEED_MS       50           
+#define TAG             "Node"
+#define NODE_ID                 2               // CHANGE TO NODE ID
+#define SAMPLING_SPEED_MS       1           
+// ID1 = brakes
+// ID2 = wheel
+// ID0 = engine
+
 
 #define ID_STOP_CMD             0x0A0
 #define ID_START_CMD            0x0A1
@@ -61,6 +69,42 @@ static QueueHandle_t twai_rx_queue;
 
 static SemaphoreHandle_t sample_task_sem;
 static SemaphoreHandle_t send_task_sem;
+
+// -------------------- ADC CONFIG (CHANGE THESE) --------------------
+// Pick the ADC unit + channel that corresponds to your chosen GPIO.
+// You MUST confirm the mapping for your ESP32-P4 board/pinout.
+static const adc_unit_t    ADC_UNIT_USED = ADC_UNIT_1;
+static const adc_channel_t ADC_CH_USED   = 0;   // <-- CHANGE
+static const adc_atten_t   ADC_ATTEN_USED = ADC_ATTEN_DB_12;
+
+#define ADC_CALI_SCHEME     ESP_ADC_CAL_VAL_EFUSE_TP
+
+static esp_adc_cal_characteristics_t adc1_chars;
+static int adc_raw[2][10];
+
+// -------------------------------------------------------
+// ADC init + optional calibration
+// -------------------------------------------------------
+static bool adc_calibration_init(void)
+{
+    esp_err_t ret;
+    bool cali_enable = false;
+
+    ret = esp_adc_cal_check_efuse(ADC_CALI_SCHEME);
+    if (ret == ESP_ERR_NOT_SUPPORTED) {
+        ESP_LOGW(TAG, "Calibration scheme not supported, skip software calibration");
+    } else if (ret == ESP_ERR_INVALID_VERSION) {
+        ESP_LOGW(TAG, "eFuse not burnt, skip software calibration");
+    } else if (ret == ESP_OK) {
+        cali_enable = true;
+        esp_adc_cal_characterize(ADC_UNIT_1, ADC_ATTEN_USED, ADC_WIDTH_BIT_DEFAULT, 0, &adc1_chars);
+    } else {
+        ESP_LOGE(TAG, "Invalid arg");
+    }
+
+    return cali_enable;
+}
+
 
 static bool twai_rx_cb(twai_node_handle_t node,
                        const twai_rx_done_event_data_t *edata,
@@ -167,10 +211,99 @@ static void sample_task(void *arg)
         xSemaphoreGive(send_task_sem);
         
     }
-    
-
-
 }
+
+static void sample_adc_task(void *arg)
+{
+    /*
+    This task will sample the needed data, buffer it (and add a timestamp if it has
+    P4 timestamp) and wait for the data to be sent before sampling again.
+
+    Data is packaged as:
+        - 1st 32 bits: Timestamp
+        - 2nd 32 bits: Value
+    */
+    while (1)
+    {
+        xSemaphoreTake(sample_task_sem, portMAX_DELAY);
+
+         // Read ADC (raw)
+        int raw = 0;
+        adc_raw[0][0] = adc1_get_raw(ADC_CH_USED);
+        ESP_LOGI(TAG, "raw  data: %d", adc_raw[0][0]);
+        raw = adc_raw[0][0];
+
+
+        int64_t t_local_sample_us = esp_timer_get_time();
+        int64_t t_main_sample_us = t_local_sample_us + g_offset_us;
+        int32_t timestamp = (int32_t)t_main_sample_us/1000 ; // Convert it from us to ms
+        
+        int32_t value = (int32_t) raw;
+
+        data =
+                ((uint64_t)(uint32_t)timestamp << 32)
+            | ((uint64_t)(uint32_t)value );
+
+        // allow sample task to run
+        xSemaphoreGive(send_task_sem);
+        
+    }
+}
+
+static void sample_rpm_task(void *arg)
+{
+    /*
+    This task will sample the ADC pulse, detect the peak, buffer the data (timestamp and ADC value),
+    and send it once for each pulse detected.
+    */
+
+    bool peak_detected = false;
+    int raw = 0;
+    
+    while (1)
+    {
+        // Wait for signal to start sampling
+        //xSemaphoreTake(sample_task_sem, portMAX_DELAY);
+
+        // Read ADC (raw)
+
+        raw = adc1_get_raw(ADC_CH_USED);
+        
+
+        // Peak detection - Check for the rising edge or threshold crossing
+        if (raw < 1000 && !peak_detected) {
+            peak_detected = true;
+
+            // Capture the timestamp in microseconds
+            int64_t t_local_sample_us = esp_timer_get_time();
+            int64_t t_main_sample_us = t_local_sample_us + g_offset_us;
+
+            // Optionally, you can keep timestamp in microseconds for better precision
+            int32_t timestamp = (int32_t)(t_main_sample_us / 1000); // Convert from us to ms
+            
+            int32_t value = (int32_t)raw;
+
+            // Pack timestamp and value into the data structure
+            data =
+                ((uint64_t)(uint32_t)timestamp << 32)
+            | ((uint64_t)(uint32_t)value );
+
+
+            ESP_LOGI(TAG, "raw  data: %d", raw);
+
+            
+            // Allow sample task to run
+            xSemaphoreGive(send_task_sem);
+        }
+        // Reset peak detection after sending data
+        else if (raw > 1000 && peak_detected) {
+            peak_detected = false;
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(1));
+    }
+}
+
 
 static void send_task(void *arg)
 {
@@ -183,9 +316,6 @@ static void send_task(void *arg)
     */
     while (1)
     {
-
-        // allow sample task to run
-        xSemaphoreGive(sample_task_sem);
 
         // Wait until data is ready
         xSemaphoreTake(send_task_sem, portMAX_DELAY);
@@ -206,11 +336,11 @@ static void send_task(void *arg)
 
         int32_t value = (int32_t)( data    & 0xFFFFFFFF );
         int32_t timestamp = (int32_t)((data >> 32) & 0xFFFFFFFF );
-         ESP_LOGI(EXAMPLE_TAG,
+         ESP_LOGI(TAG,
                          "TX Data | ts=%" PRIi32 " val=%" PRIi32,
                          timestamp, value);
 
-        vTaskDelay(pdMS_TO_TICKS(SAMPLING_SPEED_MS));
+        //vTaskDelay(pdMS_TO_TICKS(SAMPLING_SPEED_MS));
 
 
     }
@@ -234,7 +364,7 @@ static void receive_task(void *arg)
         if (rx_msg.id == ID_MASTER_TIME_BEACON) {
             
             handle_time_beacon(&rx_msg);
-            ESP_LOGI(EXAMPLE_TAG,
+            ESP_LOGI(TAG,
                 "RX | ID: 0x%03" PRIX32 " | Timestamp: %" PRIi32,
                 rx_msg.id,
                 (uint32_t)rx_msg.data);
@@ -251,6 +381,12 @@ static void receive_task(void *arg)
 
 void app_main(void)
 {
+    uint32_t voltage = 0;
+    bool cali_enable = adc_calibration_init();
+
+    //ADC1 config
+    ESP_ERROR_CHECK(adc1_config_width(ADC_WIDTH_BIT_DEFAULT));
+    ESP_ERROR_CHECK(adc1_config_channel_atten(ADC_CH_USED , ADC_ATTEN_USED));
 
     //Create tasks, queues, and semaphores
     twai_rx_queue = xQueueCreate(RX_QUEUE_LENGTH, sizeof(can_rx_word_t));
@@ -259,16 +395,16 @@ void app_main(void)
 
     //Install TWAI driver
     ESP_ERROR_CHECK(twai_new_node_onchip(&node_config, &node_hdl));
-    ESP_LOGI(EXAMPLE_TAG, "Driver installed");
+    ESP_LOGI(TAG, "Driver installed");
     
     // Handle CAN receive ISR
     ESP_ERROR_CHECK(twai_node_register_event_callbacks(node_hdl, &cbs, NULL));
 
     /* ---------- Enable / start TWAI ---------- */
     ESP_ERROR_CHECK(twai_node_enable(node_hdl));
-    ESP_LOGI(EXAMPLE_TAG, "TWAI node enabled");
+    ESP_LOGI(TAG, "TWAI node enabled");
 
-    xTaskCreatePinnedToCore(send_task, "send", 4096, NULL, 8, NULL, tskNO_AFFINITY);
-    xTaskCreatePinnedToCore(sample_task, "sample", 4096, NULL, 8, NULL, tskNO_AFFINITY);
-    xTaskCreatePinnedToCore(receive_task, "receive", 4096, NULL, 8, NULL, tskNO_AFFINITY);
+    xTaskCreatePinnedToCore(send_task, "send", 8192, NULL, 7, NULL, tskNO_AFFINITY);
+    xTaskCreatePinnedToCore(sample_rpm_task, "sample", 8192, NULL, 8, NULL, tskNO_AFFINITY);
+    //xTaskCreatePinnedToCore(receive_task, "receive", 4096, NULL, 8, NULL, tskNO_AFFINITY);
 }

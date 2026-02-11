@@ -68,6 +68,7 @@
 /Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/esp-idf/mbedtls/libmbedtls.a
 /Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/esp-idf/esp_wifi/libesp_wifi.a
 /Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/esp-idf/esp_netif/libesp_netif.a
+/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/esp-idf/wpa_supplicant/libwpa_supplicant.a
 /Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/esp-idf/esp_https_ota/libesp_https_ota.a
 /Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/esp-idf/esp_security/libesp_security.a
 /Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/esp-idf/pthread/libpthread.a
@@ -103,6 +104,7 @@
 /Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/esp-idf/lwip/liblwip.a
 /Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/esp-idf/esp_netif/libesp_netif.a
 /Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/esp-idf/nvs_flash/libnvs_flash.a
+/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/esp-idf/wpa_supplicant/libwpa_supplicant.a
 /Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/esp-idf/esp_wifi/libesp_wifi.a
 /Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/esp-idf/esp_driver_spi/libesp_driver_spi.a
 /Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/esp-idf/esp_gdbstub/libesp_gdbstub.a
@@ -160,4 +162,6 @@
 /Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/esp-idf/rt/librt.a
 /Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/esp-idf/spiffs/libspiffs.a
 /Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/esp-idf/usb/libusb.a
+/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/esp-idf/wifi_provisioning/libwifi_provisioning.a
+/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/esp-idf/json/libjson.a
 /Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/esp-idf/src/libsrc.a

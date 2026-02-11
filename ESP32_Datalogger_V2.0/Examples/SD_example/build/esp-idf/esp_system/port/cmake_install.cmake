@@ -39,7 +39,7 @@ endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32_Datalogger_V2.0/Examples/SD_example/build/esp-idf/esp_system/port/soc/esp32p4/cmake_install.cmake")
+  include("/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32_Datalogger_V2.0/Examples/SD_example/build/esp-idf/esp_system/port/soc/esp32c3/cmake_install.cmake")
 endif()
 
 string(REPLACE ";" "\n" CMAKE_INSTALL_MANIFEST_CONTENT

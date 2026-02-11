@@ -39,12 +39,7 @@ endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32_Datalogger_V2.0/Examples/SD_example/build/esp-idf/esp_hw_support/port/esp32p4/cmake_install.cmake")
-endif()
-
-if(NOT CMAKE_INSTALL_LOCAL_ONLY)
-  # Include the install script for the subdirectory.
-  include("/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32_Datalogger_V2.0/Examples/SD_example/build/esp-idf/esp_hw_support/mspi_timing_tuning/port/esp32p4/cmake_install.cmake")
+  include("/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32_Datalogger_V2.0/Examples/SD_example/build/esp-idf/esp_hw_support/port/esp32c3/cmake_install.cmake")
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)

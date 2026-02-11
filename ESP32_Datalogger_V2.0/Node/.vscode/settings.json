@@ -11,5 +11,6 @@
   ],
   "idf.openOcdConfigs": [
     "board/esp32c3-builtin.cfg"
-  ]
+  ],
+  "idf.currentSetup": "/Users/remylaurendeau/esp/v5.5.1/esp-idf"
 }

@@ -19,9 +19,9 @@
 #include "esp_timer.h"
 #include "esp_vfs_fat.h"
 
-#include "sdmmc_cmd.h"
-#include "driver/sdmmc_host.h"
-#include "sd_test_io.h"
+//#include "sdmmc_cmd.h"
+//#include "driver/sdmmc_host.h"
+//#include "sd_test_io.h"
 
 #include "esp_adc/adc_oneshot.h"
 #include "esp_adc/adc_cali.h"
@@ -61,7 +61,7 @@ static int writeCounter = 0;
 // Pick the ADC unit + channel that corresponds to your chosen GPIO.
 // You MUST confirm the mapping for your ESP32-P4 board/pinout.
 static const adc_unit_t    ADC_UNIT_USED = ADC_UNIT_1;
-static const adc_channel_t ADC_CH_USED   = 4;   // <-- CHANGE
+static const adc_channel_t ADC_CH_USED   = 0;   // <-- CHANGE
 static const adc_atten_t   ADC_ATTEN_USED = ADC_ATTEN_DB_11;
 
 static adc_oneshot_unit_handle_t s_adc_handle = NULL;
@@ -130,6 +130,8 @@ void sample_task(void *arg)
         if (s_adc_handle) {
             (void)adc_oneshot_read(s_adc_handle, ADC_CH_USED, &raw);
         }
+
+        ESP_LOGI(TAG, "ADC %d", raw);
 
         // Convert to mV if calibration is enabled; else keep mV = -1
         int mv = -1;
@@ -240,63 +242,63 @@ void sd_writer_task(void *arg)
 // -------------------------------------------------------
 void app_main(void)
 {
-    ESP_LOGI(TAG, "Initializing SD card...");
+//     ESP_LOGI(TAG, "Initializing SD card...");
 
-    esp_vfs_fat_sdmmc_mount_config_t mount_config = {
-        .format_if_mount_failed = false,
-        .max_files = 5,
-        .allocation_unit_size = 16 * 1024
-    };
+//     esp_vfs_fat_sdmmc_mount_config_t mount_config = {
+//         .format_if_mount_failed = false,
+//         .max_files = 5,
+//         .allocation_unit_size = 16 * 1024
+//     };
 
-    sdmmc_card_t *card;
-    sdmmc_host_t host = SDMMC_HOST_DEFAULT();
+//     sdmmc_card_t *card;
+//     sdmmc_host_t host = SDMMC_HOST_DEFAULT();
 
-#if CONFIG_EXAMPLE_SDMMC_SPEED_UHS_I_SDR50
-    host.slot = SDMMC_HOST_SLOT_0;
-    host.max_freq_khz = SDMMC_FREQ_SDR50;
-    host.flags &= ~SDMMC_HOST_FLAG_DDR;
-#endif
+// #if CONFIG_EXAMPLE_SDMMC_SPEED_UHS_I_SDR50
+//     host.slot = SDMMC_HOST_SLOT_0;
+//     host.max_freq_khz = SDMMC_FREQ_SDR50;
+//     host.flags &= ~SDMMC_HOST_FLAG_DDR;
+// #endif
 
-#if CONFIG_EXAMPLE_SD_PWR_CTRL_LDO_INTERNAL_IO
-    sd_pwr_ctrl_ldo_config_t cfg = {.ldo_chan_id = CONFIG_EXAMPLE_SD_PWR_CTRL_LDO_IO_ID};
-    sd_pwr_ctrl_handle_t pwr;
-    if (sd_pwr_ctrl_new_on_chip_ldo(&cfg, &pwr) == ESP_OK)
-        host.pwr_ctrl_handle = pwr;
-#endif
+// #if CONFIG_EXAMPLE_SD_PWR_CTRL_LDO_INTERNAL_IO
+//     sd_pwr_ctrl_ldo_config_t cfg = {.ldo_chan_id = CONFIG_EXAMPLE_SD_PWR_CTRL_LDO_IO_ID};
+//     sd_pwr_ctrl_handle_t pwr;
+//     if (sd_pwr_ctrl_new_on_chip_ldo(&cfg, &pwr) == ESP_OK)
+//         host.pwr_ctrl_handle = pwr;
+// #endif
 
-    // SDMMC slot configuration
-    sdmmc_slot_config_t slot_config = SDMMC_SLOT_CONFIG_DEFAULT();
-    slot_config.width = 4;
-    slot_config.clk = 43;
-    slot_config.cmd = 44;
-    slot_config.d0  = 39;
-    slot_config.d1  = 40;
-    slot_config.d2  = 41;
-    slot_config.d3  = 42;
-    slot_config.flags |= SDMMC_SLOT_FLAG_INTERNAL_PULLUP;
+//     // SDMMC slot configuration
+//     sdmmc_slot_config_t slot_config = SDMMC_SLOT_CONFIG_DEFAULT();
+//     slot_config.width = 4;
+//     slot_config.clk = 43;
+//     slot_config.cmd = 44;
+//     slot_config.d0  = 39;
+//     slot_config.d1  = 40;
+//     slot_config.d2  = 41;
+//     slot_config.d3  = 42;
+//     slot_config.flags |= SDMMC_SLOT_FLAG_INTERNAL_PULLUP;
 
-    if (esp_vfs_fat_sdmmc_mount("/sdcard", &host, &slot_config, &mount_config, &card) != ESP_OK)
-    {
-        ESP_LOGE(TAG, "Failed to mount SD card");
-        return;
-    }
+//     if (esp_vfs_fat_sdmmc_mount("/sdcard", &host, &slot_config, &mount_config, &card) != ESP_OK)
+//     {
+//         ESP_LOGE(TAG, "Failed to mount SD card");
+//         return;
+//     }
 
-    sdmmc_card_print_info(stdout, card);
+//     sdmmc_card_print_info(stdout, card);
 
-    // Init ADC
-    adc_init();
+//     // Init ADC
+//     adc_init();
 
-    // Create semaphores
-    sample_sem = xSemaphoreCreateBinary();
-    block_ready_sem = xSemaphoreCreateBinary();
-    done_sem = xSemaphoreCreateBinary();
+//     // Create semaphores
+//     sample_sem = xSemaphoreCreateBinary();
+//     block_ready_sem = xSemaphoreCreateBinary();
+//     done_sem = xSemaphoreCreateBinary();
 
-    // Get unique log file name
-    char log_path_global[64];
-    create_unique_log_filename(log_path_global, sizeof(log_path_global));
+//     // Get unique log file name
+//     char log_path_global[64];
+//     create_unique_log_filename(log_path_global, sizeof(log_path_global));
 
-    // Start tasks
-    xTaskCreatePinnedToCore(sd_writer_task, "sd_task", 4096, strdup(log_path_global), 4, NULL, 1);
+//     // Start tasks
+//     xTaskCreatePinnedToCore(sd_writer_task, "sd_task", 4096, strdup(log_path_global), 4, NULL, 1);
     xTaskCreatePinnedToCore(sample_task,    "sample_task", 4096, NULL, 5, NULL, 0);
 
     // Create and start 1 kHz timer ISR
@@ -313,7 +315,7 @@ void app_main(void)
     // Wait until datalogging ends
     xSemaphoreTake(done_sem, portMAX_DELAY);
 
-    esp_vfs_fat_sdcard_unmount("/sdcard", card);
+    //esp_vfs_fat_sdcard_unmount("/sdcard", card);
     ESP_LOGI(TAG, "SD unmounted, datalogging complete.");
 }
 

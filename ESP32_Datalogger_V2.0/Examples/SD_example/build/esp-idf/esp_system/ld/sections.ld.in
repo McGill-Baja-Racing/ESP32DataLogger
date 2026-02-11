@@ -1,5 +1,10 @@
 /*
- * SPDX-FileCopyrightText: 2022 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2021 Espressif Systems (Shanghai) CO LTD
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+/*
+ * SPDX-FileCopyrightText: 2021-2024 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -9,11 +14,6 @@
  */
        
 /* List of deprecated options */
-/*
- * SPDX-FileCopyrightText: 2021-2024 Espressif Systems (Shanghai) CO LTD
- *
- * SPDX-License-Identifier: Apache-2.0
- */
 /* CPU instruction prefetch padding size for flash mmap scenario */
 /*
  * PMP region granularity size
@@ -34,26 +34,19 @@ SECTIONS
    */
   .rtc.text :
   {
-    /* Align the start of RTC code region as per PMP granularity
-     * this ensures we do not overwrite the permissions for the previous
-     * region (ULP mem/RTC reserved) regardless of their end alignment
-     */
     
- . = ALIGN(128); 
+ . = ALIGN(4); 
  _rtc_fast_start = ABSOLUTE(.);
-    
- . = ALIGN(128); 
- _rtc_text_start = ABSOLUTE(.);
-    arrays[rtc_text]
+    HIDDEN(_rtc_code_start = .);
     mapping[rtc_text]
     *rtc_wake_stub*.*(.text .text.*)
     *(.rtc_text_end_test)
-    /* Align the end of RTC code region as per PMP granularity */
-    . = ALIGN(128);
-    
- . = ALIGN(4); 
- _rtc_text_end = ABSOLUTE(.);
-  } > lp_ram_seg
+    HIDDEN(_rtc_code_end = .);
+    /* Padding for possible CPU prefetch + 4B alignment for PMS split lines. */
+    . = ((_rtc_code_end - _rtc_code_start) == 0) ?
+        ALIGN(0) : 16 + ALIGN(4);
+    _rtc_text_end = ABSOLUTE(.);
+  } > rtc_iram_seg
   /**
    * This section located in RTC FAST Memory area.
    * It holds data marked with RTC_FAST_ATTR attribute.
@@ -64,13 +57,12 @@ SECTIONS
     
  . = ALIGN(4); 
  _rtc_force_fast_start = ABSOLUTE(.);
-    arrays[rtc_force_fast]
     mapping[rtc_force_fast]
     *(.rtc.force_fast .rtc.force_fast.*)
     
  . = ALIGN(4); 
  _rtc_force_fast_end = ABSOLUTE(.);
-  } > lp_ram_seg
+  } > rtc_data_seg
   /**
    * RTC data section holds RTC wake stub
    * data/rodata, including from any source file
@@ -80,21 +72,19 @@ SECTIONS
   .rtc.data :
   {
     _rtc_data_start = ABSOLUTE(.);
-    arrays[rtc_data]
     mapping[rtc_data]
     *rtc_wake_stub*.*(.data .rodata .data.* .rodata.* .srodata.*)
     _rtc_data_end = ABSOLUTE(.);
-  } > lp_ram_seg
+  } > rtc_data_location
   /* RTC bss, from any source file named rtc_wake_stub*.c */
   .rtc.bss (NOLOAD) :
   {
     _rtc_bss_start = ABSOLUTE(.);
     *rtc_wake_stub*.*(.bss .bss.* .sbss .sbss.*)
     *rtc_wake_stub*.*(COMMON)
-    arrays[rtc_bss]
     mapping[rtc_bss]
     _rtc_bss_end = ABSOLUTE(.);
-  } > lp_ram_seg
+  } > rtc_data_location
   /**
    * This section holds data that should not be initialized at power up
    * and will be retained during deep sleep.
@@ -110,7 +100,7 @@ SECTIONS
     
  . = ALIGN(4); 
  _rtc_noinit_end = ABSOLUTE(.);
-  } > lp_ram_seg
+  } > rtc_data_location
   /**
    * This section located in RTC SLOW Memory area.
    * It holds data marked with RTC_SLOW_ATTR attribute.
@@ -125,7 +115,7 @@ SECTIONS
     
  . = ALIGN(4); 
  _rtc_force_slow_end = ABSOLUTE(.);
-  } > lp_ram_seg
+  } > rtc_slow_seg
   /**
    * This section holds RTC data that should have fixed addresses.
    * The data are not initialized at power-up and are retained during deep
@@ -136,18 +126,17 @@ SECTIONS
     
  . = ALIGN(4); 
  _rtc_reserved_start = ABSOLUTE(.);
-    KEEP(*(.bootloader_data_rtc_mem .bootloader_data_rtc_mem.*))
-    *(.rtc_timer_data_in_rtc_mem .rtc_timer_data_in_rtc_mem.*)
     /**
      * New data can only be added here to ensure existing data are not moved.
-     * Because data have adhered to the beginning of the segment and code is relied
+     * Because data have adhered to the end of the segment and code is relied
      * on it.
      * >> put new data here <<
      */
+    *(.rtc_timer_data_in_rtc_mem .rtc_timer_data_in_rtc_mem.*)
+    KEEP(*(.bootloader_data_rtc_mem .bootloader_data_rtc_mem.*))
     _rtc_reserved_end = ABSOLUTE(.);
   } > rtc_reserved_seg
   _rtc_reserved_length = _rtc_reserved_end - _rtc_reserved_start;
-  _rtc_ulp_memory_start = _rtc_reserved_start + LENGTH(rtc_reserved_seg);
   ASSERT((_rtc_reserved_length <= LENGTH(rtc_reserved_seg)),
           "RTC reserved segment data does not fit.")
   /* Get size of rtc slow data based on rtc_data_location alias */
@@ -161,66 +150,28 @@ SECTIONS
           "RTC_SLOW segment data does not fit.")
   ASSERT((_rtc_fast_length <= LENGTH(rtc_data_seg)),
           "RTC_FAST segment data does not fit.")
-  .tcm.text :
-  {
-    /* Code marked as running out of TCM */
-    _tcm_text_start = ABSOLUTE(.);
-    arrays[tcm_text]
-    mapping[tcm_text]
-    _tcm_text_end = ABSOLUTE(.);
-  } > tcm_idram_seg
-  .tcm.data :
-  {
-    _tcm_data_start = ABSOLUTE(.);
-    arrays[tcm_data]
-    mapping[tcm_data]
-    _tcm_data_end = ABSOLUTE(.);
-  } > tcm_idram_seg
   .iram0.text :
   {
     _iram_start = ABSOLUTE(.);
     /* Vectors go to start of IRAM */
-    ASSERT(ABSOLUTE(.) % 0x40 == 0, "vector address must be 64 byte aligned");
+    ASSERT(ABSOLUTE(.) % 0x100 == 0, "vector address must be 256 byte aligned");
     KEEP(*(.exception_vectors_table.text));
     KEEP(*(.exception_vectors.text));
     /* Code marked as running out of IRAM */
     _iram_text_start = ABSOLUTE(.);
-    arrays[iram0_text]
     mapping[iram0_text]
-  } > sram_low
-  /* Marks the end of IRAM code segment */
-  .iram0.text_end (NOLOAD) :
+  } > iram0_0_seg
+  /**
+   * This section is required to skip .iram0.text area because iram0_0_seg and
+   * dram0_0_seg reflect the same address space on different buses.
+   */
+  .dram0.dummy (NOLOAD):
   {
-    /* Align the end of code region as per PMP region granularity */
-    . = ALIGN(128);
-    
- . = ALIGN(4); 
- _iram_text_end = ABSOLUTE(.);
-  } > sram_low
-  .iram0.data :
-  {
-    
- . = ALIGN(16); 
- _iram_data_start = ABSOLUTE(.);
-    arrays[iram0_data]
-    mapping[iram0_data]
-    _iram_data_end = ABSOLUTE(.);
-  } > sram_low
-  .iram0.bss (NOLOAD) :
-  {
-    
- . = ALIGN(16); 
- _iram_bss_start = ABSOLUTE(.);
-    arrays[iram0_bss]
-    mapping[iram0_bss]
-    _iram_bss_end = ABSOLUTE(.);
-    
- . = ALIGN(16); 
- _iram_end = ABSOLUTE(.);
-  } > sram_low
+    . = ORIGIN(dram0_0_seg) + _iram_end - _iram_start;
+  } > dram0_0_seg
   .dram0.data :
   {
-    _data_start_low = ABSOLUTE(.);
+    _data_start = ABSOLUTE(.);
     *(.gnu.linkonce.d.*)
     *(.data1)
     __global_pointer$ = . + 0x800;
@@ -229,16 +180,9 @@ SECTIONS
     *(.gnu.linkonce.s.*)
     *(.gnu.linkonce.s2.*)
     *(.jcr)
-    arrays[dram0_data]
     mapping[dram0_data]
-    _data_end_low = ABSOLUTE(.);
-  } > sram_low
-  .dram1.data :
-  {
-    _data_start_high = ABSOLUTE(.);
-    mapping[dram0_data]
-    _data_end_high = ABSOLUTE(.);
-  } > sram_high
+    _data_end = ABSOLUTE(.);
+  } > dram0_0_seg
   /**
    * This section holds data that should not be initialized at power up.
    * The section located in Internal SRAM memory region. The macro _NOINIT
@@ -254,7 +198,24 @@ SECTIONS
     
  . = ALIGN(4); 
  _noinit_end = ABSOLUTE(.);
-  } > sram_low
+  } > dram0_0_seg
+  /* Shared RAM */
+  .dram0.bss (NOLOAD) :
+  {
+    
+ . = ALIGN(8); 
+ _bss_start = ABSOLUTE(.);
+    /**
+     * ldgen places all bss-related data to mapping[dram0_bss]
+     * (See components/esp_system/app.lf).
+     */
+    mapping[dram0_bss]
+    
+ . = ALIGN(8); 
+ _bss_end = ABSOLUTE(.);
+  } > dram0_0_seg
+  ASSERT(((_bss_end - ORIGIN(dram0_0_seg)) <= LENGTH(dram0_0_seg)),
+         "DRAM segment data does not fit.")
   .flash.text :
   {
     _stext = .;
@@ -264,7 +225,6 @@ SECTIONS
      */
     _instruction_reserved_start = ABSOLUTE(.);
     _text_start = ABSOLUTE(.);
-    arrays[flash_text]
     mapping[flash_text]
     *(.stub)
     *(.gnu.linkonce.t.*)
@@ -290,7 +250,7 @@ SECTIONS
      * the flash.text segment.
      */
     _flash_cache_start = ABSOLUTE(0);
-  } > text_seg_low
+  } > default_code_seg
   /**
    * Dummy section represents the .flash.text section but in default_rodata_seg.
    * Thus, it must have its alignment and (at least) its size.
@@ -301,7 +261,7 @@ SECTIONS
     . = ALIGN(ALIGNOF(.flash.text)) + SIZEOF(.flash.text);
     /* Add alignment of MMU page size + 0x20 bytes for the mapping header. */
     . = ALIGN(0x10000) + 0x20;
-  } > rodata_seg_low
+  } > default_rodata_seg
   .flash.appdesc : ALIGN(0x10)
   {
     /**
@@ -321,23 +281,17 @@ SECTIONS
      * will be merged when creating the final bin image.
      */
     . = ALIGN(ALIGNOF(.flash.rodata));
-  } > rodata_seg_low
+  } > default_rodata_seg
   ASSERT((ADDR(.flash.rodata) == ADDR(.flash.appdesc) + SIZEOF(.flash.appdesc)), "The gap between .flash.appdesc and .flash.rodata must not exist to produce the final bin image.")
   .flash.rodata : ALIGN(0x10)
   {
     _flash_rodata_start = ABSOLUTE(.);
-    arrays[flash_rodata]
     mapping[flash_rodata]
     *(.irom1.text) /* catch stray ICACHE_RODATA_ATTR */
     *(.gnu.linkonce.r.*)
     *(.rodata1)
     *(.gcc_except_table .gcc_except_table.*)
     *(.gnu.linkonce.e.*)
-    . = ALIGN(ALIGNOF(.flash.init_array));
-  } > rodata_seg_low
-  ASSERT((ADDR(.flash.init_array) == ADDR(.flash.rodata) + SIZEOF(.flash.rodata)), "The gap between .flash.rodata and .flash.init_array must not exist to produce the final bin image.")
-  .flash.init_array :
-  {
     /**
      * C++ constructor tables.
      *
@@ -375,15 +329,15 @@ SECTIONS
     _esp_system_init_fn_array_end = ABSOLUTE(.);
     _rodata_end = ABSOLUTE(.);
     . = ALIGN(ALIGNOF(.flash.tdata));
-  } > rodata_seg_low
-  ASSERT((ADDR(.flash.tdata) == ADDR(.flash.init_array) + SIZEOF(.flash.init_array)), "The gap between .flash.init_array and .flash.tdata must not exist to produce the final bin image.")
+  } > default_rodata_seg
+  ASSERT((ADDR(.flash.tdata) == ADDR(.flash.rodata) + SIZEOF(.flash.rodata)), "The gap between .flash.rodata and .flash.tdata must not exist to produce the final bin image.")
   .flash.tdata :
   {
     _thread_local_data_start = ABSOLUTE(.);
     *(.tdata .tdata.* .gnu.linkonce.td.*)
     . = ALIGN(ALIGNOF(.flash.tbss));
     _thread_local_data_end = ABSOLUTE(.);
-  } > rodata_seg_low
+  } > default_rodata_seg
   ASSERT((ADDR(.flash.tbss) == ADDR(.flash.tdata) + SIZEOF(.flash.tdata)), "The gap between .flash.tdata and .flash.tbss must not exist to produce the final bin image.")
   .flash.tbss (NOLOAD) :
   {
@@ -391,7 +345,7 @@ SECTIONS
     *(.tbss .tbss.* .gnu.linkonce.tb.*)
     *(.tcommon .tcommon.*)
     _thread_local_bss_end = ABSOLUTE(.);
-  } > rodata_seg_low
+  } > default_rodata_seg
   /**
    * This section contains all the rodata that is not used
    * at runtime, helping to avoid an increase in binary size.
@@ -404,52 +358,44 @@ SECTIONS
      * NOLOAD rodata may not be included in this section.
      */
     _rodata_reserved_end = ADDR(.flash.tbss);
-    arrays[rodata_noload]
     mapping[rodata_noload]
-  } > rodata_seg_low
-  .dram0.bss (NOLOAD) :
+  } > default_rodata_seg
+  /* Marks the end of IRAM code segment */
+  .iram0.text_end (NOLOAD) :
+  {
+    /* Padding for possible CPU prefetch + alignment for PMS split lines */
+    . += 16;
+    . = ALIGN(512);
+    /* iram_end_test section exists for use by memprot unit tests only */
+    *(.iram_end_test)
+    _iram_text_end = ABSOLUTE(.);
+  } > iram0_0_seg
+  .iram0.data :
   {
     
- . = ALIGN(4); 
- _bss_start_low = ABSOLUTE(.);
-    /**
-     * ldgen places all bss-related data to mapping[dram0_bss]
-     * (See components/esp_system/app.lf).
-     */
-    arrays[dram0_bss]
-    mapping[dram0_bss]
-    
- . = ALIGN(4); 
- _bss_end_low = ABSOLUTE(.);
-  } > sram_low
-  .dram1.bss (NOLOAD) :
+ . = ALIGN(16); 
+ _iram_data_start = ABSOLUTE(.);
+    mapping[iram0_data]
+    _iram_data_end = ABSOLUTE(.);
+  } > iram0_0_seg
+  .iram0.bss (NOLOAD) :
   {
     
- . = ALIGN(4); 
- _bss_start_high = ABSOLUTE(.);
-    /**
-     * ldgen places all bss-related data to mapping[dram0_bss]
-     * (See components/esp_system/app.lf).
-     */
-    mapping[dram0_bss]
+ . = ALIGN(16); 
+ _iram_bss_start = ABSOLUTE(.);
+    mapping[iram0_bss]
+    _iram_bss_end = ABSOLUTE(.);
     
- . = ALIGN(4); 
- _bss_end_high = ABSOLUTE(.);
-  } > sram_high
+ . = ALIGN(16); 
+ _iram_end = ABSOLUTE(.);
+  } > iram0_0_seg
   /* Marks the end of data, bss and possibly rodata */
-  .dram0.heap_start_low (NOLOAD) :
+  .dram0.heap_start (NOLOAD) :
   {
     
  . = ALIGN(16); 
- _heap_start_low = ABSOLUTE(.);
-  } > sram_low
-    /* Marks the end of data, bss and possibly rodata */
-  .dram1.heap_start_high (NOLOAD) :
-  {
-    
- . = ALIGN(16); 
- _heap_start_high = ABSOLUTE(.);
-  } > sram_high
+ _heap_start = ABSOLUTE(.);
+  } > dram0_0_seg
   /**
    * This section is not included in the binary image; it is only present in the ELF file.
    * It is used to keep certain symbols in the ELF file.
@@ -516,3 +462,7 @@ SECTIONS
    *(.eh_frame)
   }
 }
+ASSERT(((_iram_end - ORIGIN(iram0_0_seg)) <= LENGTH(iram0_0_seg)),
+          "IRAM0 segment data does not fit.")
+ASSERT(((_heap_start - ORIGIN(dram0_0_seg)) <= LENGTH(dram0_0_seg)),
+          "DRAM segment data does not fit.")

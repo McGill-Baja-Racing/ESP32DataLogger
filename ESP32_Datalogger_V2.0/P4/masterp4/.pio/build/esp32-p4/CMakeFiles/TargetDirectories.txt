@@ -434,6 +434,7 @@
 /Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/esp-idf/nvs_flash/CMakeFiles/install.dir
 /Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/esp-idf/nvs_flash/CMakeFiles/install/local.dir
 /Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/esp-idf/nvs_flash/CMakeFiles/install/strip.dir
+/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/esp-idf/wpa_supplicant/CMakeFiles/__idf_wpa_supplicant.dir
 /Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/esp-idf/wpa_supplicant/CMakeFiles/edit_cache.dir
 /Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/esp-idf/wpa_supplicant/CMakeFiles/rebuild_cache.dir
 /Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/esp-idf/wpa_supplicant/CMakeFiles/list_install_components.dir
@@ -844,6 +845,7 @@
 /Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/esp-idf/usb/CMakeFiles/install.dir
 /Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/esp-idf/usb/CMakeFiles/install/local.dir
 /Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/esp-idf/usb/CMakeFiles/install/strip.dir
+/Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/esp-idf/wifi_provisioning/CMakeFiles/__idf_wifi_provisioning.dir
 /Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/esp-idf/wifi_provisioning/CMakeFiles/edit_cache.dir
 /Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/esp-idf/wifi_provisioning/CMakeFiles/rebuild_cache.dir
 /Users/remylaurendeau/Documents/Baja/BajaGit/ESP32DataLogger/ESP32_Datalogger_V2.0/P4/masterp4/.pio/build/esp32-p4/esp-idf/wifi_provisioning/CMakeFiles/list_install_components.dir
