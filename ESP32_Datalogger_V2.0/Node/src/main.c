@@ -378,7 +378,6 @@ static void receive_task(void *arg)
 
 }
 
-
 void app_main(void)
 {
     uint32_t voltage = 0;

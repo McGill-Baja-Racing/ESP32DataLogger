@@ -1,0 +1,16 @@
+{
+	"folders": [
+		{
+			"path": "../../.."
+		},
+		{
+			"name": "260216-150012-espidf-arduino-wifiscan",
+			"path": "../../../../../../../PlatformIO/Projects/260216-150012-espidf-arduino-wifiscan"
+		},
+		{
+			"name": "WIFI_Example",
+			"path": "."
+		}
+	],
+	"settings": {}
+}
