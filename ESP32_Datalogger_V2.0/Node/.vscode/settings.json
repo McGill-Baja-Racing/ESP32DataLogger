@@ -12,5 +12,12 @@
   "idf.openOcdConfigs": [
     "board/esp32c3-builtin.cfg"
   ],
-  "idf.currentSetup": "/Users/remylaurendeau/esp/v5.5.1/esp-idf"
+  "idf.currentSetup": "/Users/remylaurendeau/esp/v5.5.1/esp-idf",
+  "ROS2.distro": "jazzy",
+  "python.autoComplete.extraPaths": [
+    "/opt/ros/jazzy/lib/python3.12/site-packages"
+  ],
+  "python.analysis.extraPaths": [
+    "/opt/ros/jazzy/lib/python3.12/site-packages"
+  ]
 }

@@ -14,14 +14,18 @@ typedef enum{
     ID_START_CMD          = 0x0A5,
     ID_STOP_CMD           = 0x0A6,
     ID_ERROR_CMD          = 0xF00,
-    ID_MASTER_TIME_BEACON = 0x0A2
+    ID_MASTER_TIME_BEACON = 0x0A2,
+    ID_RPM_DATA           = 0x0D0,
+
 } can_id_t;
 
 
 
 
-static uint8_t ping_data[1];
-static uint8_t control_msg_data[1];
+static uint8_t  ping_data[1];
+static uint8_t  control_msg_data[1];
+static uint8_t rpm_msg_data[8];
+
 static uint8_t stop_data[1];
 static uint8_t fault_data[1];
 
@@ -36,6 +40,16 @@ static const twai_frame_t control_message = {
     .buffer = control_msg_data,
     .buffer_len = 0,
 };
+
+static const twai_frame_t rpm_message = {
+    .header = {
+        .id = ID_RPM_DATA,
+        .ide = false,
+    },
+    .buffer = rpm_msg_data,
+    .buffer_len = sizeof(rpm_msg_data), // timestamp + data
+};
+
 static const twai_frame_t start_message = {
     .header = {
         .id = ID_CONTROL_CMD,
@@ -48,4 +62,6 @@ static const twai_frame_t stop_message = {
         .rtr = true,
     },
 };
+
+
 
