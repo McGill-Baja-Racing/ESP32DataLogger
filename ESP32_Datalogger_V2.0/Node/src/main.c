@@ -30,7 +30,19 @@
 #define RX_QUEUE_LENGTH         16              // RX queue depth
 #define TAG             "Node"
 #define NODE_ID                 2               // CHANGE TO NODE ID
-#define SAMPLING_SPEED_MS       1           
+#define PULSES_PER_ROTATION     1               // Set this to the number of pulses in one full rotation
+
+// -------------------- TASK RATE CONFIG --------------------
+// Set SEND_PERIOD_MS to 0 to transmit queued samples as fast as TWAI accepts them.
+#define SAMPLE_QUEUE_LENGTH     64
+#define EXAMPLE_SAMPLE_PERIOD_MS 100
+#define ADC_SAMPLE_PERIOD_MS    1
+#define RPM_SAMPLE_PERIOD_MS    2
+#define SEND_PERIOD_MS          0
+
+#define ENABLE_EXAMPLE_SAMPLE_TASK 1
+#define ENABLE_ADC_SAMPLE_TASK     0
+#define ENABLE_RPM_SAMPLE_TASK     0
 // ID1 = brakes
 // ID2 = wheel
 // ID0 = engine
@@ -39,6 +51,9 @@
 #define ID_STOP_CMD             0x0A0
 #define ID_START_CMD            0x0A1
 #define ID_MASTER_TIME_BEACON   0x0A2
+#define ID_NODE_STATE           (0x0C0 + NODE_ID)
+#define NODE_STATE_LOW_POWER    0
+#define NODE_STATE_ACTIVE       1
 
 #define ID_DATA                 (0x0B1 + NODE_ID)
 
@@ -63,18 +78,20 @@ typedef struct {
     uint64_t data;
 } can_rx_word_t;
 
-uint64_t data;
+typedef struct {
+    int32_t timestamp_ms;
+    int32_t value;
+} sample_data_t;
 
 static QueueHandle_t twai_rx_queue;
-
-static SemaphoreHandle_t sample_task_sem;
-static SemaphoreHandle_t send_task_sem;
+static QueueHandle_t sample_tx_queue;
+static volatile bool s_node_active = false;
 
 // -------------------- ADC CONFIG (CHANGE THESE) --------------------
 // Pick the ADC unit + channel that corresponds to your chosen GPIO.
-// You MUST confirm the mapping for your ESP32-P4 board/pinout.
+// ESP32-C3 ADC1 channels map to GPIO0-GPIO4.
 static const adc_unit_t    ADC_UNIT_USED = ADC_UNIT_1;
-static const adc_channel_t ADC_CH_USED   = 0;   // <-- CHANGE
+static const adc_channel_t ADC_CH_USED   = ADC_CHANNEL_4;   
 static const adc_atten_t   ADC_ATTEN_USED = ADC_ATTEN_DB_12;
 
 #define ADC_CALI_SCHEME     ESP_ADC_CAL_VAL_EFUSE_TP
@@ -97,7 +114,7 @@ static bool adc_calibration_init(void)
         ESP_LOGW(TAG, "eFuse not burnt, skip software calibration");
     } else if (ret == ESP_OK) {
         cali_enable = true;
-        esp_adc_cal_characterize(ADC_UNIT_1, ADC_ATTEN_USED, ADC_WIDTH_BIT_DEFAULT, 0, &adc1_chars);
+        esp_adc_cal_characterize(ADC_UNIT_USED, ADC_ATTEN_USED, ADC_WIDTH_BIT_DEFAULT, 0, &adc1_chars);
     } else {
         ESP_LOGE(TAG, "Invalid arg");
     }
@@ -181,13 +198,74 @@ static inline void handle_time_beacon(const can_rx_word_t *rx){
     g_offset_us = (int64_t)t_main_us - t_local_us;
 }
 
+static inline int32_t get_synced_timestamp_ms(void)
+{
+    int64_t t_local_sample_us = esp_timer_get_time();
+    int64_t t_main_sample_us = t_local_sample_us + g_offset_us;
+
+    return (int32_t)(t_main_sample_us / 1000);
+}
+
+static bool queue_sample(int32_t timestamp_ms, int32_t value)
+{
+    if (!s_node_active) {
+        return false;
+    }
+
+    sample_data_t sample = {
+        .timestamp_ms = timestamp_ms,
+        .value = value,
+    };
+
+    if (xQueueSend(sample_tx_queue, &sample, portMAX_DELAY) != pdTRUE) {
+        ESP_LOGW(TAG, "Sample TX queue send failed | ts=%" PRIi32 " val=%" PRIi32,
+                 timestamp_ms, value);
+        return false;
+    }
+
+    return true;
+}
+
+static uint64_t pack_sample_data(const sample_data_t *sample)
+{
+    return ((uint64_t)(uint32_t)sample->timestamp_ms << 32)
+         | ((uint64_t)(uint32_t)sample->value);
+}
+
+static void send_node_state(uint8_t state)
+{
+    uint8_t raw[1] = {state};
+    twai_frame_t tx = {
+        .header.id = ID_NODE_STATE,
+        .header.ide = false,
+        .buffer = raw,
+        .buffer_len = sizeof(raw),
+    };
+
+    esp_err_t err = twai_node_transmit(node_hdl, &tx, pdMS_TO_TICKS(100));
+    if (err == ESP_OK) {
+        ESP_LOGI(TAG, "TX STATE | node=%d state=%s",
+                 NODE_ID,
+                 state == NODE_STATE_ACTIVE ? "active" : "low-power");
+    } else {
+        ESP_LOGW(TAG, "TX STATE failed | node=%d state=%u err=%s",
+                 NODE_ID, state, esp_err_to_name(err));
+    }
+}
+
+static void wait_until_node_active(void)
+{
+    while (!s_node_active) {
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+}
+
 
 /* --------------------------- Tasks and Functions -------------------------- */
 static void sample_task(void *arg)
 {
     /*
-    This task will sample the needed data, buffer it (and add a timestamp if it has
-    P4 timestamp) and wait for the data to be sent before sampling again.
+    Example sampler. Each sample task pushes timestamped values into sample_tx_queue.
 
     Data is packaged as:
         - 1st 32 bits: Timestamp
@@ -195,29 +273,24 @@ static void sample_task(void *arg)
     */
     while (1)
     {
-        xSemaphoreTake(sample_task_sem, portMAX_DELAY);
+        wait_until_node_active();
+        TickType_t last_wake = xTaskGetTickCount();
 
-        int64_t t_local_sample_us = esp_timer_get_time();
-        int64_t t_main_sample_us = t_local_sample_us + g_offset_us;
-        int32_t timestamp = (int32_t)t_main_sample_us/1000 ; // Convert it from us to ms
-        
-        int32_t value = timestamp + 100;   // example payload
+        while (s_node_active) {
+            int32_t timestamp = get_synced_timestamp_ms();
+            int32_t value = timestamp + 100;   // example payload
 
-        data =
-                ((uint64_t)(uint32_t)timestamp << 32)
-            | ((uint64_t)(uint32_t)value );
-
-        // allow sample task to run
-        xSemaphoreGive(send_task_sem);
-        
+            queue_sample(timestamp, value);
+            vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(EXAMPLE_SAMPLE_PERIOD_MS));
+        }
     }
 }
 
 static void sample_adc_task(void *arg)
 {
     /*
-    This task will sample the needed data, buffer it (and add a timestamp if it has
-    P4 timestamp) and wait for the data to be sent before sampling again.
+    This task samples the ADC and pushes timestamped pressure values into
+    sample_tx_queue.
 
     Data is packaged as:
         - 1st 32 bits: Timestamp
@@ -225,82 +298,87 @@ static void sample_adc_task(void *arg)
     */
     while (1)
     {
-        xSemaphoreTake(sample_task_sem, portMAX_DELAY);
+        wait_until_node_active();
+        TickType_t last_wake = xTaskGetTickCount();
 
-         // Read ADC (raw)
-        int raw = 0;
-        adc_raw[0][0] = adc1_get_raw(ADC_CH_USED);
-        ESP_LOGI(TAG, "raw  data: %d", adc_raw[0][0]);
-        raw = adc_raw[0][0];
+        while (s_node_active) {
+            int raw = 0;
+            adc_raw[0][0] = adc1_get_raw(ADC_CH_USED);
+            raw = adc_raw[0][0];
 
+            int32_t timestamp = get_synced_timestamp_ms();
+            float value = (float) raw * 2.5 / 4095.0 + 0.18;
+            int32_t value_mv = (int32_t)(value * 1000.0f);
 
-        int64_t t_local_sample_us = esp_timer_get_time();
-        int64_t t_main_sample_us = t_local_sample_us + g_offset_us;
-        int32_t timestamp = (int32_t)t_main_sample_us/1000 ; // Convert it from us to ms
-        
-        int32_t value = (int32_t) raw;
+            queue_sample(timestamp, value_mv);
+            ESP_LOGI(TAG,
+                        "pressure=%.2f raw=%d",
+                        value, raw);
 
-        data =
-                ((uint64_t)(uint32_t)timestamp << 32)
-            | ((uint64_t)(uint32_t)value );
-
-        // allow sample task to run
-        xSemaphoreGive(send_task_sem);
-        
+            vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(ADC_SAMPLE_PERIOD_MS));
+        }
     }
 }
 
 static void sample_rpm_task(void *arg)
 {
     /*
-    This task will sample the ADC pulse, detect the peak, buffer the data (timestamp and ADC value),
-    and send it once for each pulse detected.
+    This task samples the ADC pulse, detects each pulse crossing, and computes RPM
+    from the time between the current pulse and the previous one.
     */
 
-    bool peak_detected = false;
-    int raw = 0;
-    
     while (1)
     {
-        // Wait for signal to start sampling
-        //xSemaphoreTake(sample_task_sem, portMAX_DELAY);
+        wait_until_node_active();
 
-        // Read ADC (raw)
+        bool peak_detected = false;
+        int64_t last_pulse_us = 0;
+        int64_t last_log_us = 0;
+        int raw = 0;
+        TickType_t last_wake = xTaskGetTickCount();
 
-        raw = adc1_get_raw(ADC_CH_USED);
-        
-
-        // Peak detection - Check for the rising edge or threshold crossing
-        if (raw < 1000 && !peak_detected) {
-            peak_detected = true;
-
-            // Capture the timestamp in microseconds
-            int64_t t_local_sample_us = esp_timer_get_time();
-            int64_t t_main_sample_us = t_local_sample_us + g_offset_us;
-
-            // Optionally, you can keep timestamp in microseconds for better precision
-            int32_t timestamp = (int32_t)(t_main_sample_us / 1000); // Convert from us to ms
+        while (s_node_active) {
+            raw = adc1_get_raw(ADC_CH_USED);
             
-            int32_t value = (int32_t)raw;
 
-            // Pack timestamp and value into the data structure
-            data =
-                ((uint64_t)(uint32_t)timestamp << 32)
-            | ((uint64_t)(uint32_t)value );
+            // Detect one pulse when the signal crosses below the threshold.
+            if (raw < 1000 && !peak_detected) {
+                peak_detected = true;
 
+                int64_t t_main_sample_us = esp_timer_get_time() + g_offset_us;
+                int32_t timestamp = (int32_t)(t_main_sample_us / 1000); // Convert from us to ms
+                int64_t delta_us = 0;
+                int32_t rpm = 0;
 
-            ESP_LOGI(TAG, "raw  data: %d", raw);
+                if (last_pulse_us != 0) {
+                    delta_us = t_main_sample_us - last_pulse_us;
+                    if (delta_us > 0) {
+                        rpm = (int32_t)(60000000LL / (delta_us * PULSES_PER_ROTATION));
+                    }
+                }
 
-            
-            // Allow sample task to run
-            xSemaphoreGive(send_task_sem);
+                last_pulse_us = t_main_sample_us;
+
+                queue_sample(timestamp, rpm);
+
+                if (delta_us > 0 && (t_main_sample_us - last_log_us) >= 100000) {
+                    ESP_LOGI(TAG, "Pulse detected | raw=%d dt=%lld us rpm=%ld",
+                            raw, delta_us, (long)rpm);
+                    last_log_us = t_main_sample_us;
+                } else if (delta_us == 0) {
+                    ESP_LOGI(TAG, "First pulse detected | raw=%d waiting for next pulse", raw);
+                }
+
+                
+            }
+            // Use a higher reset threshold to avoid retriggering on noisy edges.
+            else if (raw > 1200 && peak_detected) {
+                peak_detected = false;
+            }
+
+            vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(RPM_SAMPLE_PERIOD_MS));
+
         }
-        // Reset peak detection after sending data
-        else if (raw > 1000 && peak_detected) {
-            peak_detected = false;
-        }
-
-        vTaskDelay(pdMS_TO_TICKS(1));
     }
 }
 
@@ -308,20 +386,26 @@ static void sample_rpm_task(void *arg)
 static void send_task(void *arg)
 {
     /*
-    Send the data over CAN every SAMPLING_SPEED_MS 
+    Sends queued samples over CAN. Sampling and sending are decoupled so samplers
+    can continue collecting while the bus is busy.
 
     Data is packaged as:
         - 1st 32 bits: Timestamp
         - 2nd 32 bits: Value
     */
+    TickType_t last_send = xTaskGetTickCount();
+
     while (1)
     {
+        sample_data_t sample;
+        xQueueReceive(sample_tx_queue, &sample, portMAX_DELAY);
 
-        // Wait until data is ready
-        xSemaphoreTake(send_task_sem, portMAX_DELAY);
+        if (!s_node_active) {
+            continue;
+        }
 
         uint8_t raw[8];
-        // Use memcpy to go from uint64 to array
+        uint64_t data = pack_sample_data(&sample);
         memcpy(raw, &data, 8);
 
         twai_frame_t tx = {
@@ -332,15 +416,15 @@ static void send_task(void *arg)
         };
 
         // Send data
-        twai_node_transmit(node_hdl, &tx, portMAX_DELAY);
+        ESP_ERROR_CHECK(twai_node_transmit(node_hdl, &tx, portMAX_DELAY));
 
-        int32_t value = (int32_t)( data    & 0xFFFFFFFF );
-        int32_t timestamp = (int32_t)((data >> 32) & 0xFFFFFFFF );
          ESP_LOGI(TAG,
                          "TX Data | ts=%" PRIi32 " val=%" PRIi32,
-                         timestamp, value);
+                         sample.timestamp_ms, sample.value);
 
-        //vTaskDelay(pdMS_TO_TICKS(SAMPLING_SPEED_MS));
+        if (SEND_PERIOD_MS > 0) {
+            vTaskDelayUntil(&last_send, pdMS_TO_TICKS(SEND_PERIOD_MS));
+        }
 
 
     }
@@ -370,6 +454,24 @@ static void receive_task(void *arg)
                 (uint32_t)rx_msg.data);
 
         }
+        else if (rx_msg.id == ID_START_CMD) {
+            if (!s_node_active) {
+                xQueueReset(sample_tx_queue);
+                s_node_active = true;
+                ESP_LOGI(TAG, "START received - sampling enabled");
+                send_node_state(NODE_STATE_ACTIVE);
+            }
+        }
+        else if (rx_msg.id == ID_STOP_CMD) {
+            if (s_node_active) {
+                s_node_active = false;
+                xQueueReset(sample_tx_queue);
+                ESP_LOGI(TAG, "STOP received - sampling disabled");
+                send_node_state(NODE_STATE_LOW_POWER);
+            } else {
+                send_node_state(NODE_STATE_LOW_POWER);
+            }
+        }
         
         
     }
@@ -380,8 +482,8 @@ static void receive_task(void *arg)
 
 void app_main(void)
 {
-    uint32_t voltage = 0;
     bool cali_enable = adc_calibration_init();
+    (void)cali_enable;
 
     //ADC1 config
     ESP_ERROR_CHECK(adc1_config_width(ADC_WIDTH_BIT_DEFAULT));
@@ -389,8 +491,9 @@ void app_main(void)
 
     //Create tasks, queues, and semaphores
     twai_rx_queue = xQueueCreate(RX_QUEUE_LENGTH, sizeof(can_rx_word_t));
-    sample_task_sem = xSemaphoreCreateBinary();
-    send_task_sem = xSemaphoreCreateBinary();
+    sample_tx_queue = xQueueCreate(SAMPLE_QUEUE_LENGTH, sizeof(sample_data_t));
+    ESP_ERROR_CHECK(twai_rx_queue == NULL ? ESP_FAIL : ESP_OK);
+    ESP_ERROR_CHECK(sample_tx_queue == NULL ? ESP_FAIL : ESP_OK);
 
     //Install TWAI driver
     ESP_ERROR_CHECK(twai_new_node_onchip(&node_config, &node_hdl));
@@ -401,9 +504,18 @@ void app_main(void)
 
     /* ---------- Enable / start TWAI ---------- */
     ESP_ERROR_CHECK(twai_node_enable(node_hdl));
-    ESP_LOGI(TAG, "TWAI node enabled");
+    ESP_LOGI(TAG, "TWAI node enabled; waiting for START command");
+    send_node_state(NODE_STATE_LOW_POWER);
 
     xTaskCreatePinnedToCore(send_task, "send", 8192, NULL, 7, NULL, tskNO_AFFINITY);
-    xTaskCreatePinnedToCore(sample_rpm_task, "sample", 8192, NULL, 8, NULL, tskNO_AFFINITY);
-    //xTaskCreatePinnedToCore(receive_task, "receive", 4096, NULL, 8, NULL, tskNO_AFFINITY);
+#if ENABLE_EXAMPLE_SAMPLE_TASK
+    xTaskCreatePinnedToCore(sample_task, "sample", 8192, NULL, 2, NULL, tskNO_AFFINITY);
+#endif
+#if ENABLE_ADC_SAMPLE_TASK
+    xTaskCreatePinnedToCore(sample_adc_task, "sample_adc", 8192, NULL, 2, NULL, tskNO_AFFINITY);
+#endif
+#if ENABLE_RPM_SAMPLE_TASK
+    xTaskCreatePinnedToCore(sample_rpm_task, "sample_rpm", 8192, NULL, 2, NULL, tskNO_AFFINITY);
+#endif
+    xTaskCreatePinnedToCore(receive_task, "receive", 4096, NULL, 8, NULL, tskNO_AFFINITY);
 }

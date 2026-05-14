@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "description": "Configured CAN nodes and sensors for the ESP32 data logger. This file is the human-readable registry for node IDs, node state ACK frames, and sensor data frames.",
+  "protocol": {
+    "bitrate_bps": 1000000,
+    "commands": {
+      "start_logging_and_sampling": "0x0A1",
+      "stop_logging_and_sampling": "0x0A0",
+      "master_time_beacon": "0x0A2"
+    },
+    "node_state_ack": {
+      "can_id_formula": "0x0C0 + node_id",
+      "payload": {
+        "byte_0": {
+          "0": "node is in low-power/idle mode",
+          "1": "node is active and sampling"
+        }
+      }
+    },
+    "sensor_data": {
+      "can_id_formula": "0x0B1 + node_id",
+      "payload": {
+        "bytes_0_to_3": "uint32 little-endian sensor value",
+        "bytes_4_to_7": "uint32 little-endian timestamp_ms"
+      }
+    }
+  },
+  "nodes": [
+    {
+      "node_id": 2,
+      "name": "sensor_node_2",
+      "enabled": true,
+      "active": false,
+      "state_ack_can_id": "0x0C2",
+      "data_can_id": "0x0B3",
+      "hardware": {
+        "board": "esp32-c3-devkitm-1",
+        "can_tx_gpio": 21,
+        "can_rx_gpio": 20
+      },
+      "sensors": [
+        {
+          "sensor_id": 2,
+          "name": "example_timestamp_value",
+          "enabled": true,
+          "can_id": "0x0B3",
+          "units": "raw",
+          "value_encoding": "uint32 little-endian in bytes 0..3",
+          "timestamp_encoding": "uint32 little-endian milliseconds in bytes 4..7"
+        }
+      ]
+    }
+  ]
+}
