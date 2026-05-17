@@ -1,0 +1,3 @@
+dependencies:
+  espressif/esp_hosted: "*"
+  espressif/esp_wifi_remote: "*"
