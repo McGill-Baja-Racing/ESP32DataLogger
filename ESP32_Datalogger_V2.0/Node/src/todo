@@ -1,0 +1,37 @@
+// TODO
+// esp32c# mini https://mischianti.org/esp32-c3-super-mini-high-resolution-pinout-datasheet-and-specs/
+
+/* Bring esp32 chip from home that way can use breadborads for design
+
+IR Sensor:
+- design circuit with op-amp 
+
+GPS Sensor:
+
+RPM Sensor:
+
+Pressure Transducer:
+- Scale down input using resistors (no need for op-amp)
+- Voltage to pressure conversion function
+
+*/
+lsls
+
+/* ATTENUATION
+- allows to measure higher input voltage
+- see doc:  https://docs.espressif.com/projects/esp-idf/en/v6.0.1/esp32/api-reference/peripherals/adc/index.html
+*/
+
+# Nodes
+[ ] - Message IDs for all sensors
+[ ] - ADC oneshot implementation 
+
+Creating General ADC oneshot with (start-stop) button capabilities for all sensors
+[x] - Twai communication
+[ ] - Add filter for node --> should only receive commands from master!!
+[ ] - Start and stop capabilities
+[ ] - Watchdog (error signal)
+
+# P4
+[ ]
+[ ]

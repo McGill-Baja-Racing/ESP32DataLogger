@@ -305,13 +305,18 @@ static int64_t get_data_timestamp_in_ms(){
     return (int32_t)(t_main_sample_us / 1000); // Convert from us to ms
 };
 
+static int64_t get_data_timestamp_in_us(){
+    int64_t t_main_sample_us = esp_timer_get_time() + g_offset_us;
+    return (int32_t)(t_main_sample_us); // Convert from us to ms
+};
+
 void rpm_collector_task(void *args)
 {
     //vTaskSuspend( NULL ); // Prevents task from running before command has been sent
     esp_err_t ret;  
     uint32_t ret_num = 0;
     uint8_t raw_data[READ_LEN] = {0};
-    
+    i
     memset(raw_data, 0xcc, READ_LEN); // Number of bytes to be set to a value. Writting an initial value: 0xcc is a know debugging practice
 
     // Initializing Continuous ADC
@@ -328,15 +333,17 @@ void rpm_collector_task(void *args)
 
     ESP_ERROR_CHECK(adc_continuous_start(handle)); // Analog to digital Converter
 
-    uint64_t processed = 0;
+    int processed = 0;
     bool first_peak_detected = false;
-    uint64_t prev_peak = 0;
-    uint64_t curr_peak = 0;
+    uint64_t prev_peak_ts = 0;
+    uint64_t curr_peak_ts = 0;
+    float_t peak_interval = 0;
+
     uint64_t data = 0;
     bool peak_detected = false;
     uint32_t peak_count;
     uint32_t num_valid_parsed_samples;
-    uint64_t rpm_estimate;
+    float_t rpm_estimate;
     ESP_LOGI("TASK", "PARSING RPM Data");
 
     while (1) {
@@ -357,6 +364,8 @@ void rpm_collector_task(void *args)
                 if (parse_ret == ESP_OK) { 
                     peak_count = 0;
                     num_valid_parsed_samples = 0;
+                    curr_peak_ts = 0;
+                    
                     for (int i = 0; i < num_parsed_samples; i++) {
                         if (parsed_data[i].valid) {
                             num_valid_parsed_samples +=1;
@@ -364,14 +373,15 @@ void rpm_collector_task(void *args)
                             //ESP_LOGI(TAG, "Reading data: %d", processed);
 
                             /* ------------ PEAK CATCHER ----------*/
-                            if (processed < 1000 && !peak_detected) {
-                                peak_count+=1;
-                                peak_detected = true; 
-                                
-
-                            }else if (processed > 1000 && peak_detected) {
+                            static int last_processed = 0;
+                            
+                            if (!peak_detected && last_processed < 100 && processed >= 1900) {
+                                peak_detected = true;
+                                curr_peak_ts = get_data_timestamp_in_us();
+                            } else if (peak_detected && processed < 1900) {
                                 peak_detected = false;
                             }
+                            last_processed = processed;
 
                         } else {
                             ESP_LOGW(TAG, "Invalid data [ADC%d_Ch%d_%" PRIu32"]",
@@ -382,10 +392,27 @@ void rpm_collector_task(void *args)
                     } 
                     
                     if (num_valid_parsed_samples > 0){
+                        if (curr_peak_ts!=0){
+                            if (!first_peak_detected){
+                                prev_peak_ts = curr_peak_ts;
+                                first_peak_detected = true;
+                            }else{
+                                peak_interval = (curr_peak_ts - prev_peak_ts);
+                                prev_peak_ts = curr_peak_ts;
+                                rpm_estimate = 6*(1.0f/(2.0f*peak_interval/1000.0f));//30000 since peak_interval is actually half a period
+                                ESP_LOGI(TAG, "rpm estimate: %f, peak_interval: %f, num %d", rpm_estimate, peak_interval);
+                            }
+
+                        }else{
+                            ESP_LOGI(TAG, "None");
+
+                        }
+                        
+                        /*
                         rpm_estimate = (peak_count * ADC_SAMPLING_FREQ * 60)/num_valid_parsed_samples;
                         data = ((uint64_t)(uint32_t)timestamp << 32) | (rpm_estimate);
                         xQueueSend(twai_tx_queue, &data, 0);
-                        ESP_LOGI(TAG, "raw  data: %d, rpm estimate: %d", processed, rpm_estimate);
+                        ESP_LOGI(TAG, "raw  data: %d, rpm estimate: %d", processed, rpm_estimate);*/
                     }else{
                         ESP_LOGW(TAG,"All %d data sampled parsed were invalid. Consider Investigating", num_parsed_samples);
                     }
@@ -458,7 +485,7 @@ void rpm_node_main(){
     //xTaskCreate(can_mailbox_task,"can_mailbox", 4096, NULL,tskIDLE_PRIORITY,&can_mailbox_task_hdl);
     //xTaskCreate(send_mail_to_node_task,"send_mail", 4096, NULL,tskIDLE_PRIORITY,&send_mail_task_hdl);
     xTaskCreate(rpm_dispatcher,"rpm_dispatcher", 4096, NULL,tskIDLE_PRIORITY,&rpm_dispatcher_task_hdl);
-    xTaskCreate(rpm_collector_task,"rpm_collector", 8192, NULL,tskIDLE_PRIORITY,&rpm_collector_task_hdl);
+    xTaskCreate(rpm_collector_task,"rpm_collector", 4096, NULL,tskIDLE_PRIORITY,&rpm_collector_task_hdl);
     xTaskCreate(can_manager_task,"can_manager", 4096, NULL,tskIDLE_PRIORITY,NULL);
     //xTaskCreate(send_rpm_data_to_master,"send_data_to_master", 4096, NULL,tskIDLE_PRIORITY,NULL);
 }  

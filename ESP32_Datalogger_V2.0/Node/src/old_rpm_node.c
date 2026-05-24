@@ -36,7 +36,7 @@
 #define TX_QUEUE_DEPTH          5               // TX queue depth
 #define RX_QUEUE_LENGTH         16              // RX queue depth
 #define TAG             "Node"
-#define NODE_ID                 2               // CHANGE TO NODE ID
+//#define NODE_ID                 2               // CHANGE TO NODE ID
 #define SAMPLING_SPEED_MS       1           
 // ID1 = brakes
 // ID2 = wheel

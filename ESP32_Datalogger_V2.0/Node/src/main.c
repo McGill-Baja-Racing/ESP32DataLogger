@@ -2,9 +2,11 @@
 #include "rpm_node.hpp"
 #elif MASTER
 #include "master_btn_control.hpp"
-#elif ADC_ONESHOT
-#include "adc_oneshot_node.hpp"
+#elif SENSOR_TEMPLATE
+#include "test.hpp"
 #endif
+#include "adc_oneshot_node.hpp"
+
 
 void app_main() {
     #ifdef RPM_NODE
@@ -13,6 +15,8 @@ void app_main() {
         btn_control_main();
     #elif ADC_ONESHOT
         adc_oneshot_main();
+    #elif SENSOR_TEMPLATE
+        node_main();
     #endif
 }
 
