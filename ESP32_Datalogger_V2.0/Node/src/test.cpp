@@ -24,7 +24,7 @@
 #include "esp_twai_onchip.h"
 
 
-#include "../lib/can/frames.c"
+#include "frames.h"
 #include "adc_oneshot_node.hpp"
 #include "time_sync.hpp"
 
@@ -48,8 +48,8 @@ static const char *TAG = "NODE_" STRINGIFY(NODE_ID);
 
 
 /* --------------------- TWAI config ------------------ */
-#define TX_GPIO_NUM             5
-#define RX_GPIO_NUM             4
+#define TX_GPIO_NUM             21
+#define RX_GPIO_NUM             20
 #define TRANSM_RATE             1000000
 #define TX_QUEUE_LENGTH          5             
 #define RX_QUEUE_LENGTH         256
@@ -65,6 +65,7 @@ static twai_onchip_node_config_t node_config = {
         .bitrate = TRANSM_RATE,
     },
     .tx_queue_depth = TX_QUEUE_LENGTH,
+
 };
 
 
@@ -265,10 +266,10 @@ static void send_mail_to_node_task(void *arg)
         message_type=!message_type;
         if (message_type){
             msg.id = 0xC11;
-            ESP_LOGI(TAG, "START");
+            ESP_LOGI(TAG, "Sending START Command");
         }else{
             msg.id = 0xC21;
-            ESP_LOGI(TAG, "STOP");
+            ESP_LOGI(TAG, "Sending STOP Command");
         }
 
         xQueueSend(twai_rx_queue, &msg, 0);
