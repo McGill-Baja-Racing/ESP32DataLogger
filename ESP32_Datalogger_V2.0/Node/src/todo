@@ -22,12 +22,31 @@ lsls
 - see doc:  https://docs.espressif.com/projects/esp-idf/en/v6.0.1/esp32/api-reference/peripherals/adc/index.html
 */
 
+# Sensors
+7 in Total (5 nodes) --> therefore 1 node will have 2 sensors
+
+Prssure Sensors: (2 Sensors)
+[ ] Front
+[ ] Rear
+
+[ ] CVT Sensor
+
+[ ] GPS Sensor (2 Sensors)
+[ ] Accelorometer
+
+RPM Sensors
+[ ] Engine 
+[ ] Wheel
+
 # Nodes
 [ ] - Message IDs for all sensors
 [ ] - ADC oneshot implementation 
 
 Creating General ADC oneshot with (start-stop) button capabilities for all sensors
+
+[ ] - How should I do Setup --> figure out file structure because of new sensor additions
 [x] - Twai communication
+[ ] - Ask Remy about the pressure conversion -> do I truncated it and package as an int?
 [ ] - Add filter for node --> should only receive commands from master!!
 [ ] - Start and stop capabilities
 [ ] - Watchdog (error signal)

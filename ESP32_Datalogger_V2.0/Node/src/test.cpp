@@ -26,14 +26,15 @@
 
 #include "../lib/can/frames.c"
 #include "adc_oneshot_node.hpp"
-
+#include "time_sync.hpp"
 
 
 // Defining Stringify to have the MACRO in the TAG
 #define STR_HELPER(x) #x
 #define STRINGIFY(x) STR_HELPER(x)
 static const char *TAG = "NODE_" STRINGIFY(NODE_ID);
-//static const char *TAG = "Node";
+
+
 /* --------------------- Logging / buffer config ------------------ */
 #define SAMPLE_SIZE_INT64  2
 #define SAMPLES_PER_BLOCK  100
@@ -69,6 +70,7 @@ static twai_onchip_node_config_t node_config = {
 
 static QueueHandle_t twai_tx_queue = NULL;
 static QueueHandle_t twai_rx_queue = NULL;
+static QueueHandle_t sensor_data_queue = NULL;
 
 
 TaskHandle_t daq_task_hdl = NULL;
@@ -115,20 +117,54 @@ static twai_event_callbacks_t cbs = { // function to call when data is received
     .on_rx_done = twai_rx_cb,
 };
 
-/* --------------------- Button Control ------------------ */
+/* --------------------- SENSOR CONFIG ------------------ */
+bool use_oneshot = true;
+
+void sensor_init(){
+    // Maybe could do some sort of hashmap?
+    
+    #if defined(NODE_ID) && NODE_ID == 1
+        use_oneshot = false;
+        Sensor Front_brake;
+        set_Sensor_id(&Front_brake,ID_Pa_FRONT_BRAKE);
+
+        Sensor Rear_brake;
+        set_Sensor_id(&Front_brake,ID_Pa_REAR_BRAKE);
+
+
+    #elif defined(NODE_ID) && NODE_ID == 2
+        use_oneshot = false;
+        Sensor Engine_RPM;
+        set_Sensor_id(&Front_brake,ID_RPM_ENGINE);
+
+        Sensor Wheel_RPM;
+        set_Sensor_id(&Front_brake,ID_RPM_WHEEL);
+
+    #elif defined(NODE_ID) && NODE_ID == 3
+        Sensor CVT;
+        set_Sensor_id(&Front_brake,ID_Temp_CVT);
+
+    #elif defined(NODE_ID) && NODE_ID == 4
+        Sensor GPS;
+        set_Sensor_id(&Front_brake,ID_GPS);        
+    #elif defined(NODE_ID) && NODE_ID == 5
+        #define SENSOR_MSG_ID ID_RPM_WHEEL
+    #endif
+}
 
 /* ------------------- Start and Stop ---------------------- */
-
 
 void process_master_cmds_task(void *args){
     
     can_rx_word_t rx_msg;
+    uint32_t msg_node_id; 
 
     while (1){
         xQueueReceive(twai_rx_queue, &rx_msg, portMAX_DELAY);
 
+        msg_node_id = get_node_id_from_frame_id(rx_msg.id & CAN_NODE_MASK);
         // ADD FILTER FOR ID_REBOOT -> so can also target specific nodes
-        if (NODE_ID != (rx_msg.id & CAN_NODE_MASK)){ // Message is not addressed to current sensor
+        if (NODE_ID != msg_node_id | msg_node_id == 0){ // Message is not addressed to current sensor, if 0 it means message is adressed to all sensors
             ESP_LOGI(TAG, "Not for Node");
             ESP_LOGI(TAG, "ID: 0x%03" PRIx32, rx_msg.id);
             continue;
@@ -137,7 +173,7 @@ void process_master_cmds_task(void *args){
         ESP_LOGI(TAG, "ID: 0x%03" PRIx32, rx_msg.id);
 
         ESP_LOGI(TAG, "ID: 0x%03" PRIx32, (rx_msg.id & CAN_CMD_MASK));
-        switch (rx_msg.id & CAN_CMD_MASK) // Check command
+        switch (get_cmd_id_from_frame_id(rx_msg.id)) // Check command
         {
         case ID_REBOOT_CMD:
             /* code */
@@ -151,6 +187,10 @@ void process_master_cmds_task(void *args){
         case ID_STOP_CMD:
             is_collecting_data = false; // because of while loop --> 
             /* code */
+            break;
+        case ID_MASTER_TIME_BEACON:
+            update_time_offset(rx_msg.data);
+            // HANDLE TIME SYNC
             break;
         default:
             ESP_LOGI(TAG, "This commands is not for node");
@@ -168,7 +208,6 @@ void reboot_task (void *args){
 
         ESP_LOGW(TAG, "Reboot requested");
         vTaskDelay(pdMS_TO_TICKS(100));
-
         esp_restart();
     }
 }
@@ -178,44 +217,40 @@ void daq_task (void *args){
     bool calib_performed = adc_oneshot_and_calib_init();
     while(1){
 
-        if(!is_collecting_data){
-            ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+        if(!is_collecting_data){ //Flase
+            ulTaskNotifyTake(pdTRUE, portMAX_DELAY); // Wait --> True and go
         }
 
-        adc_oneshot_main(&is_collecting_data,calib_performed);
         /*
-            ADC ONESHOT MAIN COULD GO HERE
+            ADC ONESHOT MAIN 
+            - How do we extract the data?? --> put in queue of target task as input param and then send it?
             - Depending on flag the mapping/calculations change (use ifdef)
         */
+       /* Will need to find a way to switch between either ONESHOT and CONTINUOUS*/
+       if (use_oneshot){
+            adc_oneshot_main(&is_collecting_data,calib_performed,twai_tx_queue); 
+       }else{
+            // adc_continous_main(); TO CODE
+       }
 
     }
     adc_oneshot_and_calib_deinit(calib_performed);
 }
 
-void v_send_control_cmd(void *args ){
-    bool status = false;
-    while(1){
-        if (ulTaskNotifyTake(pdTRUE, portMAX_DELAY)) {
-            if (status){
-                ESP_ERROR_CHECK(twai_node_transmit(node_hdl, &start_message, 0));  // Timeout = 0: returns immediately if queue is full
-            }else{
-                ESP_ERROR_CHECK(twai_node_transmit(node_hdl, &stop_message, 0));  // Timeout = 0: returns immediately if queue is full
-            }
-            status =! status;
-            ESP_LOGI("btn-Task", "ISR Received");
-            ESP_ERROR_CHECK(twai_node_transmit_wait_all_done(node_hdl, -1));  // Wait for transmission to finish
-        }
-    }
-}
-void send_data_to_master_task(void *args){
+
+void send_data_to_master_task(void *args){ // HOW DOES THIS WORK FOR MULTIPLE SENSORS??
+    uint64_t data;
+
     while (1){
-        ESP_LOGI(TAG, "Alive");
-
-        vTaskDelay(1000);       
+        xQueueReceive(twai_tx_queue,&data,portMAX_DELAY);
+        ESP_LOGI(TAG, "Sending sensor data to master");
+        memcpy(sensor_msg_data, &data, sizeof(sensor_msg_data));
+        ESP_ERROR_CHECK(twai_node_transmit(node_hdl,&sensor_frame_message,0)); // sending data 
     }
 }
 
 
+// FOR TESTING
 static void send_mail_to_node_task(void *arg)
 {
     /*
@@ -234,11 +269,11 @@ static void send_mail_to_node_task(void *arg)
         }else{
             msg.id = 0xC21;
             ESP_LOGI(TAG, "STOP");
-
         }
+
         xQueueSend(twai_rx_queue, &msg, 0);
 
-        vTaskDelay(1000);       
+        vTaskDelay(3000);       
     }
 }
 
@@ -247,10 +282,11 @@ static void send_mail_to_node_task(void *arg)
 void node_main(){
     twai_rx_queue = xQueueCreate(RX_QUEUE_LENGTH, sizeof(can_rx_word_t));
     twai_tx_queue = xQueueCreate(TX_QUEUE_LENGTH, sizeof(can_rx_word_t));
+    sensor_data_queue = xQueueCreate(TX_QUEUE_LENGTH, sizeof(can_rx_word_t));
+
 
     ESP_ERROR_CHECK(twai_new_node_onchip(&node_config, &node_hdl));
     ESP_ERROR_CHECK(twai_node_register_event_callbacks(node_hdl, &cbs, NULL));
-    //ESP_ERROR_CHECK(twai_node_enable(node_hdl));
     esp_err_t ret = twai_node_enable(node_hdl);
     ESP_LOGI(TAG, "twai_node_enable returned: %s", esp_err_to_name(ret));    ESP_LOGI(TAG, "TWAI enabled");
 

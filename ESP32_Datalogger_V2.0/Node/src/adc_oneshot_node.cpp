@@ -3,8 +3,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/queue.h"
+
 #include "soc/soc_caps.h"
 #include "esp_log.h"
 #include "esp_adc/adc_oneshot.h"
@@ -15,6 +18,8 @@
 #include "esp_twai.h"
 #include "esp_twai_onchip.h"
 #include "../lib/can/frames.c"
+#include "time_sync.hpp"
+#include "sensor_specific_code.hpp"
 
 
 const static char *TAG = "ONESHOT";
@@ -28,19 +33,9 @@ const static char *TAG = "ONESHOT";
 #define ADC1_CHAN0          ADC_CHANNEL_3 // GPIO PIN (e.g. sensor pin)
 #define ADC_UNIT            ADC_UNIT_1 // ADC chip
 #define ADC_ATTEN           ADC_ATTEN_DB_12 // Need 12 DB attentuation to maximise voltage input range. Now it is between  150 ∼ 2450 mV 
-#define ADC_MAX_VOLTAGE_mV  2450.0f   // Use for standard ESP32
-
-#define SENSOR_MAX_VOLTAGE_mV   4500.0f
-#define SENSOR_MIN_VOLTAGE_mV   500.0f 
-
 #define ADC_RES             ADC_BITWIDTH_DEFAULT // Measurement resolution
 
 
-
-
-
-static int adc_raw[2][10];
-static int voltage[2][10];
 static bool adc_calibration_init(adc_unit_t unit, adc_channel_t channel, adc_atten_t atten, adc_cali_handle_t *out_handle);
 static void adc_calibration_deinit(adc_cali_handle_t handle);
 
@@ -138,32 +133,31 @@ void adc_oneshot_and_calib_deinit(bool calib_performed){
     }
 }
 
-void adc_oneshot_main(bool *loop_condition,bool do_calibration1_chan0)
+void adc_oneshot_main(bool *loop_condition,bool do_calibration1_chan0,QueueHandle_t queue_hdl)
 {
     // Make sure to do deinit after calibration or else will get an error
     //-------------ADC1 Init---------------//
+    int adc_raw;
+    int adc_raw_voltage;
+    uint64_t adc_mapped_data;
+    uint64_t packaged_data;
 
-    while (!*loop_condition) {
-        ESP_ERROR_CHECK(adc_oneshot_read(adc1_handle, ADC1_CHAN0, &adc_raw[0][0]));
-        ESP_LOGI(TAG, "ADC%d Channel[%d] Raw Data: %d", ADC_UNIT_1 + 1, ADC1_CHAN0, adc_raw[0][0]);
+    bool mapping_succeeded = false;
+
+    while (*loop_condition) {
+        ESP_ERROR_CHECK(adc_oneshot_read(adc1_handle, ADC1_CHAN0, &adc_raw));
+        ESP_LOGI(TAG, "ADC%d Channel[%d] Raw Data: %d", ADC_UNIT_1 + 1, ADC1_CHAN0, adc_raw);
         if (do_calibration1_chan0) {
             // READ: https://documentation.espressif.com/esp32_datasheet_en.pdf
-            ESP_ERROR_CHECK(adc_cali_raw_to_voltage(adc1_cali_chan0_handle, adc_raw[0][0], &voltage[0][0]));
-            ESP_LOGI(TAG, "ADC%d Channel[%d] Cali Voltage: %d mV", ADC_UNIT_1 + 1, ADC1_CHAN0, voltage[0][0]);
-            // Need to adjust min_voltage detected due to resistor
-            float min_voltage_value = SENSOR_MIN_VOLTAGE_mV * ADC_MAX_VOLTAGE_mV/SENSOR_MAX_VOLTAGE_mV; // ADJUSTED 
-            if (voltage[0][0]< min_voltage_value){ // need to adjust the 500 mV due to the resistors
-                ESP_LOGE(TAG, "Invalid data. Value should be greater than %f mv since %f mv is 0 psi",min_voltage_value);
-            }else{
-                float pressure_span = 1600.0f;
-                float voltage_span = ADC_MAX_VOLTAGE_mV - min_voltage_value;
-                float pressure =((float)(voltage[0][0] - min_voltage_value) / voltage_span)* pressure_span;
-                ESP_LOGI(TAG, "Pressure value %f psi",pressure);
+            ESP_ERROR_CHECK(adc_cali_raw_to_voltage(adc1_cali_chan0_handle, adc_raw, &adc_raw_voltage));
+            mapping_succeeded = sensor_specific_data_mapping(adc_raw_voltage,&adc_mapped_data);
+            if (mapping_succeeded){
+                packaged_data = package_timestamp_with_data(adc_mapped_data); // IMP: SEE WITH REMY FOR THI
+                
+                xQueueSend(queue_hdl,&packaged_data, 0); // HANDLE CASE IF QUEUE IS FULL!!
             }
-
         }
         vTaskDelay(pdMS_TO_TICKS(200));
-
 
     }
 }
