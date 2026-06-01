@@ -17,7 +17,7 @@
 
 #include "esp_twai.h"
 #include "esp_twai_onchip.h"
-#include "../lib/can/frames.c"
+#include "frames.h"
 #include "time_sync.hpp"
 #include "sensor_specific_code.hpp"
 
@@ -147,6 +147,8 @@ void adc_oneshot_main(bool *loop_condition,bool do_calibration1_chan0,QueueHandl
     while (*loop_condition) {
         ESP_ERROR_CHECK(adc_oneshot_read(adc1_handle, ADC1_CHAN0, &adc_raw));
         ESP_LOGI(TAG, "ADC%d Channel[%d] Raw Data: %d", ADC_UNIT_1 + 1, ADC1_CHAN0, adc_raw);
+        ESP_LOGI(TAG, "Stack HWM: %d", uxTaskGetStackHighWaterMark(NULL));
+
         if (do_calibration1_chan0) {
             // READ: https://documentation.espressif.com/esp32_datasheet_en.pdf
             ESP_ERROR_CHECK(adc_cali_raw_to_voltage(adc1_cali_chan0_handle, adc_raw, &adc_raw_voltage));

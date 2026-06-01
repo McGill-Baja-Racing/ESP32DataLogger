@@ -4,12 +4,14 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+#include "freertos/FreeRTOS.h"
+#include "freertos/queue.h"
 #include <stdbool.h>
 
 
 bool adc_oneshot_and_calib_init();
 void adc_oneshot_and_calib_deinit(bool calib_performed);
-void adc_oneshot_main(bool *loop_condition,bool do_calibration1_chan0);
+void adc_oneshot_main(bool *loop_condition,bool do_calibration1_chan0,QueueHandle_t queue_hdl);
 
 #ifdef __cplusplus
 }  // extern "C"

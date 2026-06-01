@@ -3,7 +3,7 @@
 #include "esp_err.h"
 #include "esp_log.h"
 #include "esp_timer.h"
-#include "../lib/can/frames.c"
+#include "frames.h"
 #include "time_sync.hpp"
 
 #include <atomic>
