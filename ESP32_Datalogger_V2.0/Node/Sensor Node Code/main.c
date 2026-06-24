@@ -76,7 +76,7 @@ static SemaphoreHandle_t send_task_sem;
 // You MUST confirm the mapping for your ESP32-P4 board/pinout.
 static const adc_unit_t    ADC_UNIT_USED = ADC_UNIT_1;
 static const adc_channel_t ADC_CH_USED   = ADC_CHANNEL_6;   
-static const adc_atten_t   ADC_ATTEN_USED = ADC_ATTEN_DB_11;
+static const adc_atten_t   ADC_ATTEN_USED = ADC_ATTEN_DB_12;
 
 #define ADC_CALI_SCHEME     ESP_ADC_CAL_VAL_EFUSE_TP
 

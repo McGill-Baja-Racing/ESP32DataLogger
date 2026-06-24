@@ -25,3 +25,10 @@ CONFIG_ESP_HOSTED_SDIO_PIN_D1=15
 CONFIG_ESP_HOSTED_SDIO_PIN_D2=16
 CONFIG_ESP_HOSTED_SDIO_PIN_D3=17
 CONFIG_ESP_HOSTED_SDIO_GPIO_RESET_SLAVE=54
+
+# nodes_config.json and wifi_sta_config.json need long filename support.
+# Heap-backed LFN avoids adding large filename buffers to task stacks.
+# CONFIG_FATFS_LFN_NONE is not set
+CONFIG_FATFS_LFN_HEAP=y
+CONFIG_FATFS_MAX_LFN=64
+CONFIG_FATFS_API_ENCODING_ANSI_OEM=y

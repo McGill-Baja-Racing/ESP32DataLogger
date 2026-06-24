@@ -6,7 +6,32 @@
     "commands": {
       "start_logging_and_sampling": "0x0A1",
       "stop_logging_and_sampling": "0x0A0",
-      "master_time_beacon": "0x0A2"
+      "master_time_beacon": "0x0A2",
+      "node_runtime_config": "0x0A3"
+    },
+    "node_runtime_config": {
+      "description": "Before targeted start, the master sends a reset frame for each physical node, then one sensor config frame for each enabled virtual sensor.",
+      "reset_payload": {
+        "byte_0": "target physical node_id",
+        "byte_1": "0 = reset all virtual sensors disabled",
+        "bytes_2_to_7": "reserved"
+      },
+      "sensor_payload": {
+        "byte_0": "target physical node_id",
+        "byte_1": "1 = sensor config",
+        "byte_2": "sensor_id",
+        "byte_3": "flags bit0 = enabled",
+        "bytes_4_to_5": "uint16 little-endian sample_rate_hz",
+        "bytes_6_to_7": "uint16 little-endian CAN data ID"
+      },
+      "sensor_io_payload": {
+        "byte_0": "target physical node_id",
+        "byte_1": "3 = sensor IO config",
+        "byte_2": "sensor_id",
+        "byte_3": "function: 0 sim, 1 adc, 2 rpm, 3 front_brake, 4 rear_brake, 5 old_rpm, 6 bearing, 7 accel_x, 8 accel_y, 9 accel_z",
+        "byte_4": "port/GPIO number",
+        "bytes_5_to_7": "reserved"
+      }
     },
     "node_state_ack": {
       "can_id_formula": "0x0C0 + node_id",
@@ -18,13 +43,63 @@
       }
     },
     "sensor_data": {
-      "can_id_formula": "0x0B1 + node_id",
+      "can_id_rule": "Each enabled sensor owns one unique CAN data ID. Nodes 2, 3, 4, and 5 use the same sensor layout with non-overlapping data IDs.",
       "payload": {
         "bytes_0_to_3": "uint32 little-endian sensor value",
         "bytes_4_to_7": "uint32 little-endian timestamp_ms"
       }
     }
   },
+  "master_sensors": [
+    {
+      "sensor_id": 1,
+      "name": "gps_speed",
+      "enabled": true,
+      "can_id": "0x700",
+      "units": "kph_x100",
+      "sample_rate_hz": 1,
+      "function": "gps_speed",
+      "port": 0,
+      "preview_enabled": true,
+      "description": "Master-local GY-GPS6MV2 speed. This is published for live graphs and recorded to SD when logging is running."
+    },
+    {
+      "sensor_id": 2,
+      "name": "gps_latitude",
+      "enabled": true,
+      "can_id": "0x701",
+      "units": "deg_e7",
+      "sample_rate_hz": 1,
+      "function": "gps_latitude",
+      "port": 0,
+      "preview_enabled": false,
+      "description": "Master-local GPS latitude recorded to SD only by default."
+    },
+    {
+      "sensor_id": 3,
+      "name": "gps_longitude",
+      "enabled": true,
+      "can_id": "0x702",
+      "units": "deg_e7",
+      "sample_rate_hz": 1,
+      "function": "gps_longitude",
+      "port": 0,
+      "preview_enabled": false,
+      "description": "Master-local GPS longitude recorded to SD only by default."
+    },
+    {
+      "sensor_id": 4,
+      "name": "engine_rpm",
+      "enabled": true,
+      "can_id": "0x703",
+      "units": "rpm",
+      "sample_rate_hz": 50,
+      "function": "engine_rpm",
+      "port": 3,
+      "preview_enabled": true,
+      "description": "Master/P4-local engine RPM input. GPIO receives one conditioned tach pulse per engine rotation; RPM is calculated from pulse spacing with an adaptive zero timeout."
+    }
+  ],
   "nodes": [
     {
       "node_id": 2,
@@ -32,7 +107,6 @@
       "enabled": true,
       "active": false,
       "state_ack_can_id": "0x0C2",
-      "data_can_id": "0x0B3",
       "hardware": {
         "board": "esp32-c3-devkitm-1",
         "can_tx_gpio": 21,
@@ -40,11 +114,175 @@
       },
       "sensors": [
         {
-          "sensor_id": 2,
-          "name": "example_timestamp_value",
+          "sensor_id": 20,
+          "name": "steering_angle",
           "enabled": true,
           "can_id": "0x0B3",
-          "units": "raw",
+          "units": "deg_x10",
+          "sample_rate_hz": 1000,
+          "function": "sim",
+          "port": 0,
+          "description": "Simulated steering angle. Value is degrees x10 with 450 as the centered offset.",
+          "value_encoding": "uint32 little-endian in bytes 0..3",
+          "timestamp_encoding": "uint32 little-endian milliseconds in bytes 4..7"
+        },
+        {
+          "sensor_id": 21,
+          "name": "brake_pressure",
+          "enabled": true,
+          "can_id": "0x0B4",
+          "units": "psi_x10",
+          "sample_rate_hz": 1000,
+          "function": "sim",
+          "port": 0,
+          "description": "Simulated brake pressure pulses. Value is PSI x10.",
+          "value_encoding": "uint32 little-endian in bytes 0..3",
+          "timestamp_encoding": "uint32 little-endian milliseconds in bytes 4..7"
+        },
+        {
+          "sensor_id": 22,
+          "name": "wheel_rpm",
+          "enabled": true,
+          "can_id": "0x0B5",
+          "units": "rpm",
+          "sample_rate_hz": 1000,
+          "function": "sim",
+          "port": 0,
+          "description": "Simulated wheel speed with a slow acceleration/deceleration pattern plus small ripple.",
+          "value_encoding": "uint32 little-endian in bytes 0..3",
+          "timestamp_encoding": "uint32 little-endian milliseconds in bytes 4..7"
+        }
+      ]
+    },
+    {
+      "node_id": 3,
+      "name": "sensor_node_3",
+      "enabled": true,
+      "active": false,
+      "state_ack_can_id": "0x0C3",
+      "hardware": {
+        "board": "esp32-c3-devkitm-1",
+        "can_tx_gpio": 21,
+        "can_rx_gpio": 20
+      },
+      "sensors": [
+        {
+          "sensor_id": 20,
+          "name": "steering_angle",
+          "enabled": true,
+          "can_id": "0x0B6",
+          "units": "deg_x10",
+          "sample_rate_hz": 1000,
+          "function": "sim",
+          "port": 0,
+          "description": "Simulated steering angle. Value is degrees x10 with 450 as the centered offset.",
+          "value_encoding": "uint32 little-endian in bytes 0..3",
+          "timestamp_encoding": "uint32 little-endian milliseconds in bytes 4..7"
+        },
+        {
+          "sensor_id": 21,
+          "name": "brake_pressure",
+          "enabled": true,
+          "can_id": "0x0B7",
+          "units": "psi_x10",
+          "sample_rate_hz": 1000,
+          "function": "sim",
+          "port": 0,
+          "description": "Simulated brake pressure pulses. Value is PSI x10.",
+          "value_encoding": "uint32 little-endian in bytes 0..3",
+          "timestamp_encoding": "uint32 little-endian milliseconds in bytes 4..7"
+        },
+        {
+          "sensor_id": 22,
+          "name": "wheel_rpm",
+          "enabled": true,
+          "can_id": "0x0B8",
+          "units": "rpm",
+          "sample_rate_hz": 1000,
+          "function": "sim",
+          "port": 0,
+          "description": "Simulated wheel speed with a slow acceleration/deceleration pattern plus small ripple.",
+          "value_encoding": "uint32 little-endian in bytes 0..3",
+          "timestamp_encoding": "uint32 little-endian milliseconds in bytes 4..7"
+        }
+      ]
+    },
+    {
+      "node_id": 4,
+      "name": "p4_engine_rpm_node",
+      "enabled": true,
+      "active": false,
+      "state_ack_can_id": "0x0C4",
+      "hardware": {
+        "board": "esp32-p4-master-or-node_p4",
+        "can_tx_gpio": 21,
+        "can_rx_gpio": 20,
+        "rpm_gpio": 3
+      },
+      "sensors": [
+        {
+          "sensor_id": 22,
+          "name": "engine_rpm",
+          "enabled": true,
+          "can_id": "0x0B9",
+          "units": "rpm",
+          "sample_rate_hz": 50,
+          "function": "rpm",
+          "port": 3,
+          "description": "Engine RPM tach input. GPIO receives one conditioned pulse per engine rotation; RPM is calculated from pulse spacing.",
+          "value_encoding": "uint32 little-endian in bytes 0..3",
+          "timestamp_encoding": "uint32 little-endian milliseconds in bytes 4..7"
+        }
+      ]
+    },
+    {
+      "node_id": 5,
+      "name": "sensor_node_5",
+      "enabled": true,
+      "active": false,
+      "state_ack_can_id": "0x0C5",
+      "hardware": {
+        "board": "esp32-c3-devkitm-1",
+        "can_tx_gpio": 21,
+        "can_rx_gpio": 20
+      },
+      "sensors": [
+        {
+          "sensor_id": 20,
+          "name": "steering_angle",
+          "enabled": true,
+          "can_id": "0x0BC",
+          "units": "deg_x10",
+          "sample_rate_hz": 1000,
+          "function": "sim",
+          "port": 0,
+          "description": "Simulated steering angle. Value is degrees x10 with 450 as the centered offset.",
+          "value_encoding": "uint32 little-endian in bytes 0..3",
+          "timestamp_encoding": "uint32 little-endian milliseconds in bytes 4..7"
+        },
+        {
+          "sensor_id": 21,
+          "name": "brake_pressure",
+          "enabled": true,
+          "can_id": "0x0BD",
+          "units": "psi_x10",
+          "sample_rate_hz": 1000,
+          "function": "sim",
+          "port": 0,
+          "description": "Simulated brake pressure pulses. Value is PSI x10.",
+          "value_encoding": "uint32 little-endian in bytes 0..3",
+          "timestamp_encoding": "uint32 little-endian milliseconds in bytes 4..7"
+        },
+        {
+          "sensor_id": 22,
+          "name": "wheel_rpm",
+          "enabled": true,
+          "can_id": "0x0BE",
+          "units": "rpm",
+          "sample_rate_hz": 1000,
+          "function": "sim",
+          "port": 0,
+          "description": "Simulated wheel speed with a slow acceleration/deceleration pattern plus small ripple.",
           "value_encoding": "uint32 little-endian in bytes 0..3",
           "timestamp_encoding": "uint32 little-endian milliseconds in bytes 4..7"
         }

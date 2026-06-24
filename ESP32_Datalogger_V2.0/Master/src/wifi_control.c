@@ -6,6 +6,7 @@
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
+#include "freertos/semphr.h"
 #include "freertos/task.h"
 
 #include "cJSON.h"
@@ -14,6 +15,7 @@
 #include "esp_hosted.h"
 #include "esp_log.h"
 #include "esp_netif.h"
+#include "esp_timer.h"
 #include "esp_wifi.h"
 #include "nvs_flash.h"
 
@@ -22,9 +24,12 @@ static const char *TAG = "wifi_control";
 #define WIFI_STA_CONFIG_PATH "/sdcard/wifi_sta_config.json"
 #define WIFI_STA_CONFIG_MAX_BYTES 1024
 #define WIFI_STA_MAX_RETRY 10
+#define WIFI_RECOVERY_MIN_INTERVAL_MS 15000
+#define WIFI_RECOVERY_RESET_DELAY_MS 500
+#define WIFI_RECOVERY_CONNECT_WAIT_MS 15000
 
-#define WIFI_STA_FALLBACK_SSID "BajaLogger"
-#define WIFI_STA_FALLBACK_PASSWORD "bajalogger"
+#define WIFI_STA_FALLBACK_SSID "Frank-Lucas"
+#define WIFI_STA_FALLBACK_PASSWORD "frank1234"
 
 #define WIFI_CONNECTED_BIT BIT0
 #define WIFI_FAIL_BIT      BIT1
@@ -36,7 +41,12 @@ typedef struct {
 
 static SemaphoreHandle_t s_hosted_transport_up;
 static EventGroupHandle_t s_wifi_event_group;
+static esp_netif_t *s_sta_netif;
 static int s_wifi_retry_count;
+static bool s_wifi_connected_once;
+static volatile bool s_wifi_reconnect_pending;
+static volatile bool s_wifi_recovery_active;
+static int64_t s_last_wifi_reconnect_us;
 
 static char *read_text_file(const char *path, size_t max_bytes)
 {
@@ -172,21 +182,51 @@ static void wifi_event_handler(void *arg,
     (void)arg;
 
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
+        if (s_wifi_recovery_active) {
+            ESP_LOGI(TAG, "Wi-Fi STA started during recovery; connect will be issued by recovery task");
+            return;
+        }
         esp_wifi_connect();
     } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
-        if (s_wifi_retry_count < WIFI_STA_MAX_RETRY) {
-            s_wifi_retry_count++;
-            ESP_LOGW(TAG, "Wi-Fi disconnected; retrying (%d/%d)",
-                     s_wifi_retry_count,
-                     WIFI_STA_MAX_RETRY);
-            esp_wifi_connect();
-        } else {
-            xEventGroupSetBits(s_wifi_event_group, WIFI_FAIL_BIT);
+        xEventGroupClearBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
+        if (s_wifi_recovery_active) {
+            ESP_LOGW(TAG, "Wi-Fi disconnected during controlled recovery");
+            return;
         }
+
+        s_wifi_retry_count++;
+        if (!s_wifi_connected_once && s_wifi_retry_count > WIFI_STA_MAX_RETRY) {
+            xEventGroupSetBits(s_wifi_event_group, WIFI_FAIL_BIT);
+            return;
+        }
+
+        ESP_LOGW(TAG,
+                 "Wi-Fi disconnected; retrying (%d%s)",
+                 s_wifi_retry_count,
+                 s_wifi_connected_once ? "" : "/10");
+        esp_wifi_connect();
     } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
         ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
         s_wifi_retry_count = 0;
+        s_wifi_connected_once = true;
         ESP_LOGI(TAG, "Wi-Fi connected. IP=" IPSTR, IP2STR(&event->ip_info.ip));
+        if (s_sta_netif) {
+            esp_netif_dns_info_t dns = {0};
+            dns.ip.type = ESP_IPADDR_TYPE_V4;
+            dns.ip.u_addr.ip4.addr = ESP_IP4TOADDR(8, 8, 8, 8);
+            esp_err_t dns_err = esp_netif_set_dns_info(s_sta_netif, ESP_NETIF_DNS_MAIN, &dns);
+            if (dns_err != ESP_OK) {
+                ESP_LOGW(TAG, "Failed to set main DNS: %s", esp_err_to_name(dns_err));
+            }
+
+            dns.ip.u_addr.ip4.addr = ESP_IP4TOADDR(1, 1, 1, 1);
+            dns_err = esp_netif_set_dns_info(s_sta_netif, ESP_NETIF_DNS_BACKUP, &dns);
+            if (dns_err != ESP_OK) {
+                ESP_LOGW(TAG, "Failed to set backup DNS: %s", esp_err_to_name(dns_err));
+            } else {
+                ESP_LOGI(TAG, "DNS servers set to 8.8.8.8 and 1.1.1.1");
+            }
+        }
         xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
     }
 }
@@ -212,7 +252,7 @@ static esp_err_t wifi_init_sta(void)
         return ESP_ERR_NO_MEM;
     }
 
-    esp_netif_create_default_wifi_sta();
+    s_sta_netif = esp_netif_create_default_wifi_sta();
 
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_RETURN_ON_ERROR(esp_wifi_init(&cfg), TAG, "esp_wifi_init failed");
@@ -266,4 +306,114 @@ static esp_err_t wifi_init_sta(void)
 esp_err_t wifi_control_start(void)
 {
     return wifi_init_sta();
+}
+
+bool wifi_control_is_connected(void)
+{
+    return s_wifi_event_group &&
+           (xEventGroupGetBits(s_wifi_event_group) & WIFI_CONNECTED_BIT);
+}
+
+static void wifi_reconnect_task(void *arg)
+{
+    char reason[96] = {};
+    if (arg) {
+        snprintf(reason, sizeof(reason), "%s", (const char *)arg);
+        free(arg);
+    }
+
+    ESP_LOGW(TAG,
+             "Cycling Wi-Fi STA after connectivity failure%s%s",
+             reason[0] ? ": " : "",
+             reason);
+
+    s_wifi_recovery_active = true;
+    if (s_wifi_event_group) {
+        xEventGroupClearBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
+    }
+
+    esp_err_t err = esp_wifi_disconnect();
+    if (err != ESP_OK && err != ESP_ERR_WIFI_NOT_STARTED && err != ESP_ERR_WIFI_NOT_CONNECT) {
+        ESP_LOGW(TAG, "esp_wifi_disconnect during recovery failed: %s", esp_err_to_name(err));
+    }
+
+    vTaskDelay(pdMS_TO_TICKS(WIFI_RECOVERY_RESET_DELAY_MS));
+
+    err = esp_wifi_stop();
+    if (err != ESP_OK && err != ESP_ERR_WIFI_NOT_STARTED) {
+        ESP_LOGW(TAG, "esp_wifi_stop during recovery failed: %s", esp_err_to_name(err));
+    }
+
+    vTaskDelay(pdMS_TO_TICKS(WIFI_RECOVERY_RESET_DELAY_MS));
+
+    err = esp_wifi_start();
+    if (err != ESP_OK && err != ESP_ERR_WIFI_CONN) {
+        ESP_LOGW(TAG, "esp_wifi_start during recovery failed: %s", esp_err_to_name(err));
+    }
+
+    vTaskDelay(pdMS_TO_TICKS(WIFI_RECOVERY_RESET_DELAY_MS));
+
+    s_wifi_retry_count = 0;
+    s_wifi_recovery_active = false;
+    err = esp_wifi_connect();
+    if (err != ESP_OK && err != ESP_ERR_WIFI_CONN) {
+        ESP_LOGW(TAG, "esp_wifi_connect after recovery reset failed: %s", esp_err_to_name(err));
+    }
+
+    if (s_wifi_event_group) {
+        EventBits_t bits = xEventGroupWaitBits(s_wifi_event_group,
+                                               WIFI_CONNECTED_BIT,
+                                               pdFALSE,
+                                               pdFALSE,
+                                               pdMS_TO_TICKS(WIFI_RECOVERY_CONNECT_WAIT_MS));
+        if (bits & WIFI_CONNECTED_BIT) {
+            ESP_LOGI(TAG, "Wi-Fi recovery completed with fresh IP");
+        } else {
+            ESP_LOGW(TAG, "Wi-Fi recovery did not regain IP within %d ms",
+                     WIFI_RECOVERY_CONNECT_WAIT_MS);
+        }
+    }
+
+    s_wifi_reconnect_pending = false;
+    vTaskDelete(NULL);
+}
+
+esp_err_t wifi_control_reconnect(const char *reason)
+{
+    if (!s_wifi_event_group) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    int64_t now_us = esp_timer_get_time();
+    if (s_wifi_reconnect_pending ||
+        (s_last_wifi_reconnect_us > 0 &&
+         now_us - s_last_wifi_reconnect_us <
+             (int64_t)WIFI_RECOVERY_MIN_INTERVAL_MS * 1000)) {
+        return ESP_OK;
+    }
+
+    char *reason_copy = NULL;
+    if (reason && reason[0]) {
+        reason_copy = strndup(reason, 95);
+        if (!reason_copy) {
+            return ESP_ERR_NO_MEM;
+        }
+    }
+
+    s_wifi_reconnect_pending = true;
+    s_last_wifi_reconnect_us = now_us;
+
+    BaseType_t ok = xTaskCreate(wifi_reconnect_task,
+                                "wifi_recover",
+                                3072,
+                                reason_copy,
+                                4,
+                                NULL);
+    if (ok != pdPASS) {
+        free(reason_copy);
+        s_wifi_reconnect_pending = false;
+        return ESP_ERR_NO_MEM;
+    }
+
+    return ESP_OK;
 }

@@ -1,0 +1,22 @@
+services:
+  mqtt:
+    image: eclipse-mosquitto:2
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - ./data/mosquitto:/mosquitto/data
+      - ./data/mosquitto-log:/mosquitto/log
+
+  api:
+    build: ./api
+    restart: unless-stopped
+    environment:
+      BAJA_API_TOKEN: ${BAJA_API_TOKEN:-baja_logger_test_v1}
+      BAJA_DATA_DIR: /data
+    ports:
+      - "8000:8000"
+      - "80:8000"
+    volumes:
+      - ./data/api:/data
