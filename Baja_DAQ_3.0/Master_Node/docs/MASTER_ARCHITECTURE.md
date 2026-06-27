@@ -22,6 +22,7 @@ Useful source references:
 
 - [Master firmware entry point and task implementation](https://github.com/McGillBajaRacing/ESP32DataLogger/blob/main/Baja_DAQ_3.0/Master_Node/src/main.c#L2883)
 - [Master public control interface](https://github.com/McGillBajaRacing/ESP32DataLogger/blob/main/Baja_DAQ_3.0/Master_Node/src/master_control.h)
+- [Sensor Node architecture and operation](https://github.com/McGillBajaRacing/ESP32DataLogger/blob/main/Baja_DAQ_3.0/Sensor_Node/docs/NODE_ARCHITECTURE.md)
 - [Sensor node firmware](https://github.com/McGillBajaRacing/ESP32DataLogger/blob/main/Baja_DAQ_3.0/Sensor_Node/src/main.c)
 - [Stable build and test gate](https://github.com/McGillBajaRacing/ESP32DataLogger/blob/main/Baja_DAQ_3.0/Master_Node/docs/STABLE_BASELINE.md)
 
