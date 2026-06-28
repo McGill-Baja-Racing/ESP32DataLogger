@@ -13,7 +13,7 @@ roadmap, see [DAQ 3.0 Master Node Architecture and Operation](MASTER_ARCHITECTUR
 - TWAI/CAN receive, node start/stop/config, and CAN recovery
 - Serial commands: `start`, `stop`, `status`, `files`, `download <filename>`, `log <mode>`
 - Built-in node/sensor fallback configuration
-- Optional master-local GPS/RPM samples, disabled in the baseline build
+- Optional master-local GPS samples, disabled in the baseline build
 - `tools/decode_log.py` for converting downloaded `.bin` logs
 
 ## Removed
@@ -41,15 +41,15 @@ Optional test targets:
 
 ```bash
 pio run -e MasterStableGPS
-pio run -e MasterStableRPM
-pio run -e MasterStableSensors
 ```
 
 Feature flags:
 
 - `MASTER_GPS_ENABLED=1` compiles and starts GPS.
-- `MASTER_RPM_ENABLED=1` compiles and starts RPM sampling.
-- `MasterStableSensors` enables both GPS and RPM.
+
+The RPM implementations and build profiles are retained as experimental code,
+but RPM did not operate reliably in testing and is not part of the supported
+baseline. It must be investigated and revalidated before use.
 
 ## Stable Test Gate
 
@@ -62,5 +62,4 @@ Before adding a feature back, this baseline should pass:
 - Decode the file with `tools/decode_log.py`.
 - Run on CAN for at least 30 minutes without reset.
 
-After the baseline passes, repeat the same gate with `MasterStableGPS`, then
-`MasterStableRPM`, then `MasterStableSensors`.
+After the baseline passes, repeat the same gate with `MasterStableGPS`.

@@ -12,7 +12,7 @@ The ESP32-P4 master is the coordinator and persistent data logger for the DAQ
 - transmit a master time beacon every 100 ms;
 - monitor node availability and recover from CAN bus-off conditions;
 - expose serial commands for operation, diagnostics, and file download; and
-- optionally sample GPS and engine RPM directly on the master.
+- optionally sample GPS directly on the master.
 
 The stable baseline deliberately contains only SD, CAN, and serial operation.
 Wi-Fi, MQTT, cloud upload, and dashboards were removed until the logger
@@ -56,9 +56,7 @@ Dispatch task
             v
        decode_log.py -> CSV
 
-GPS task -----------\
-                      > master_submit_local_sample() -> SD sample queue
-RPM task -----------/
+GPS task -> master_submit_local_sample() -> SD sample queue
 ```
 
 The TWAI callback performs only the minimum interrupt-safe work: it receives a
@@ -80,12 +78,10 @@ The master build profiles and feature flags are defined in
 
 The primary profiles are:
 
-| Profile | GPS | Master RPM | SD node configuration | Intended use |
-|---|---:|---:|---:|---|
-| `MasterStable` | Off | Off | Off | Stable SD + CAN + serial baseline |
-| `MasterStableGPS` | On | Off | Off | Baseline plus GPS validation |
-| `MasterStableRPM` | Off | On | Off | Baseline plus local RPM validation |
-| `MasterStableSensors` | On | On | Off | GPS and local RPM together |
+| Profile | GPS | SD node configuration | Intended use |
+|---|---:|---:|---|
+| `MasterStable` | Off | Off | Stable SD + CAN + serial baseline |
+| `MasterStableGPS` | On | Off | Baseline plus GPS validation |
 
 The flags control which source files are compiled and which tasks are started:
 
@@ -93,7 +89,11 @@ The flags control which source files are compiled and which tasks are started:
 - `MASTER_AUTO_START_LOGGING` starts a recording 500 ms after boot.
 - `MASTER_USE_SD_NODE_CONFIG` selects SD JSON instead of built-in node data.
 - `MASTER_GPS_ENABLED` compiles and starts the GPS module.
-- `MASTER_RPM_ENABLED` compiles and starts the master-local RPM module.
+
+`MASTER_RPM_ENABLED`, `MasterStableRPM`, and `MasterStableSensors` remain in
+the repository only as experimental development paths. RPM did not operate
+reliably in testing and is not a supported DAQ 3.0 feature. It must be
+investigated and revalidated before it is enabled on a vehicle.
 
 At present, every stable PlatformIO profile sets
 `MASTER_USE_SD_NODE_CONFIG=0`. Therefore, the normal stable firmware does
@@ -121,10 +121,10 @@ The same function also defines optional master-local signals:
 | GPS speed | `0x700` | 1 Hz | GPS |
 | GPS latitude | `0x701` | 1 Hz | GPS |
 | GPS longitude | `0x702` | 1 Hz | GPS |
-| Engine RPM | `0x703` | 50 Hz | RPM sampler |
-
-These entries may exist in memory even when GPS or RPM is disabled, but no
-samples are produced unless the corresponding module is compiled and started.
+The configuration still reserves engine RPM ID `0x703` for future development,
+but the current RPM implementation is not approved for use. GPS entries may
+exist in memory while GPS is disabled, but no samples are produced unless the
+GPS module is compiled and started.
 
 ### 3.3 SD JSON configuration
 
@@ -254,7 +254,7 @@ FreeRTOS schedules larger priority numbers before smaller ones.
 | `node_watchdog` | 6 | Detects three seconds of node silence and reconfigures the node during logging. |
 | `gps` | 6 | Optional NMEA parser and GPS sample producer. |
 | `auto_start_log` | 5 | Waits 500 ms, starts logging, and then deletes itself. |
-| `rpm_sampler` | 4 | Optional ADC sampler that polls every 2 ms and calculates engine RPM. |
+| `rpm_sampler` | 4 | Experimental RPM task retained for future investigation; not supported for operation. |
 
 Task creation is shown in
 [`app_main()`](https://github.com/McGillBajaRacing/ESP32DataLogger/blob/main/Baja_DAQ_3.0/Master_Node/src/main.c#L2994).
@@ -272,7 +272,8 @@ Task creation is shown in
 5. Initialize 1 Mbit/s TWAI on TX GPIO 20 and RX GPIO 21.
 6. Send three global STOP commands so nodes enter a known idle state.
 7. Create the baseline FreeRTOS tasks.
-8. Start optional GPS and RPM tasks if enabled.
+8. Start the optional GPS task if enabled. Experimental RPM builds are not part
+   of the supported startup path.
 9. Create the auto-start task when auto-start is enabled.
 
 If SD mounting fails, the current firmware exits `app_main()` and does not
@@ -358,8 +359,9 @@ python3 tools/decode_log.py log_0001.bin
 
 ### Priority 1: correctness and data-loss prevention
 
-- Resolve the current built-in master RPM GPIO conflict: RPM defaults to GPIO
-  21, which is also the master's CAN RX pin.
+- Redesign and validate RPM acquisition before restoring it. The previous
+  implementation did not work reliably, and its built-in GPIO 21 assignment
+  also conflicts with the master's CAN RX pin.
 - Check every `xTaskCreate` result in `app_main()` and fail visibly when a
   required task cannot start.
 - Count and report failures when the interrupt callback cannot enqueue a CAN
@@ -412,10 +414,12 @@ python3 tools/decode_log.py log_0001.bin
 
 Validate additions incrementally:
 
-1. `MasterStable` -- SD + CAN + serial;
-2. `MasterStableGPS` -- add GPS;
-3. `MasterStableRPM` -- add RPM after resolving the GPIO conflict; and
-4. `MasterStableSensors` -- operate GPS and RPM together.
+1. `MasterStable` -- SD + CAN + serial; and
+2. `MasterStableGPS` -- add GPS.
+
+RPM profiles are excluded from the stable validation order until RPM hardware,
+signal conditioning, GPIO assignment, and firmware processing are redesigned
+and validated.
 
 Each stage should repeatedly mount the SD card, auto-start logging, create and
 decode a valid log, survive serial stop/start cycles, and operate on CAN for at

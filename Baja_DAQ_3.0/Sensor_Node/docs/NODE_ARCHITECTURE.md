@@ -13,8 +13,8 @@ The node is responsible for:
 
 - receiving time, configuration, START, STOP, and log-mode commands;
 - maintaining up to eight runtime-configured virtual sensors;
-- sampling simulated, ADC, brake-pressure, acceleration, RPM, and quadrature
-  encoder inputs when those capabilities are compiled in;
+- sampling simulated, ADC, brake-pressure, acceleration, and quadrature encoder
+  inputs when those capabilities are compiled in;
 - timestamping samples on the master's timebase;
 - buffering and transmitting samples over 1 Mbit/s CAN/TWAI;
 - reporting active/idle state and health information; and
@@ -89,8 +89,8 @@ Important definitions are:
 | `NODE_START_ACTIVE_ON_BOOT` | Starts sampling without waiting for the master when set. |
 | `NODE_DEFAULT_SENSORS_ENABLED` | Enables the built-in sensor table at boot. |
 | `NODE_ENABLE_SIM_FUNCTION` | Compiles simulated sensor generation. |
-| `NODE_ENABLE_ADC_FUNCTIONS` | Compiles ADC, pressure, acceleration, and legacy ADC-RPM functions. |
-| `NODE_ENABLE_RPM_FUNCTION` | Compiles GPIO-interrupt RPM measurement. |
+| `NODE_ENABLE_ADC_FUNCTIONS` | Compiles ADC, pressure, and acceleration functions. It also contains an unsupported legacy ADC-RPM path. |
+| `NODE_ENABLE_RPM_FUNCTION` | Compiles the experimental GPIO-interrupt RPM implementation; not supported for operation. |
 | `NODE_ENABLE_BEARING_FUNCTION` | Compiles quadrature bearing-encoder measurement. |
 
 Available profiles are:
@@ -99,8 +99,8 @@ Available profiles are:
 |---|---|
 | `NodeStable` | Inactive-on-boot baseline; simulation capability only and no sensors enabled by default. |
 | `NodeStableSim` | Enables the built-in simulated sensors for bench testing. |
-| `NodeStableRPM` | Compiles the GPIO-interrupt RPM function. |
-| `NodeStableADC` | Compiles ADC, brake-pressure, acceleration, and legacy ADC-RPM functions. |
+| `NodeStableRPM` | Experimental RPM development profile retained for future investigation; not approved for deployment. |
+| `NodeStableADC` | Compiles ADC, brake-pressure, and acceleration functions. |
 | `NodeEncoderTest` | Standalone encoder test using GPIO 6/7 and alternate CAN pins. |
 
 All current general profiles default to `NODE_ID=4`. Before deploying multiple
@@ -167,19 +167,21 @@ The runtime protocol identifies sensor behavior with a function code:
 |---:|---|---|
 | 0 | `sim` | Generates deterministic test waveforms. |
 | 1 | `adc` | Reports calibrated ADC input voltage. |
-| 2 | `rpm` | Uses falling-edge GPIO interrupts and pulse spacing to calculate RPM. |
 | 3 | `front_brake` | Converts calibrated ADC voltage to front brake pressure. |
 | 4 | `rear_brake` | Converts calibrated ADC voltage to rear brake pressure. |
-| 5 | `old_rpm` | Detects tach pulses through ADC threshold crossings. |
 | 6 | `bearing` | Uses a quadrature encoder and reports angular displacement in degrees x10. |
 | 7 | `accel_x` | Converts an analog accelerometer X axis to acceleration. |
 | 8 | `accel_y` | Converts an analog accelerometer Y axis to acceleration. |
 | 9 | `accel_z` | Converts an analog accelerometer Z axis to acceleration. |
 
-ESP32-C3 ADC1 inputs are limited to GPIO 0 through GPIO 4. RPM uses one GPIO,
-while the bearing encoder uses primary and auxiliary GPIOs. The master
-configuration must avoid CAN-pin conflicts and assigning the same physical
-input to incompatible functions.
+Function codes 2 (`rpm`) and 5 (`old_rpm`) are reserved by the existing
+protocol, but their implementations did not work reliably and must not be used
+for vehicle operation. They remain in the source only to support future
+investigation and redesign.
+
+ESP32-C3 ADC1 inputs are limited to GPIO 0 through GPIO 4. The bearing encoder
+uses primary and auxiliary GPIOs. The master configuration must avoid CAN-pin
+conflicts and assigning the same physical input to incompatible functions.
 
 ## 5. CAN protocol and state control
 
@@ -252,8 +254,6 @@ virtual sensor. At each deadline it:
 Input-specific behavior includes:
 
 - ADC functions use one-shot reads and ESP-IDF calibration when available.
-- RPM edges are captured by a GPIO ISR; the scheduled sampler publishes the
-  latest calculated RPM and returns zero after the no-pulse timeout.
 - The bearing encoder updates a quadrature count on both GPIO edges; the
   sampler converts the count into angular displacement.
 - Simulated signals use repeatable waveforms for network and logging tests.
@@ -309,7 +309,7 @@ Larger FreeRTOS priority numbers run before smaller ones.
 | `health` | 3 | Report load, timing, queue, drop, transmit, and heap metrics every 500 ms. |
 | `sample` | 2 | Schedule and acquire all enabled runtime virtual sensors. |
 | `sample_adc` | 2 | Optional legacy dedicated ADC sampler; disabled by default. |
-| `sample_rpm` | 2 | Optional legacy dedicated ADC-RPM sampler; disabled by default. |
+| `sample_rpm` | 2 | Unsupported experimental RPM task retained for future investigation; disabled by default. |
 
 CAN and GPIO callbacks run in interrupt context rather than as tasks. Task
 creation is located in
@@ -322,7 +322,7 @@ creation is located in
 `app_main()` performs the following sequence:
 
 1. Store and report the hardware reset reason.
-2. Initialize compiled ADC, RPM, and encoder capabilities.
+2. Initialize compiled ADC and encoder capabilities.
 3. Create the 64-entry sample transmit queue.
 4. Create the 16-entry CAN receive queue.
 5. Create and enable the 1 Mbit/s TWAI controller.
@@ -350,7 +350,6 @@ From `Baja_DAQ_3.0/Sensor_Node`:
 ```bash
 pio run -e NodeStable
 pio run -e NodeStableSim
-pio run -e NodeStableRPM
 pio run -e NodeStableADC
 pio run -e NodeEncoderTest
 ```
@@ -374,7 +373,7 @@ Recommended validation order:
 
 - Add explicit production build profiles for each physical node instead of
   relying on all general profiles defaulting to Node ID 4.
-- Validate at build or startup that CAN, ADC, RPM, and encoder GPIO assignments
+- Validate at build or startup that CAN, ADC, and encoder GPIO assignments
   do not conflict.
 - Check every `xTaskCreatePinnedToCore` result and fail visibly if a required
   task cannot start.
@@ -393,7 +392,18 @@ Recommended validation order:
 - Version runtime configuration payloads to allow backward-compatible firmware
   changes.
 
-### Priority 3: timing and data quality
+### Priority 3: RPM redesign
+
+- Treat both the GPIO-interrupt and legacy ADC-threshold RPM implementations as
+  non-operational until their failure modes are reproduced and understood.
+- Verify the tach signal-conditioning hardware, voltage levels, pulse shape,
+  pulses per revolution, GPIO selection, and electrical noise environment.
+- Reimplement RPM acquisition with explicit input diagnostics and hardware-in-
+  the-loop tests before adding it back to a production profile.
+- Do not enable function codes 2 or 5 from the master configuration until this
+  validation is complete.
+
+### Priority 4: timing and data quality
 
 - Filter time-beacon offset measurements, detect missing beacons, and report
   synchronization validity and estimated error.
@@ -404,13 +414,14 @@ Recommended validation order:
 - Define and document scaling for every sensor output, especially acceleration
   and pressure values.
 
-### Priority 4: resilience and maintainability
+### Priority 5: resilience and maintainability
 
 - Protect runtime sensor-table updates from concurrent sampler access with a
   mutex or configuration handoff mechanism.
 - Add unit tests for payload parsing, sensor scheduling, simulated waveforms,
-  pressure conversion, RPM filtering, and quadrature decoding.
+  pressure conversion, and quadrature decoding.
 - Add hardware-in-the-loop tests for queue overload, noisy inputs, master
   resets, missing time beacons, and repeated START/STOP cycles.
-- Remove or consolidate the legacy dedicated ADC/RPM tasks once the generic
+- Remove the failed RPM paths if the future redesign does not reuse them, and
+  consolidate the remaining legacy dedicated ADC task once the generic
   virtual-sensor path is fully validated.
