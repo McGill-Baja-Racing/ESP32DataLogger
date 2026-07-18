@@ -1,1 +1,21 @@
-idf_component_register(SRCS "main.c" INCLUDE_DIRS ".")
+idf_component_register(
+    SRCS
+        "main.c"
+        "can/can_node.c"
+        "sampler/sampler.c"
+        "sensors/sensor_registry.c"
+        "sensors/adc_input.c"
+        "sensors/front_brake.c"
+        "sensors/rear_brake.c"
+        "sensors/bearing_encoder.c"
+        "sensors/generic_adc.c"
+        "sensors/engine_rpm.c"
+        "time/time_sync.c"
+    INCLUDE_DIRS
+        "."
+        "can"
+        "protocol"
+        "sampler"
+        "sensors"
+        "time"
+)

@@ -18,13 +18,11 @@ from pathlib import Path
 RECORD_SIZE_BYTES = 16
 
 SIGNAL_METADATA = {
-    0x0B1: ("front_brake_pressure", "brake_node_1", "psi_x10"),
-    0x0B2: ("rear_brake_pressure", "brake_node_1", "psi_x10"),
+    0x0B1: ("front_brake_pressure", "brake_node_1", "psi"),
+    0x0B2: ("rear_brake_pressure", "brake_node_1", "psi"),
     0x0B9: ("bearing_encoder", "encoder_node_4", "deg_x10"),
-    0x700: ("gps_speed", "master", "km/h"),
-    0x701: ("gps_latitude", "master", "deg_e7"),
-    0x702: ("gps_longitude", "master", "deg_e7"),
-    0x703: ("engine_rpm", "master", "rpm"),
+    0x0BA: ("generic_adc_voltage", "engine_node_5", "mV"),
+    0x0BB: ("engine_rpm", "engine_node_5", "rpm_placeholder"),
 }
 
 
@@ -41,12 +39,6 @@ def parse_args() -> argparse.Namespace:
 def signed_u32(value: int) -> int:
     value &= 0xFFFFFFFF
     return value - 0x100000000 if value & 0x80000000 else value
-
-
-def display_value(can_id: int, value: int) -> int | float:
-    if can_id == 0x700:
-        return value / 100.0
-    return value
 
 
 def decode_log(input_path: Path, output_path: Path) -> list[str]:
@@ -97,7 +89,7 @@ def decode_log(input_path: Path, output_path: Path) -> list[str]:
                     signal,
                     node,
                     timestamp_ms,
-                    display_value(can_id, value),
+                    value,
                     units,
                     packed,
                 ]
