@@ -1,0 +1,5 @@
+# All changes must be reviewed by an authorized PR reviewer
+* @McGill-Baja-Racing/pr-reviewers
+
+# The reviewer team also owns the approval configuration
+/.github/ @McGill-Baja-Racing/pr-reviewers
