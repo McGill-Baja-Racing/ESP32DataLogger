@@ -13,7 +13,8 @@ starts and stops sampling but does not configure sensor hardware at runtime.
 |---|---:|---|
 | `NodeBrake` | 1 | Front brake pressure on GPIO1 and rear brake pressure on GPIO2, both at 100 Hz |
 | `NodeEncoder` | 4 | Bearing quadrature encoder on GPIO6/GPIO7 at 50 Hz |
-| `NodeEngine` | 5 | Generic ADC voltage on GPIO1 at 100 Hz and engine RPM placeholder on GPIO3 at 50 Hz |
+| `NodeEngine` | 5 | Engine RPM placeholder on GPIO3 at 50 Hz |
+| `NodeADC` | 6 | Generic ADC voltage on GPIO1 at 100 Hz |
 
 All builds use CAN TX GPIO21 and RX GPIO20.
 
@@ -25,6 +26,7 @@ From this directory:
 pio run -e NodeBrake
 pio run -e NodeEncoder
 pio run -e NodeEngine
+pio run -e NodeADC
 ```
 
 Upload and monitor one build with:
