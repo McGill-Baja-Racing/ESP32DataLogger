@@ -41,8 +41,8 @@ See `src/README.md` for dependencies and maintenance guidance.
 | 1 | Front brake pressure | `0x0B1` | 100 Hz |
 | 1 | Rear brake pressure | `0x0B2` | 100 Hz |
 | 4 | Bearing encoder | `0x0B9` | 50 Hz |
-| 5 | Generic ADC voltage | `0x0BA` | 100 Hz |
 | 5 | Engine RPM placeholder | `0x0BB` | 50 Hz |
+| 6 | Generic ADC voltage | `0x0BA` | 100 Hz |
 
 The accepted IDs are compiled into the master. The corresponding sensor type,
 rate, CAN ID, and GPIO configuration is compiled into each sensor node. There
@@ -53,7 +53,7 @@ protocol and log decoder but currently reports zero until the analog tach peak
 detection is implemented and validated on hardware.
 
 Nodes report transitions on `0x0C0 + node ID`. The master records the latest
-state for nodes 1, 4, and 5, prints transitions to serial, and includes their
+state for nodes 1, 4, 5, and 6, prints transitions to serial, and includes their
 active/idle/unknown state in the `status` output. State reports are control
 information and are not written to the sensor log.
 

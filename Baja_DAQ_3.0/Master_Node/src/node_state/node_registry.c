@@ -6,7 +6,7 @@
 #include "esp_log.h"
 #include "protocol/app_protocol.h"
 
-#define NODE_SLOT_COUNT 6
+#define NODE_SLOT_COUNT 7
 
 typedef struct {
     bool seen;

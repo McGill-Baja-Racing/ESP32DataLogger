@@ -36,9 +36,9 @@ static void print_status(void)
     ESP_LOGI(TAG, "state=%s file=%s can_drops=%" PRIu32 " log_drops=%" PRIu32,
              data_logger_state_name(), data_logger_path(),
              can_master_rx_drop_count(), data_logger_drop_count());
-    ESP_LOGI(TAG, "nodes: 1=%s 4=%s 5=%s",
+    ESP_LOGI(TAG, "nodes: 1=%s 4=%s 5=%s 6=%s",
              node_registry_state_name(1), node_registry_state_name(4),
-             node_registry_state_name(5));
+             node_registry_state_name(5), node_registry_state_name(6));
 }
 
 static void handle_can_message(const can_message_t *message)

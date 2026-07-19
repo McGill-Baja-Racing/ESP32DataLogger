@@ -54,8 +54,8 @@ The following values in `protocol/app_protocol.h` must match the Sensor Node:
 | Generic ADC voltage | `0x0BA` |
 | Engine RPM placeholder | `0x0BB` |
 
-After changing the protocol, build `MasterStable`, `NodeBrake`, and
-`NodeEncoder`, and `NodeEngine`. A successful build checks interfaces and types; a bench CAN test
+After changing the protocol, build `MasterStable`, `NodeBrake`, `NodeEncoder`,
+`NodeEngine`, and `NodeADC`. A successful build checks interfaces and types; a bench CAN test
 is still required to validate timing and physical communication.
 
 ## Where changes belong

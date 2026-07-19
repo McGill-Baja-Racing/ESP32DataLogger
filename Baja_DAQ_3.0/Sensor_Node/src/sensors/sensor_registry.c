@@ -15,10 +15,13 @@ extern sensor_t bearing_encoder_sensor;
 
 static sensor_t sensors[1];
 #elif NODE_FIXED_ENGINE_CONFIG
-extern sensor_t generic_adc_sensor;
 extern sensor_t engine_rpm_sensor;
 
-static sensor_t sensors[2];
+static sensor_t sensors[1];
+#elif NODE_FIXED_ADC_CONFIG
+extern sensor_t generic_adc_sensor;
+
+static sensor_t sensors[1];
 #else
 #error "Select a fixed sensor-node configuration"
 #endif
@@ -30,9 +33,10 @@ sensor_t *sensor_registry(size_t *count)
     sensors[1] = rear_brake_sensor;
 #elif NODE_FIXED_ENCODER_CONFIG
     sensors[0] = bearing_encoder_sensor;
+#elif NODE_FIXED_ENGINE_CONFIG
+    sensors[0] = engine_rpm_sensor;
 #else
     sensors[0] = generic_adc_sensor;
-    sensors[1] = engine_rpm_sensor;
 #endif
     *count = sizeof(sensors) / sizeof(sensors[0]);
     return sensors;

@@ -9,7 +9,8 @@ send runtime configuration.
 |---|---:|---|
 | `NodeBrake` | 1 | Front brake `0x0B1` at 100 Hz on GPIO1; rear brake `0x0B2` at 100 Hz on GPIO2 |
 | `NodeEncoder` | 4 | Bearing encoder `0x0B9` at 50 Hz on GPIO6/GPIO7 |
-| `NodeEngine` | 5 | Generic ADC `0x0BA` at 100 Hz on GPIO1; engine RPM placeholder `0x0BB` at 50 Hz on GPIO3 |
+| `NodeEngine` | 5 | Engine RPM placeholder `0x0BB` at 50 Hz on GPIO3 |
+| `NodeADC` | 6 | Generic ADC `0x0BA` at 100 Hz on GPIO1 |
 
 All builds use 1 Mbit/s CAN with TX GPIO21 and RX GPIO20.
 Each node monitors its CAN controller and automatically initiates recovery after
@@ -61,6 +62,7 @@ bytes 0-2.
 pio run -e NodeBrake
 pio run -e NodeEncoder
 pio run -e NodeEngine
+pio run -e NodeADC
 ```
 
 The RPM placeholder currently outputs zero. Hardware measurements are required
