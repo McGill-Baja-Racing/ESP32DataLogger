@@ -13,7 +13,7 @@ starts and stops sampling but does not configure sensor hardware at runtime.
 |---|---:|---|
 | `NodeBrake` | 1 | Front brake pressure on GPIO1 and rear brake pressure on GPIO2, both at 100 Hz |
 | `NodeEncoder` | 4 | Bearing quadrature encoder on GPIO6/GPIO7 at 50 Hz |
-| `NodeEngine` | 5 | Engine RPM placeholder on GPIO3 at 50 Hz |
+| `NodeEngine` | 5 | Engine RPM on GPIO3 at 50 Hz |
 | `NodeADC` | 6 | Generic ADC voltage on GPIO1 at 100 Hz |
 
 All builds use CAN TX GPIO21 and RX GPIO20.
@@ -89,6 +89,6 @@ Sensor frames use eight little-endian bytes:
 Node-state reports use CAN ID `0x0C0 + NODE_ID`. Full periodic health reports
 are intentionally not part of this bare-bones firmware.
 
-The engine RPM stream currently reports zero intentionally. Its source file
-documents the voltage-peak parameters that must be measured and implemented
-before it can be treated as a real RPM signal.
+The engine RPM input measures rising-edge timing on GPIO3. Its one-spark-per-
+revolution assumption, pulse rejection window, and stopped-engine timeout must
+be validated against the conditioned ignition signal on the vehicle.
