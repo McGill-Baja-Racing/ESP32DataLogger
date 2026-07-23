@@ -98,6 +98,23 @@ CAN payload. The sampler supplies the synchronized timestamp in bytes 4-7.
 revolution. Its input conditioning, pulse rejection, and stopped-engine timeout
 constants must be revalidated if the ignition hardware or expected engine-speed
 range changes.
+## Standalone serial sensor testing
+
+Every fixed sensor environment defines this bench-test flag:
+
+```ini
+-D SENSOR_SERIAL_TEST=0
+```
+
+Leave it at `0` for normal CAN operation. Change it to `1` to make that
+environment skip CAN initialization, start the sampler immediately, and print
+each configured sensor independently to the serial console twice per second.
+
+`NodeEngineBench` is a ready-to-use example with the flag set to `1`.
+
+`engine_rpm.c` is deliberately incomplete: it emits zero until tach signal
+thresholds, hysteresis, pulses/revolution, filtering, and timeout are validated
+on hardware. Do not replace those TODOs with guessed constants.
 
 Keep `main.c` limited to startup and high-level wiring. Add a new module only
 when it owns a distinct hardware interface, state, or substantial behavior.
