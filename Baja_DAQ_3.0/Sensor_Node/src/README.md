@@ -94,6 +94,20 @@ CAN payload. The sampler supplies the synchronized timestamp in bytes 4-7.
 | Sensor calibration/conversion | Corresponding file under `sensors/` |
 | Sensors included in a node | `sensors/sensor_registry.c` |
 
+## Standalone serial sensor testing
+
+Every fixed sensor environment defines this bench-test flag:
+
+```ini
+-D SENSOR_SERIAL_TEST=0
+```
+
+Leave it at `0` for normal CAN operation. Change it to `1` to make that
+environment skip CAN initialization, start the sampler immediately, and print
+each configured sensor independently to the serial console twice per second.
+
+`NodeEngineBench` is a ready-to-use example with the flag set to `1`.
+
 `engine_rpm.c` is deliberately incomplete: it emits zero until tach signal
 thresholds, hysteresis, pulses/revolution, filtering, and timeout are validated
 on hardware. Do not replace those TODOs with guessed constants.

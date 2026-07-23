@@ -14,6 +14,10 @@
 #include "sensors/sensor.h"
 #include "time/time_sync.h"
 
+#ifndef SENSOR_SERIAL_TEST
+#define SENSOR_SERIAL_TEST 0
+#endif
+
 /*
  * Generic sampling pipeline
  * -------------------------
@@ -23,8 +27,10 @@
  */
 
 #define SAMPLE_QUEUE_LENGTH 64
+#define SERIAL_LOG_SLOT_COUNT 16
 
 typedef struct {
+    const char *sensor_name;
     uint32_t can_id;
     int32_t timestamp_ms;
     int32_t value;
@@ -94,6 +100,7 @@ static void sample_task(void *argument)
             if (now >= sensor->next_sample_us) {
                 /* Hardware-specific work is confined to the sensor callback. */
                 sample_t sample = {
+                    .sensor_name = sensor->name,
                     .can_id = sensor->can_id,
                     .timestamp_ms = time_sync_timestamp_ms(),
                     .value = sensor->read(sensor),
@@ -121,11 +128,45 @@ static void send_task(void *argument)
 {
     (void)argument;
     sample_t sample;
+#if SENSOR_SERIAL_TEST
+    typedef struct {
+        const char *sensor_name;
+        int64_t next_log_us;
+    } serial_log_slot_t;
+    serial_log_slot_t log_slots[SERIAL_LOG_SLOT_COUNT] = {0};
+#endif
     while (true) {
         xQueueReceive(sample_queue, &sample, portMAX_DELAY);
         if (!active) {
             continue;
         }
+#if SENSOR_SERIAL_TEST
+        /* Throttle each sensor independently so multi-sensor bench
+         * configurations remain readable without hiding any sensor. */
+        size_t slot = 0;
+        while (slot < SERIAL_LOG_SLOT_COUNT &&
+               log_slots[slot].sensor_name != NULL &&
+               log_slots[slot].sensor_name != sample.sensor_name) {
+            slot++;
+        }
+        if (slot == SERIAL_LOG_SLOT_COUNT) {
+            ESP_LOGW(TAG, "No serial log slot available for %s",
+                     sample.sensor_name);
+            continue;
+        }
+        if (log_slots[slot].sensor_name == NULL) {
+            log_slots[slot].sensor_name = sample.sensor_name;
+        }
+        int64_t now_us = esp_timer_get_time();
+        if (now_us >= log_slots[slot].next_log_us) {
+            ESP_LOGI("SensorTest",
+                     "%s: CAN=0x%03" PRIX32 " time=%" PRId32
+                     "ms value=%" PRId32,
+                     sample.sensor_name, sample.can_id,
+                     sample.timestamp_ms, sample.value);
+            log_slots[slot].next_log_us = now_us + 500000;
+        }
+#else
         uint8_t payload[8];
         uint64_t packed = ((uint64_t)(uint32_t)sample.timestamp_ms << 32) |
                           (uint32_t)sample.value;
@@ -135,6 +176,7 @@ static void send_task(void *argument)
             ESP_LOGW(TAG, "Sensor 0x%03" PRIX32 " TX failed: %s",
                      sample.can_id, esp_err_to_name(error));
         }
+#endif
     }
 }
 
