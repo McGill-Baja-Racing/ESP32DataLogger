@@ -9,7 +9,7 @@ send runtime configuration.
 |---|---:|---|
 | `NodeBrake` | 1 | Front brake `0x0B1` at 100 Hz on GPIO1; rear brake `0x0B2` at 100 Hz on GPIO2 |
 | `NodeEncoder` | 4 | Bearing encoder `0x0B9` at 50 Hz on GPIO6/GPIO7 |
-| `NodeEngine` | 5 | Engine RPM placeholder `0x0BB` at 50 Hz on GPIO3 |
+| `NodeEngine` | 5 | Engine RPM `0x0BB` at 50 Hz on GPIO3 |
 | `NodeADC` | 6 | Generic ADC `0x0BA` at 100 Hz on GPIO1 |
 
 All builds use 1 Mbit/s CAN with TX GPIO21 and RX GPIO20.
@@ -65,6 +65,6 @@ pio run -e NodeEngine
 pio run -e NodeADC
 ```
 
-The RPM placeholder currently outputs zero. Hardware measurements are required
-before defining its peak thresholds, hysteresis, pulses per revolution, valid
-RPM range, filtering, and no-pulse timeout.
+The RPM driver measures rising edges on GPIO3 and assumes one spark per
+revolution. Its input conditioning, pulse rejection window, expected RPM range,
+and stopped-engine timeout require validation on the vehicle.

@@ -29,7 +29,7 @@ src/
     ├── rear_brake.c        Rear pressure sensor
     ├── bearing_encoder.c   Quadrature encoder
     ├── generic_adc.c       General GPIO1 voltage in millivolts
-    └── engine_rpm.c        Documented placeholder for analog peak RPM
+    └── engine_rpm.c        Digital spark-edge timing and RPM conversion
 ```
 
 ## Module relationships
@@ -94,6 +94,10 @@ CAN payload. The sampler supplies the synchronized timestamp in bytes 4-7.
 | Sensor calibration/conversion | Corresponding file under `sensors/` |
 | Sensors included in a node | `sensors/sensor_registry.c` |
 
+`engine_rpm.c` measures rising-edge timing on GPIO3 for one spark per
+revolution. Its input conditioning, pulse rejection, and stopped-engine timeout
+constants must be revalidated if the ignition hardware or expected engine-speed
+range changes.
 ## Standalone serial sensor testing
 
 Every fixed sensor environment defines this bench-test flag:
