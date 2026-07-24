@@ -27,7 +27,7 @@ src/
     ├── adc_input.*         Shared ESP32-C3 ADC access
     ├── front_brake.c       Front pressure sensor
     ├── rear_brake.c        Rear pressure sensor
-    ├── bearing_encoder.c   Quadrature encoder
+    ├── bearing_encoder.c   Quadrature bearing RPM
     ├── generic_adc.c       General GPIO1 voltage in millivolts
     └── engine_rpm.c        Digital spark-edge timing and RPM conversion
 ```

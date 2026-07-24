@@ -17,6 +17,7 @@ struct sensor {
     uint32_t period_us;
     int64_t next_sample_us;
     esp_err_t (*init)(sensor_t *sensor);
+    void (*start)(sensor_t *sensor);
     int32_t (*read)(sensor_t *sensor);
     void *context;
 };

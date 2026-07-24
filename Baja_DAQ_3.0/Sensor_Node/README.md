@@ -12,7 +12,7 @@ starts and stops sampling but does not configure sensor hardware at runtime.
 | PlatformIO environment | Node | Sensors |
 |---|---:|---|
 | `NodeBrake` | 1 | Front brake pressure on GPIO1 and rear brake pressure on GPIO2, both at 100 Hz |
-| `NodeEncoder` | 4 | Bearing quadrature encoder on GPIO6/GPIO7 at 50 Hz |
+| `NodeEncoder` | 4 | Signed bearing RPM on GPIO6/GPIO7 at 50 Hz |
 | `NodeEngine` | 5 | Engine RPM on GPIO3 at 50 Hz |
 | `NodeADC` | 6 | Generic ADC voltage on GPIO1 at 100 Hz |
 

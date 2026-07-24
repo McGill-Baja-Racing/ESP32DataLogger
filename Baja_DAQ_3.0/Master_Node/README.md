@@ -42,7 +42,7 @@ header because they are separate firmware projects. Changes to CAN command IDs,
 node-state encoding, or sensor IDs must be made in both protocol headers and
 validated by building all firmware profiles.
 
-The accepted first-version signals are front/rear brake pressure, bearing
-encoder angle, generic ADC voltage from node 6 (`0x0BA`), and the engine RPM
+The accepted first-version signals are front/rear brake pressure, signed
+bearing RPM, generic ADC voltage from node 6 (`0x0BA`), and the engine RPM
 placeholder from node 5 (`0x0BB`). The placeholder is logged but currently
 contains zero.

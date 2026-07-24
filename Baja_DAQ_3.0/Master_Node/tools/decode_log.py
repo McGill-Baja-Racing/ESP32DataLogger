@@ -20,7 +20,7 @@ RECORD_SIZE_BYTES = 16
 SIGNAL_METADATA = {
     0x0B1: ("front_brake_pressure", "brake_node_1", "psi"),
     0x0B2: ("rear_brake_pressure", "brake_node_1", "psi"),
-    0x0B9: ("bearing_encoder", "encoder_node_4", "deg_x10"),
+    0x0B9: ("bearing_rpm", "encoder_node_4", "rpm"),
     0x0BA: ("generic_adc_voltage", "adc_node_6", "mV"),
     0x0BB: ("engine_rpm", "engine_node_5", "rpm_placeholder"),
 }

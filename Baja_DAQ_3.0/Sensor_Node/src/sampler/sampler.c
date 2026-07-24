@@ -53,6 +53,11 @@ static void arm_schedule(void)
 void sampler_start(void)
 {
     xQueueReset(sample_queue);
+    for (size_t i = 0; i < sensor_count; i++) {
+        if (sensors[i].start) {
+            sensors[i].start(&sensors[i]);
+        }
+    }
     arm_schedule();
     active = true;
 }
