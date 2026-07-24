@@ -8,13 +8,20 @@ send runtime configuration.
 | Build | Node | Sensors |
 |---|---:|---|
 | `NodeBrake` | 1 | Front brake `0x0B1` at 100 Hz on GPIO1; rear brake `0x0B2` at 100 Hz on GPIO2 |
-| `NodeEncoder` | 4 | Bearing encoder `0x0B9` at 50 Hz on GPIO6/GPIO7 |
+| `NodeEncoder` | 4 | Signed bearing RPM `0x0B9` at 50 Hz on GPIO6/GPIO7 |
 | `NodeEngine` | 5 | Engine RPM `0x0BB` at 50 Hz on GPIO3 |
 | `NodeADC` | 6 | Generic ADC `0x0BA` at 100 Hz on GPIO1 |
 
 All builds use 1 Mbit/s CAN with TX GPIO21 and RX GPIO20.
 Each node monitors its CAN controller and automatically initiates recovery after
 a bus-off condition while preserving its current started/stopped state.
+
+The SKF BMB-6202/032S2/UB108A bearing has two NPN open-collector quadrature
+outputs. Power it from regulated 5 V with a shared ground, and pull GPIO6 and
+GPIO7 up to 3.3 V through separate 4.7 kΩ resistors. Do not pull either ESP32
+input above 3.3 V. The firmware's weak internal pull-ups are only a bench-test
+fallback; vehicle wiring also requires suitable filtering and transient
+protection.
 
 ## Source layout
 
@@ -30,7 +37,7 @@ The implementation is organized by responsibility:
 | `sensors/sensor_registry.c` | Sensors selected for each build profile |
 | `sensors/front_brake.c` | GPIO1 front pressure conversion |
 | `sensors/rear_brake.c` | GPIO2 rear pressure conversion |
-| `sensors/bearing_encoder.c` | GPIO6/GPIO7 quadrature decoding and angle conversion |
+| `sensors/bearing_encoder.c` | GPIO6/GPIO7 quadrature decoding and signed RPM conversion |
 | `sensors/adc_input.c` | ADC one-shot and calibration shared by analog sensors |
 | `sensors/generic_adc.c` | Calibrated GPIO1 voltage reported in millivolts |
 | `sensors/engine_rpm.c` | Placeholder for future raw-voltage peak detection |
