@@ -18,6 +18,8 @@ and store them safely on an SD card.
 - graceful stop, queue drain, flush, and file close
 - serial `start`, `stop`, and `status` commands at 115200 baud
 - registration of node boot, start, stop, and recovery states
+- open `BajaDAQ` SoftAP and HTTP controls at `http://192.168.4.1`
+- binary and streamed CSV downloads for completed log sessions
 - `tools/decode_log.py` to convert a log to CSV
 
 ## Source organization
@@ -33,6 +35,8 @@ and store them safely on an SD card.
 | `node_state/node_registry.c` | Latest node state acknowledgements |
 | `time/time_beacon.c` | Periodic master-clock broadcast |
 | `console/serial_console.c` | Serial command parsing |
+| `app/app_control.c` | Serialized logging lifecycle shared by serial and HTTP |
+| `web/web_server.c` | ESP-Hosted SoftAP, HTTP API, UI, and downloads |
 
 See `src/README.md` for dependencies and maintenance guidance.
 
