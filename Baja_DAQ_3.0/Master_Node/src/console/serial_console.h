@@ -7,6 +7,7 @@
 typedef struct {
     bool (*start)(void);
     bool (*stop)(void);
+    bool (*test_data)(void);
     void (*status)(void);
 } serial_console_callbacks_t;
 

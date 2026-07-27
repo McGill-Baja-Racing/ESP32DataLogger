@@ -7,6 +7,7 @@
 #include "esp_twai_onchip.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
+#include "freertos/semphr.h"
 #include "freertos/task.h"
 
 /*
@@ -23,8 +24,10 @@
 #ifndef NODE_CAN_RX_GPIO
 #define NODE_CAN_RX_GPIO 20
 #endif
+#ifndef NODE_CAN_BITRATE
+#define NODE_CAN_BITRATE 1000000
+#endif
 
-#define CAN_BITRATE             1000000
 #define CAN_TX_QUEUE_DEPTH      5
 #define CAN_RX_QUEUE_LENGTH     16
 #define CAN_TX_TIMEOUT_MS       50
@@ -38,6 +41,7 @@ typedef struct {
 
 static const char *TAG = "CAN";
 static QueueHandle_t rx_queue;
+static SemaphoreHandle_t tx_mutex;
 static twai_node_handle_t can_handle;
 static can_node_callbacks_t app_callbacks;
 static node_state_t current_state = NODE_STATE_IDLE;
@@ -78,14 +82,26 @@ static bool targets_this_node(const can_message_t *message)
 
 esp_err_t can_node_send(uint32_t can_id, const uint8_t *payload, uint8_t length)
 {
+    if (length > 8 || (length > 0 && !payload)) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (!tx_mutex ||
+        xSemaphoreTake(tx_mutex, pdMS_TO_TICKS(CAN_TX_TIMEOUT_MS)) != pdTRUE) {
+        return ESP_ERR_TIMEOUT;
+    }
     twai_frame_t frame = {
         .header.id = can_id,
         .header.ide = false,
         .buffer = (uint8_t *)payload,
         .buffer_len = length,
     };
-    return twai_node_transmit(can_handle, &frame,
-                              pdMS_TO_TICKS(CAN_TX_TIMEOUT_MS));
+    esp_err_t error = twai_node_transmit(can_handle, &frame, CAN_TX_TIMEOUT_MS);
+    if (error == ESP_OK) {
+        /* The TWAI queue retains these pointers until transmission finishes. */
+        error = twai_node_transmit_wait_all_done(can_handle, -1);
+    }
+    xSemaphoreGive(tx_mutex);
+    return error;
 }
 
 void can_node_report_state(node_state_t state, node_state_reason_t reason)
@@ -114,14 +130,23 @@ static void dispatch_task(void *argument)
                 app_callbacks.on_time_beacon(message.data);
             }
         } else if (message.id == CAN_ID_START && targets_this_node(&message)) {
-            if (app_callbacks.on_start) {
-                app_callbacks.on_start();
+            if (current_state != NODE_STATE_ACTIVE) {
+                ESP_LOGI(TAG, "Received START; sampler -> active");
+                if (app_callbacks.on_start) {
+                    app_callbacks.on_start();
+                }
             }
+            /* Acknowledge every copy in the command burst. Duplicate STARTs
+             * do not restart the sampler, but replace a lost acknowledgement. */
             can_node_report_state(NODE_STATE_ACTIVE, NODE_STATE_REASON_START);
         } else if (message.id == CAN_ID_STOP && targets_this_node(&message)) {
-            if (app_callbacks.on_stop) {
-                app_callbacks.on_stop();
+            if (current_state != NODE_STATE_IDLE) {
+                ESP_LOGI(TAG, "Received STOP; sampler -> idle");
+                if (app_callbacks.on_stop) {
+                    app_callbacks.on_stop();
+                }
             }
+            /* As with START, repeat only the acknowledgement, not the action. */
             can_node_report_state(NODE_STATE_IDLE, NODE_STATE_REASON_STOP);
         }
     }
@@ -176,13 +201,14 @@ esp_err_t can_node_init(const can_node_callbacks_t *callbacks,
     app_callbacks = *callbacks;
     reset_reason = boot_reset_reason;
     rx_queue = xQueueCreate(CAN_RX_QUEUE_LENGTH, sizeof(can_message_t));
-    if (!rx_queue) {
+    tx_mutex = xSemaphoreCreateMutex();
+    if (!rx_queue || !tx_mutex) {
         return ESP_ERR_NO_MEM;
     }
 
     twai_onchip_node_config_t config = {
         .io_cfg = {.tx = NODE_CAN_TX_GPIO, .rx = NODE_CAN_RX_GPIO},
-        .bit_timing = {.bitrate = CAN_BITRATE},
+        .bit_timing = {.bitrate = NODE_CAN_BITRATE},
         .tx_queue_depth = CAN_TX_QUEUE_DEPTH,
     };
     esp_err_t error = twai_new_node_onchip(&config, &can_handle);

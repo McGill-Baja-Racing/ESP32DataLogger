@@ -8,18 +8,24 @@
 #include "esp_twai_onchip.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
+#include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "protocol/app_protocol.h"
 
 #define CAN_TX_GPIO             20
 #define CAN_RX_GPIO             21
-#define CAN_BITRATE             1000000
+#ifndef MASTER_CAN_BITRATE
+#define MASTER_CAN_BITRATE      1000000
+#endif
 #define CAN_RX_QUEUE_LENGTH     256
 #define CAN_TX_QUEUE_DEPTH      5
 #define CAN_RECOVERY_POLL_MS    250
+#define CAN_COMMAND_REPEAT_COUNT 5
+#define CAN_COMMAND_REPEAT_MS    20
 
 static const char *TAG = "MasterCAN";
 static QueueHandle_t rx_queue;
+static SemaphoreHandle_t tx_mutex;
 static twai_node_handle_t can_handle;
 static can_message_handler_t application_handler;
 static volatile uint32_t rx_drops;
@@ -50,23 +56,62 @@ static bool receive_callback(twai_node_handle_t node,
 
 esp_err_t can_master_send(uint32_t id, const uint8_t *payload, uint8_t length)
 {
+    if (length > 8 || (length > 0 && !payload)) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (!tx_mutex || xSemaphoreTake(tx_mutex, pdMS_TO_TICKS(100)) != pdTRUE) {
+        return ESP_ERR_TIMEOUT;
+    }
     twai_frame_t frame = {
         .header.id = id,
         .header.ide = false,
         .buffer = (uint8_t *)payload,
         .buffer_len = length,
     };
-    return twai_node_transmit(can_handle, &frame, pdMS_TO_TICKS(100));
+    esp_err_t error = twai_node_transmit(can_handle, &frame, 100);
+    if (error == ESP_OK) {
+        /*
+         * The TWAI driver queues pointers to the frame and payload instead of
+         * copying them. Wait before these stack objects leave scope.
+         */
+        error = twai_node_transmit_wait_all_done(can_handle, -1);
+    }
+    xSemaphoreGive(tx_mutex);
+    return error;
+}
+
+static esp_err_t send_command_burst(uint32_t id)
+{
+    esp_err_t first_error = ESP_OK;
+    for (unsigned int attempt = 0; attempt < CAN_COMMAND_REPEAT_COUNT; attempt++) {
+        esp_err_t error = can_master_send(id, NULL, 0);
+        if (error != ESP_OK && first_error == ESP_OK) {
+            first_error = error;
+        }
+        if (attempt + 1 < CAN_COMMAND_REPEAT_COUNT) {
+            vTaskDelay(pdMS_TO_TICKS(CAN_COMMAND_REPEAT_MS));
+        }
+    }
+    return first_error;
 }
 
 esp_err_t can_master_start_nodes(void)
 {
-    return can_master_send(CAN_ID_START, NULL, 0);
+    return send_command_burst(CAN_ID_START);
 }
 
 esp_err_t can_master_stop_nodes(void)
 {
-    return can_master_send(CAN_ID_STOP, NULL, 0);
+    return send_command_burst(CAN_ID_STOP);
+}
+
+esp_err_t can_master_inject_test_message(const can_message_t *message)
+{
+    if (!message || message->dlc > 8) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    return xQueueSend(rx_queue, message, pdMS_TO_TICKS(100)) == pdPASS
+         ? ESP_OK : ESP_ERR_TIMEOUT;
 }
 
 uint32_t can_master_rx_drop_count(void)
@@ -132,12 +177,13 @@ esp_err_t can_master_init(can_message_handler_t message_handler)
     }
     application_handler = message_handler;
     rx_queue = xQueueCreate(CAN_RX_QUEUE_LENGTH, sizeof(can_message_t));
-    if (!rx_queue) {
+    tx_mutex = xSemaphoreCreateMutex();
+    if (!rx_queue || !tx_mutex) {
         return ESP_ERR_NO_MEM;
     }
     twai_onchip_node_config_t config = {
         .io_cfg = {.tx = CAN_TX_GPIO, .rx = CAN_RX_GPIO},
-        .bit_timing = {.bitrate = CAN_BITRATE},
+        .bit_timing = {.bitrate = MASTER_CAN_BITRATE},
         .tx_queue_depth = CAN_TX_QUEUE_DEPTH,
     };
     esp_err_t error = twai_new_node_onchip(&config, &can_handle);

@@ -17,4 +17,5 @@ esp_err_t can_master_init(can_message_handler_t message_handler);
 esp_err_t can_master_send(uint32_t id, const uint8_t *payload, uint8_t length);
 esp_err_t can_master_start_nodes(void);
 esp_err_t can_master_stop_nodes(void);
+esp_err_t can_master_inject_test_message(const can_message_t *message);
 uint32_t can_master_rx_drop_count(void);

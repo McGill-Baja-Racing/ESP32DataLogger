@@ -13,6 +13,9 @@ send runtime configuration.
 | `NodeADC` | 6 | Generic ADC `0x0BA` at 100 Hz on GPIO1 |
 
 All builds use 1 Mbit/s CAN with TX GPIO21 and RX GPIO20.
+Each node waits three seconds after reset before sensor and CAN initialization
+so its serial monitor can reconnect. The master automatic START occurs after
+five seconds, leaving the node time to report its boot state.
 Each node monitors its CAN controller and automatically initiates recovery after
 a bus-off condition while preserving its current started/stopped state.
 

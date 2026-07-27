@@ -28,15 +28,24 @@ void node_registry_update(const can_message_t *message)
 {
     uint32_t id = message->id - CAN_ID_NODE_STATE_BASE;
     if (id >= NODE_SLOT_COUNT || message->dlc < 2) return;
+    uint8_t state = (uint8_t)message->data;
+    uint8_t reason = (uint8_t)(message->data >> 8);
+    uint8_t reset_reason = message->dlc >= 3
+                         ? (uint8_t)(message->data >> 16) : 0;
+    bool changed = !nodes[id].seen || nodes[id].state != state ||
+                   nodes[id].reason != reason ||
+                   nodes[id].reset_reason != reset_reason;
     nodes[id] = (registered_node_t) {
         .seen = true,
-        .state = (uint8_t)message->data,
-        .reason = (uint8_t)(message->data >> 8),
-        .reset_reason = message->dlc >= 3 ? (uint8_t)(message->data >> 16) : 0,
+        .state = state,
+        .reason = reason,
+        .reset_reason = reset_reason,
     };
-    ESP_LOGI(TAG, "Node %" PRIu32 " state=%s reason=%u reset=%u", id,
-             nodes[id].state == PROTOCOL_NODE_ACTIVE ? "active" : "idle",
-             nodes[id].reason, nodes[id].reset_reason);
+    if (changed) {
+        ESP_LOGI(TAG, "Node %" PRIu32 " state=%s reason=%u reset=%u", id,
+                 nodes[id].state == PROTOCOL_NODE_ACTIVE ? "active" : "idle",
+                 nodes[id].reason, nodes[id].reset_reason);
+    }
 }
 
 const char *node_registry_state_name(uint8_t node_id)

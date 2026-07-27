@@ -1,6 +1,8 @@
 #include "esp_err.h"
 #include "esp_log.h"
 #include "esp_system.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 #include "can/can_node.h"
 #include "sampler/sampler.h"
@@ -9,6 +11,11 @@
 #ifndef SENSOR_SERIAL_TEST
 #define SENSOR_SERIAL_TEST 0
 #endif
+#ifndef SENSOR_AUTO_START_TEST
+#define SENSOR_AUTO_START_TEST 0
+#endif
+
+#define SENSOR_STARTUP_DELAY_MS 3000
 
 /*
  * Application composition root
@@ -30,6 +37,13 @@ static void handle_stop(void)
 
 void app_main(void)
 {
+    /*
+     * Allow USB serial/JTAG and the host monitor time to reconnect after reset.
+     * The master waits five seconds before START, leaving about two seconds for
+     * this node to initialize CAN and report its boot state.
+     */
+    vTaskDelay(pdMS_TO_TICKS(SENSOR_STARTUP_DELAY_MS));
+
     /* Sensor hardware and sampling tasks exist before CAN can issue START. */
     ESP_ERROR_CHECK(sampler_init());
 
@@ -48,7 +62,16 @@ void app_main(void)
     };
     ESP_ERROR_CHECK(can_node_init(&callbacks, (uint8_t)esp_reset_reason()));
 
+#if SENSOR_AUTO_START_TEST
+    /*
+     * CAN bench mode: transmit samples without requiring the master START.
+     * A subsequently received STOP still stops sampling normally.
+     */
+    sampler_start();
+    can_node_report_state(NODE_STATE_ACTIVE, NODE_STATE_REASON_BOOT);
+#else
     /* The master uses this acknowledgement to register the node after boot. */
     can_node_report_state(NODE_STATE_IDLE, NODE_STATE_REASON_BOOT);
+#endif
 #endif
 }

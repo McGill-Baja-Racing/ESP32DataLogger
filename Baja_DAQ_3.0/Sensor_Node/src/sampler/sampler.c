@@ -52,6 +52,9 @@ static void arm_schedule(void)
 
 void sampler_start(void)
 {
+    if (active) {
+        return;
+    }
     xQueueReset(sample_queue);
     arm_schedule();
     active = true;
@@ -59,6 +62,9 @@ void sampler_start(void)
 
 void sampler_stop(void)
 {
+    if (!active) {
+        return;
+    }
     active = false;
     xQueueReset(sample_queue);
 }
@@ -119,7 +125,14 @@ static void sample_task(void *argument)
         if (sleep_us >= 2000) {
             vTaskDelay(pdMS_TO_TICKS((uint32_t)(sleep_us / 1000)));
         } else {
-            taskYIELD();
+            /*
+             * taskYIELD() only gives CPU time to tasks at the same or a
+             * higher priority. If sampling is continuously close to or
+             * behind schedule, that starves the lower-priority idle task and
+             * triggers the task watchdog. Blocking for one tick guarantees
+             * idle time while adding at most one scheduler tick of jitter.
+             */
+            vTaskDelay(1);
         }
     }
 }
