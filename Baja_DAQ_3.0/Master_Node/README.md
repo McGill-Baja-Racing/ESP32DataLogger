@@ -29,6 +29,10 @@ pio run -e MasterStable
 The master waits five seconds after boot before automatically opening a log and
 broadcasting START, giving sensor nodes and serial monitors time to initialize.
 
+`SD_FORMAT_IF_MOUNT_FAILED` in `platformio.ini` controls automatic formatting.
+It defaults to `1`, so an inserted card that cannot be mounted as FAT is erased
+and formatted. Set it to `0` for non-destructive mount failures.
+
 ## Data flow
 
 ```text

@@ -6,6 +6,14 @@
 #include "freertos/task.h"
 #include "sdmmc_cmd.h"
 
+#ifndef SD_FORMAT_IF_MOUNT_FAILED
+#define SD_FORMAT_IF_MOUNT_FAILED 0
+#endif
+
+#if SD_FORMAT_IF_MOUNT_FAILED != 0 && SD_FORMAT_IF_MOUNT_FAILED != 1
+#error "SD_FORMAT_IF_MOUNT_FAILED must be 0 or 1"
+#endif
+
 #if SOC_SDMMC_IO_POWER_EXTERNAL
 #include "sd_pwr_ctrl_by_on_chip_ldo.h"
 #endif
@@ -13,8 +21,8 @@
 esp_err_t sd_card_mount(void)
 {
     esp_vfs_fat_sdmmc_mount_config_t mount = {
-        .format_if_mount_failed = false,
-        .max_files = 2,
+        .format_if_mount_failed = SD_FORMAT_IF_MOUNT_FAILED != 0,
+        .max_files = 5,
         .allocation_unit_size = 16 * 1024,
     };
     sdmmc_host_t host = SDMMC_HOST_DEFAULT();
