@@ -102,6 +102,7 @@ void app_main(void)
 {
     ESP_ERROR_CHECK(sd_card_mount());
     ESP_ERROR_CHECK(data_logger_init());
+    ESP_ERROR_CHECK(node_registry_init());
     ESP_ERROR_CHECK(can_master_init(handle_can_message));
 
     /* Force nodes idle before the console and automatic session can start. */

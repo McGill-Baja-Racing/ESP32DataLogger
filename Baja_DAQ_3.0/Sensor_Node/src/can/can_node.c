@@ -1,5 +1,6 @@
 #include "can_node.h"
 
+#include <inttypes.h>
 #include <stdbool.h>
 
 #include "esp_log.h"
@@ -32,6 +33,8 @@
 #define CAN_RX_QUEUE_LENGTH     16
 #define CAN_TX_TIMEOUT_MS       50
 #define CAN_RECOVERY_POLL_MS    250
+#define CAN_ERROR_LOG_MS        1000
+#define NODE_HEARTBEAT_MS       1000
 
 typedef struct {
     uint32_t id;
@@ -169,15 +172,35 @@ static void recovery_task(void *argument)
     (void)argument;
     bool recovering = false;
     twai_error_state_t previous = TWAI_ERROR_ACTIVE;
+    uint8_t previous_tx_errors = 0;
+    uint8_t previous_rx_errors = 0;
+    uint32_t previous_bus_errors = 0;
+    TickType_t last_error_log = 0;
     while (true) {
         twai_node_status_t status = {0};
         twai_node_record_t record = {0};
         if (twai_node_get_info(can_handle, &status, &record) == ESP_OK) {
             if (status.state != previous) {
-                ESP_LOGW(TAG, "State %s -> %s", state_name(previous),
-                         state_name(status.state));
+                ESP_LOGW(TAG, "State %s -> %s; tx=%u rx=%u errors=%" PRIu32,
+                         state_name(previous), state_name(status.state),
+                         status.tx_error_count, status.rx_error_count,
+                         record.bus_err_num);
                 previous = status.state;
             }
+            TickType_t now = xTaskGetTickCount();
+            bool errors_changed = status.tx_error_count != previous_tx_errors ||
+                                  status.rx_error_count != previous_rx_errors ||
+                                  record.bus_err_num != previous_bus_errors;
+            if (errors_changed &&
+                now - last_error_log >= pdMS_TO_TICKS(CAN_ERROR_LOG_MS)) {
+                ESP_LOGW(TAG, "CAN errors while %s: tx=%u rx=%u total=%" PRIu32,
+                         state_name(status.state), status.tx_error_count,
+                         status.rx_error_count, record.bus_err_num);
+                last_error_log = now;
+            }
+            previous_tx_errors = status.tx_error_count;
+            previous_rx_errors = status.rx_error_count;
+            previous_bus_errors = record.bus_err_num;
             if (status.state == TWAI_ERROR_BUS_OFF && !recovering) {
                 if (app_callbacks.on_bus_off) {
                     app_callbacks.on_bus_off();
@@ -189,6 +212,15 @@ static void recovery_task(void *argument)
             }
         }
         vTaskDelay(pdMS_TO_TICKS(CAN_RECOVERY_POLL_MS));
+    }
+}
+
+static void heartbeat_task(void *argument)
+{
+    (void)argument;
+    while (true) {
+        vTaskDelay(pdMS_TO_TICKS(NODE_HEARTBEAT_MS));
+        can_node_report_state(current_state, NODE_STATE_REASON_HEARTBEAT);
     }
 }
 
@@ -225,7 +257,8 @@ esp_err_t can_node_init(const can_node_callbacks_t *callbacks,
         return error;
     }
     if (xTaskCreate(dispatch_task, "can_dispatch", 3072, NULL, 8, NULL) != pdPASS ||
-        xTaskCreate(recovery_task, "can_recovery", 3072, NULL, 8, NULL) != pdPASS) {
+        xTaskCreate(recovery_task, "can_recovery", 3072, NULL, 8, NULL) != pdPASS ||
+        xTaskCreate(heartbeat_task, "can_heartbeat", 3072, NULL, 6, NULL) != pdPASS) {
         return ESP_ERR_NO_MEM;
     }
     return ESP_OK;

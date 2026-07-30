@@ -38,8 +38,10 @@ The implementation is organized by responsibility:
 | `sensors/generic_adc.c` | Calibrated GPIO1 voltage reported in millivolts |
 | `sensors/engine_rpm.c` | Placeholder for future raw-voltage peak detection |
 
-The bare-bones node has no periodic health frame. It retains a small state
-report for boot, start, stop, and CAN recovery.
+Each node sends its current state once per second as a heartbeat, in addition
+to reports for boot, start, stop, and CAN recovery. This lets the master detect
+a disconnected or unpowered node even if the CAN controller never enters
+bus-off.
 
 ## Protocol
 

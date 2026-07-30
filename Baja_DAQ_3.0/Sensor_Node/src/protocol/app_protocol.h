@@ -30,4 +30,5 @@ typedef enum {
     NODE_STATE_REASON_STOP = 2,
     NODE_STATE_REASON_START = 3,
     NODE_STATE_REASON_RECOVERY = 4,
+    NODE_STATE_REASON_HEARTBEAT = 5,
 } node_state_reason_t;

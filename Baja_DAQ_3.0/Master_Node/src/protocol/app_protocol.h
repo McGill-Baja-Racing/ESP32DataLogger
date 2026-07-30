@@ -20,6 +20,14 @@ typedef enum {
     PROTOCOL_NODE_ACTIVE = 1,
 } protocol_node_state_t;
 
+typedef enum {
+    NODE_STATE_REASON_BOOT = 1,
+    NODE_STATE_REASON_STOP = 2,
+    NODE_STATE_REASON_START = 3,
+    NODE_STATE_REASON_RECOVERY = 4,
+    NODE_STATE_REASON_HEARTBEAT = 5,
+} node_state_reason_t;
+
 static inline bool protocol_is_sensor_id(uint32_t id)
 {
     return id == CAN_ID_FRONT_BRAKE ||
