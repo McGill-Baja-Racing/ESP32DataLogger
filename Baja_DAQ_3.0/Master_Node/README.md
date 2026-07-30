@@ -12,8 +12,8 @@ Node TX GPIO21/RX GPIO20.
 - Broadcast START and STOP commands to fixed-configuration sensor nodes.
 - Broadcast a 64-bit master-time beacon every 100 ms.
 - Receive the configured sensor CAN IDs and buffer them to the SD card.
-- Register node state reports and mark a node offline after three seconds
-  without a heartbeat.
+- During recording, use received sensor frames to mark nodes active and report
+  a node offline after three seconds without data.
 - Recover the CAN controller after bus-off.
 - Provide `start`, `stop`, `testdata`, and `status` serial commands at
   115200 baud.

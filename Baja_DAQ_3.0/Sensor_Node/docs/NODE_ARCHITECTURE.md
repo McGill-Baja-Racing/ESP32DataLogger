@@ -38,10 +38,9 @@ The implementation is organized by responsibility:
 | `sensors/generic_adc.c` | Calibrated GPIO1 voltage reported in millivolts |
 | `sensors/engine_rpm.c` | Placeholder for future raw-voltage peak detection |
 
-Each node sends its current state once per second as a heartbeat, in addition
-to reports for boot, start, stop, and CAN recovery. This lets the master detect
-a disconnected or unpowered node even if the CAN controller never enters
-bus-off.
+Nodes report state transitions for boot, start, stop, and CAN recovery. While
+recording, normal sensor frames provide liveness information to the master, so
+the nodes do not send separate heartbeat traffic.
 
 ## Protocol
 

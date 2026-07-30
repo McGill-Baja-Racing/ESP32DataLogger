@@ -90,9 +90,10 @@ Sensor frames use eight little-endian bytes:
 | 0-3 | Signed 32-bit sensor value |
 | 4-7 | Synchronized timestamp in milliseconds |
 
-Node-state reports use CAN ID `0x0C0 + NODE_ID`. Each node repeats its current
-state once per second as a heartbeat. CAN controller error-counter changes are
-also printed locally, even when the controller does not reach bus-off.
+Node-state reports use CAN ID `0x0C0 + NODE_ID` for boot, start, stop, and CAN
+recovery transitions. Normal sensor traffic provides node-liveness information
+to the master while recording, so no heartbeat frames are sent. CAN controller
+error-counter changes are printed locally even without reaching bus-off.
 
 The engine RPM input measures rising-edge timing on GPIO3. Its one-spark-per-
 revolution assumption, pulse rejection window, and stopped-engine timeout must

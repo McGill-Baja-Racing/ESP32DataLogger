@@ -35,6 +35,7 @@ static const test_sample_t test_samples[TEST_SAMPLE_COUNT] = {
 static bool start_logging(void)
 {
     if (!data_logger_start()) return false;
+    node_registry_set_monitoring(true);
     ESP_ERROR_CHECK_WITHOUT_ABORT(can_master_start_nodes());
     return true;
 }
@@ -42,6 +43,7 @@ static bool start_logging(void)
 static bool stop_logging(void)
 {
     if (!data_logger_stop()) return false;
+    node_registry_set_monitoring(false);
     ESP_ERROR_CHECK_WITHOUT_ABORT(can_master_stop_nodes());
     return true;
 }
@@ -86,6 +88,7 @@ static void handle_can_message(const can_message_t *message)
     if (node_registry_is_state_frame(message)) {
         node_registry_update(message);
     } else if (protocol_is_sensor_id(message->id)) {
+        node_registry_record_sensor_frame(message);
         data_logger_enqueue(message);
     }
 }

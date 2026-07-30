@@ -34,7 +34,6 @@
 #define CAN_TX_TIMEOUT_MS       50
 #define CAN_RECOVERY_POLL_MS    250
 #define CAN_ERROR_LOG_MS        1000
-#define NODE_HEARTBEAT_MS       1000
 
 typedef struct {
     uint32_t id;
@@ -215,15 +214,6 @@ static void recovery_task(void *argument)
     }
 }
 
-static void heartbeat_task(void *argument)
-{
-    (void)argument;
-    while (true) {
-        vTaskDelay(pdMS_TO_TICKS(NODE_HEARTBEAT_MS));
-        can_node_report_state(current_state, NODE_STATE_REASON_HEARTBEAT);
-    }
-}
-
 esp_err_t can_node_init(const can_node_callbacks_t *callbacks,
                         uint8_t boot_reset_reason)
 {
@@ -257,8 +247,7 @@ esp_err_t can_node_init(const can_node_callbacks_t *callbacks,
         return error;
     }
     if (xTaskCreate(dispatch_task, "can_dispatch", 3072, NULL, 8, NULL) != pdPASS ||
-        xTaskCreate(recovery_task, "can_recovery", 3072, NULL, 8, NULL) != pdPASS ||
-        xTaskCreate(heartbeat_task, "can_heartbeat", 3072, NULL, 6, NULL) != pdPASS) {
+        xTaskCreate(recovery_task, "can_recovery", 3072, NULL, 8, NULL) != pdPASS) {
         return ESP_ERR_NO_MEM;
     }
     return ESP_OK;

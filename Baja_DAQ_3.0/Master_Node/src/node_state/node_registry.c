@@ -14,6 +14,7 @@
 
 typedef struct {
     bool seen;
+    bool data_seen;
     uint8_t state;
     uint8_t reason;
     uint8_t reset_reason;
@@ -23,6 +24,12 @@ typedef struct {
 
 static const char *TAG = "NodeRegistry";
 static registered_node_t nodes[NODE_SLOT_COUNT];
+static bool monitoring;
+
+static bool is_configured_node(uint32_t id)
+{
+    return id == 1 || id == 4 || id == 5 || id == 6;
+}
 
 bool node_registry_is_state_frame(const can_message_t *message)
 {
@@ -38,27 +45,44 @@ void node_registry_update(const can_message_t *message)
     uint8_t reason = (uint8_t)(message->data >> 8);
     uint8_t reset_reason = message->dlc >= 3
                          ? (uint8_t)(message->data >> 16) : 0;
-    bool heartbeat = reason == NODE_STATE_REASON_HEARTBEAT;
     bool changed = !nodes[id].seen || nodes[id].offline ||
                    nodes[id].state != state ||
-                   (!heartbeat && (nodes[id].reason != reason ||
-                                   nodes[id].reset_reason != reset_reason));
-    if (heartbeat && nodes[id].seen) {
-        reason = nodes[id].reason;
-        reset_reason = nodes[id].reset_reason;
-    }
-    nodes[id] = (registered_node_t) {
-        .seen = true,
-        .state = state,
-        .reason = reason,
-        .reset_reason = reset_reason,
-        .last_seen = xTaskGetTickCount(),
-        .offline = false,
-    };
+                   nodes[id].reason != reason ||
+                   nodes[id].reset_reason != reset_reason;
+    nodes[id].seen = true;
+    nodes[id].state = state;
+    nodes[id].reason = reason;
+    nodes[id].reset_reason = reset_reason;
     if (changed) {
         ESP_LOGI(TAG, "Node %" PRIu32 " state=%s reason=%u reset=%u", id,
                  nodes[id].state == PROTOCOL_NODE_ACTIVE ? "active" : "idle",
                  nodes[id].reason, nodes[id].reset_reason);
+    }
+}
+
+void node_registry_set_monitoring(bool enabled)
+{
+    monitoring = enabled;
+    TickType_t now = xTaskGetTickCount();
+    for (uint32_t id = 1; id < NODE_SLOT_COUNT; id++) {
+        if (!is_configured_node(id)) continue;
+        nodes[id].data_seen = false;
+        nodes[id].last_seen = now;
+        nodes[id].offline = false;
+    }
+}
+
+void node_registry_record_sensor_frame(const can_message_t *message)
+{
+    if (!monitoring) return;
+    uint8_t id = protocol_sensor_node_id(message->id);
+    if (id == 0 || id >= NODE_SLOT_COUNT) return;
+    bool reconnected = nodes[id].offline;
+    nodes[id].data_seen = true;
+    nodes[id].last_seen = xTaskGetTickCount();
+    nodes[id].offline = false;
+    if (reconnected) {
+        ESP_LOGI(TAG, "Node %u active; sensor data resumed", id);
     }
 }
 
@@ -68,11 +92,12 @@ static void monitor_task(void *argument)
     while (true) {
         TickType_t now = xTaskGetTickCount();
         for (uint32_t id = 1; id < NODE_SLOT_COUNT; id++) {
-            if (nodes[id].seen && !nodes[id].offline &&
+            if (!is_configured_node(id)) continue;
+            if (monitoring && !nodes[id].offline &&
                 now - nodes[id].last_seen >=
                     pdMS_TO_TICKS(NODE_OFFLINE_TIMEOUT_MS)) {
                 nodes[id].offline = true;
-                ESP_LOGW(TAG, "Node %" PRIu32 " offline; no heartbeat for %u ms",
+                ESP_LOGW(TAG, "Node %" PRIu32 " offline; no sensor data for %u ms",
                          id, NODE_OFFLINE_TIMEOUT_MS);
             }
         }
@@ -88,7 +113,8 @@ esp_err_t node_registry_init(void)
 
 const char *node_registry_state_name(uint8_t node_id)
 {
-    if (node_id >= NODE_SLOT_COUNT || !nodes[node_id].seen) return "unknown";
+    if (node_id >= NODE_SLOT_COUNT) return "unknown";
+    if (!monitoring) return "off";
     if (nodes[node_id].offline) return "offline";
-    return nodes[node_id].state == PROTOCOL_NODE_ACTIVE ? "active" : "idle";
+    return nodes[node_id].data_seen ? "active" : "waiting";
 }

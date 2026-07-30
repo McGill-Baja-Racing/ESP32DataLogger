@@ -52,11 +52,12 @@ The generic ADC value is calibrated millivolts. Engine RPM is reserved in the
 protocol and log decoder but currently reports zero until the analog tach peak
 detection is implemented and validated on hardware.
 
-Nodes report transitions and one-second heartbeats on `0x0C0 + node ID`. The
-master records the latest state for nodes 1, 4, 5, and 6, prints transitions to
-serial, and includes their active/idle/offline/unknown state in the `status`
-output. A node becomes offline after three seconds without a report. State
-reports are control information and are not written to the sensor log.
+Nodes report boot, start, stop, and recovery transitions on `0x0C0 + node ID`.
+While recording, the master uses normal sensor frames as proof that nodes 1, 4,
+5, and 6 are active. The `status` output shows waiting until the first frame,
+active while frames arrive, and offline after three seconds without sensor data.
+When the logger is stopped, node status is off and no liveness traffic is sent.
+State reports are control information and are not written to the sensor log.
 
 ## Time synchronization
 
