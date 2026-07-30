@@ -11,9 +11,6 @@
 #ifndef SENSOR_SERIAL_TEST
 #define SENSOR_SERIAL_TEST 0
 #endif
-#ifndef SENSOR_AUTO_START_TEST
-#define SENSOR_AUTO_START_TEST 0
-#endif
 
 #define SENSOR_STARTUP_DELAY_MS 3000
 
@@ -61,17 +58,7 @@ void app_main(void)
         .on_bus_off = sampler_discard_pending,
     };
     ESP_ERROR_CHECK(can_node_init(&callbacks, (uint8_t)esp_reset_reason()));
-
-#if SENSOR_AUTO_START_TEST
-    /*
-     * CAN bench mode: transmit samples without requiring the master START.
-     * A subsequently received STOP still stops sampling normally.
-     */
-    sampler_start();
-    can_node_report_state(NODE_STATE_ACTIVE, NODE_STATE_REASON_BOOT);
-#else
     /* The master uses this acknowledgement to register the node after boot. */
     can_node_report_state(NODE_STATE_IDLE, NODE_STATE_REASON_BOOT);
-#endif
 #endif
 }
