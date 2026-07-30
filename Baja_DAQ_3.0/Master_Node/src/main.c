@@ -13,24 +13,8 @@
 #include "time/time_beacon.h"
 
 #define AUTO_START_DELAY_MS 5000
-#define TEST_SAMPLE_COUNT 5
-
 /* Composition root: initializes modules and defines application-level flow. */
 static const char *TAG = "Master";
-
-typedef struct {
-    uint32_t can_id;
-    int32_t timestamp_ms;
-    int32_t value;
-} test_sample_t;
-
-static const test_sample_t test_samples[TEST_SAMPLE_COUNT] = {
-    {CAN_ID_FRONT_BRAKE,     1000, 1234},
-    {CAN_ID_REAR_BRAKE,      1001,  567},
-    {CAN_ID_BEARING_ENCODER, 1002, -321},
-    {CAN_ID_GENERIC_ADC,     1003, 3300},
-    {CAN_ID_ENGINE_RPM,      1004, 2750},
-};
 
 static bool start_logging(void)
 {
@@ -58,31 +42,6 @@ static void print_status(void)
     ESP_LOGI(TAG, "nodes: 1=%s 4=%s 5=%s 6=%s",
              node_registry_state_name(1), node_registry_state_name(4),
              node_registry_state_name(5), node_registry_state_name(6));
-}
-
-static bool inject_test_data(void)
-{
-    if (data_logger_state() != LOGGER_RUNNING) {
-        ESP_LOGW(TAG, "Test data requires a running log");
-        return false;
-    }
-    for (size_t i = 0; i < TEST_SAMPLE_COUNT; i++) {
-        can_message_t message = {
-            .id = test_samples[i].can_id,
-            .dlc = 8,
-            .data = ((uint64_t)(uint32_t)test_samples[i].timestamp_ms << 32) |
-                    (uint32_t)test_samples[i].value,
-        };
-        esp_err_t error = can_master_inject_test_message(&message);
-        if (error != ESP_OK) {
-            ESP_LOGE(TAG, "Test-data injection failed: %s",
-                     esp_err_to_name(error));
-            return false;
-        }
-    }
-    ESP_LOGI(TAG, "Injected %u test samples into the CAN receive queue",
-             TEST_SAMPLE_COUNT);
-    return true;
 }
 
 static void handle_can_message(const can_message_t *message)
@@ -119,7 +78,6 @@ void app_main(void)
     serial_console_callbacks_t console = {
         .start = start_logging,
         .stop = stop_logging,
-        .test_data = inject_test_data,
         .status = print_status,
     };
     ESP_ERROR_CHECK(serial_console_start(&console));

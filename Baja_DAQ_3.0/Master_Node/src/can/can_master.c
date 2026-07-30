@@ -105,15 +105,6 @@ esp_err_t can_master_stop_nodes(void)
     return send_command_burst(CAN_ID_STOP);
 }
 
-esp_err_t can_master_inject_test_message(const can_message_t *message)
-{
-    if (!message || message->dlc > 8) {
-        return ESP_ERR_INVALID_ARG;
-    }
-    return xQueueSend(rx_queue, message, pdMS_TO_TICKS(100)) == pdPASS
-         ? ESP_OK : ESP_ERR_TIMEOUT;
-}
-
 uint32_t can_master_rx_drop_count(void)
 {
     return rx_drops;
