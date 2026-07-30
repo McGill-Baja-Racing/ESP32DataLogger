@@ -36,6 +36,7 @@ static bool start_logging(void)
 {
     if (!data_logger_start()) return false;
     node_registry_set_monitoring(true);
+    time_beacon_set_recording(true);
     ESP_ERROR_CHECK_WITHOUT_ABORT(can_master_start_nodes());
     return true;
 }
@@ -43,6 +44,7 @@ static bool start_logging(void)
 static bool stop_logging(void)
 {
     if (!data_logger_stop()) return false;
+    time_beacon_set_recording(false);
     node_registry_set_monitoring(false);
     ESP_ERROR_CHECK_WITHOUT_ABORT(can_master_stop_nodes());
     return true;

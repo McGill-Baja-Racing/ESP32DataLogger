@@ -95,6 +95,10 @@ recovery transitions. Normal sensor traffic provides node-liveness information
 to the master while recording, so no heartbeat frames are sent. CAN controller
 error-counter changes are printed locally even without reaching bus-off.
 
+The high bit of each master-time beacon carries the Master's recording state.
+After a node reboot, the next beacon restarts sampling automatically when the
+Master is still recording; the lower 63 bits retain the master timestamp.
+
 The engine RPM input measures rising-edge timing on GPIO3. Its one-spark-per-
 revolution assumption, pulse rejection window, and stopped-engine timeout must
 be validated against the conditioned ignition signal on the vehicle.

@@ -42,6 +42,11 @@ Nodes report state transitions for boot, start, stop, and CAN recovery. While
 recording, normal sensor frames provide liveness information to the master, so
 the nodes do not send separate heartbeat traffic.
 
+The high bit of the 100 ms master-time beacon carries the Master's recording
+state. A node that reboots while the Master is recording restarts its sampler
+after receiving the next beacon; the lower 63 bits remain the synchronized
+microsecond timestamp.
+
 ## Protocol
 
 | CAN ID | Direction | Purpose |

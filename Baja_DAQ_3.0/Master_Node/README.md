@@ -10,7 +10,8 @@ Node TX GPIO21/RX GPIO20.
 
 - Mount the SD card and create numbered binary log files.
 - Broadcast START and STOP commands to fixed-configuration sensor nodes.
-- Broadcast a 64-bit master-time beacon every 100 ms.
+- Broadcast a master-time beacon with recording state every 100 ms so rebooted
+  nodes can rejoin an active session.
 - Receive the configured sensor CAN IDs and buffer them to the SD card.
 - During recording, use received sensor frames to mark nodes active and report
   a node offline after three seconds without data.

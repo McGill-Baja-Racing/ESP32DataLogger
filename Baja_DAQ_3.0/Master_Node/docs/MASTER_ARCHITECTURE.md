@@ -52,7 +52,11 @@ The generic ADC value is calibrated millivolts. Engine RPM is reserved in the
 protocol and log decoder but currently reports zero until the analog tach peak
 detection is implemented and validated on hardware.
 
-Nodes report boot, start, stop, and recovery transitions on `0x0C0 + node ID`.
+Nodes report boot, start, stop, beacon synchronization, and recovery transitions
+on `0x0C0 + node ID`. The high bit of each 100 ms time beacon carries the
+Master's recording state; the remaining 63 bits carry master microseconds. A
+node that reboots during a recording therefore resumes sampling on its next
+beacon without requiring the Master to repeat the original START command.
 While recording, the master uses normal sensor frames as proof that nodes 1, 4,
 5, and 6 are active. The `status` output shows waiting until the first frame,
 active while frames arrive, and offline after three seconds without sensor data.

@@ -129,7 +129,22 @@ static void dispatch_task(void *argument)
         xQueueReceive(rx_queue, &message, portMAX_DELAY);
         if (message.id == CAN_ID_MASTER_TIME && message.dlc == 8) {
             if (app_callbacks.on_time_beacon) {
-                app_callbacks.on_time_beacon(message.data);
+                app_callbacks.on_time_beacon(message.data &
+                                             CAN_MASTER_TIME_VALUE_MASK);
+            }
+            node_state_t master_state =
+                (message.data & CAN_MASTER_TIME_RECORDING_FLAG)
+                ? NODE_STATE_ACTIVE : NODE_STATE_IDLE;
+            if (master_state != current_state) {
+                ESP_LOGI(TAG, "Beacon sync; sampler -> %s",
+                         master_state == NODE_STATE_ACTIVE ? "active" : "idle");
+                if (master_state == NODE_STATE_ACTIVE) {
+                    if (app_callbacks.on_start) app_callbacks.on_start();
+                } else {
+                    if (app_callbacks.on_stop) app_callbacks.on_stop();
+                }
+                can_node_report_state(master_state,
+                                      NODE_STATE_REASON_BEACON_SYNC);
             }
         } else if (message.id == CAN_ID_START && targets_this_node(&message)) {
             if (current_state != NODE_STATE_ACTIVE) {

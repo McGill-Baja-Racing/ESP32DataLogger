@@ -11,6 +11,12 @@
 #define FAILURE_LOG_PERIOD_MS 5000
 
 static const char *TAG = "TimeBeacon";
+static volatile bool recording;
+
+void time_beacon_set_recording(bool enabled)
+{
+    recording = enabled;
+}
 
 static void beacon_task(void *argument)
 {
@@ -19,7 +25,11 @@ static void beacon_task(void *argument)
     esp_err_t previous_error = ESP_OK;
     TickType_t last_failure_log = 0;
     while (true) {
-        uint64_t time_us = (uint64_t)esp_timer_get_time();
+        uint64_t time_us = (uint64_t)esp_timer_get_time() &
+                           CAN_MASTER_TIME_VALUE_MASK;
+        if (recording) {
+            time_us |= CAN_MASTER_TIME_RECORDING_FLAG;
+        }
         for (uint8_t i = 0; i < sizeof(payload); i++) {
             payload[i] = (uint8_t)(time_us >> (8 * i));
         }
