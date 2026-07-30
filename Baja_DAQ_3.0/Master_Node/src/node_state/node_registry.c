@@ -28,7 +28,7 @@ static bool monitoring;
 
 static bool is_configured_node(uint32_t id)
 {
-    return id == 1 || id == 4 || id == 5 || id == 6;
+    return id < 32 && (MASTER_EXPECTED_NODE_MASK & (1U << id)) != 0;
 }
 
 bool node_registry_is_state_frame(const can_message_t *message)
@@ -114,6 +114,7 @@ esp_err_t node_registry_init(void)
 const char *node_registry_state_name(uint8_t node_id)
 {
     if (node_id >= NODE_SLOT_COUNT) return "unknown";
+    if (!is_configured_node(node_id)) return "disabled";
     if (!monitoring) return "off";
     if (nodes[node_id].offline) return "offline";
     return nodes[node_id].data_seen ? "active" : "waiting";

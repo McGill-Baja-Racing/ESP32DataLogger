@@ -15,6 +15,8 @@ Node TX GPIO21/RX GPIO20.
 - Receive the configured sensor CAN IDs and buffer them to the SD card.
 - During recording, use received sensor frames to mark nodes active and report
   a node offline after three seconds without data.
+- Select installed nodes with `MASTER_EXPECTED_NODE_MASK` in
+  `src/node_state/node_registry.h` (currently nodes 4 and 5).
 - Recover the CAN controller after bus-off.
 - Provide `start`, `stop`, `testdata`, and `status` serial commands at
   115200 baud.

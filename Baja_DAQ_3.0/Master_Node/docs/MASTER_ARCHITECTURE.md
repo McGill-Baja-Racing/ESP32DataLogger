@@ -57,11 +57,13 @@ on `0x0C0 + node ID`. The high bit of each 100 ms time beacon carries the
 Master's recording state; the remaining 63 bits carry master microseconds. A
 node that reboots during a recording therefore resumes sampling on its next
 beacon without requiring the Master to repeat the original START command.
-While recording, the master uses normal sensor frames as proof that nodes 1, 4,
-5, and 6 are active. The `status` output shows waiting until the first frame,
+While recording, the master uses normal sensor frames as proof that configured
+nodes are active. The expected-node mask in `node_registry.h` currently enables
+nodes 4 and 5. The `status` output shows waiting until the first frame,
 active while frames arrive, and offline after three seconds without sensor data.
-When the logger is stopped, node status is off and no liveness traffic is sent.
-State reports are control information and are not written to the sensor log.
+Unconfigured nodes appear as disabled. When the logger is stopped, configured
+node status is off and no liveness traffic is sent. State reports are control
+information and are not written to the sensor log.
 
 ## Time synchronization
 
