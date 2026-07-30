@@ -179,7 +179,8 @@ static void recovery_task(void *argument)
         twai_node_status_t status = {0};
         twai_node_record_t record = {0};
         if (twai_node_get_info(can_handle, &status, &record) == ESP_OK) {
-            if (status.state != previous) {
+            bool state_changed = status.state != previous;
+            if (state_changed) {
                 ESP_LOGW(TAG, "State %s -> %s; tx=%u rx=%u errors=%" PRIu32,
                          state_name(previous), state_name(status.state),
                          status.tx_error_count, status.rx_error_count,
@@ -200,13 +201,24 @@ static void recovery_task(void *argument)
             previous_tx_errors = status.tx_error_count;
             previous_rx_errors = status.rx_error_count;
             previous_bus_errors = record.bus_err_num;
-            if (status.state == TWAI_ERROR_BUS_OFF && !recovering) {
+            /* A failed recovery can pass through PASSIVE and return to BUS_OFF.
+             * Start a fresh recovery each time BUS_OFF is entered so a later
+             * physical reconnection can restore communication automatically. */
+            if (status.state == TWAI_ERROR_BUS_OFF &&
+                (!recovering || state_changed)) {
                 if (app_callbacks.on_bus_off) {
                     app_callbacks.on_bus_off();
                 }
-                recovering = twai_node_recover(can_handle) == ESP_OK;
+                esp_err_t error = twai_node_recover(can_handle);
+                recovering = error == ESP_OK;
+                if (error != ESP_OK) {
+                    ESP_LOGE(TAG, "CAN recovery start failed: %s",
+                             esp_err_to_name(error));
+                }
             } else if (recovering && status.state == TWAI_ERROR_ACTIVE) {
                 recovering = false;
+                ESP_LOGI(TAG, "CAN recovered; sampler remains %s",
+                         current_state == NODE_STATE_ACTIVE ? "active" : "idle");
                 can_node_report_state(current_state, NODE_STATE_REASON_RECOVERY);
             }
         }
