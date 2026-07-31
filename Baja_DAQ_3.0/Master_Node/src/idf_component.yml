@@ -1,1 +1,3 @@
-dependencies: {}
+dependencies:
+  espressif/esp_hosted: ">=2.11,<3.0"
+  espressif/esp_wifi_remote: ">=1.5.2"

@@ -19,6 +19,8 @@ Node TX GPIO21/RX GPIO20.
   `src/node_state/node_registry.h` (currently nodes 4 and 5).
 - Recover the CAN controller after bus-off.
 - Provide `start`, `stop`, and `status` serial commands at 115200 baud.
+- Host an open `BajaDAQ` Wi-Fi access point with controls and log downloads at
+  `http://192.168.4.1`.
 
 ## Build
 
@@ -45,7 +47,20 @@ Sensor CAN frames -> can/can_master.c -> main dispatch
 
 time/time_beacon.c -> can_master_send() -> synchronized sensor nodes
 console commands   -> main policy       -> logger + node commands
+web controls       -> main policy       -> logger + node commands
 ```
+
+## Wi-Fi controls
+
+The Waveshare ESP32-P4-WIFI6 uses its ESP32-C6 coprocessor over SDIO through
+ESP-Hosted. Connect a phone or laptop to the open `BajaDAQ` network and browse
+to `http://192.168.4.1`. The page reports logger and node state, accepts Start
+and Stop commands, and offers completed sessions as their original binary log
+or as a streamed CSV conversion.
+
+The C6 must run an ESP-Hosted slave firmware compatible with the version pinned
+in `dependencies.lock`. Network startup failures are reported on serial and do
+not disable SD logging, CAN collection, or serial commands.
 
 [src/main.c](src/main.c) is the composition root. Module ownership and change
 guidance are documented in [src/README.md](src/README.md). The CAN payload and

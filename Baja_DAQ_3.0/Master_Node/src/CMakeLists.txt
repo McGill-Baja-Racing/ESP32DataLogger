@@ -1,12 +1,14 @@
 idf_component_register(
     SRCS
         "main.c"
+        "app/app_control.c"
         "can/can_master.c"
         "console/serial_console.c"
         "logger/data_logger.c"
         "node_state/node_registry.c"
         "storage/sd_card.c"
         "time/time_beacon.c"
+        "web/web_server.c"
     INCLUDE_DIRS "."
     REQUIRES
         fatfs
@@ -15,4 +17,9 @@ idf_component_register(
         esp_driver_twai
         esp_driver_gpio
         esp_timer
+        esp_http_server
+        esp_netif
+        esp_event
+        nvs_flash
+        espressif__esp_hosted
 )
