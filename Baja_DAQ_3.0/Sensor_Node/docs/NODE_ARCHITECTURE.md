@@ -13,6 +13,9 @@ send runtime configuration.
 | `NodeADC` | 6 | Generic ADC `0x0BA` at 100 Hz on GPIO1 |
 
 All builds use 1 Mbit/s CAN with TX GPIO21 and RX GPIO20.
+Each node waits three seconds after reset before sensor and CAN initialization
+so its serial monitor can reconnect. The master automatic START occurs after
+five seconds, leaving the node time to report its boot state.
 Each node monitors its CAN controller and automatically initiates recovery after
 a bus-off condition while preserving its current started/stopped state.
 
@@ -35,8 +38,14 @@ The implementation is organized by responsibility:
 | `sensors/generic_adc.c` | Calibrated GPIO1 voltage reported in millivolts |
 | `sensors/engine_rpm.c` | Placeholder for future raw-voltage peak detection |
 
-The bare-bones node has no periodic health frame. It retains a small state
-report for boot, start, stop, and CAN recovery.
+Nodes report state transitions for boot, start, stop, and CAN recovery. While
+recording, normal sensor frames provide liveness information to the master, so
+the nodes do not send separate heartbeat traffic.
+
+The high bit of the 100 ms master-time beacon carries the Master's recording
+state. A node that reboots while the Master is recording restarts its sampler
+after receiving the next beacon; the lower 63 bits remain the synchronized
+microsecond timestamp.
 
 ## Protocol
 

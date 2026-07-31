@@ -39,7 +39,8 @@ static void console_task(void *argument)
 
 esp_err_t serial_console_start(const serial_console_callbacks_t *callbacks)
 {
-    if (!callbacks || !callbacks->start || !callbacks->stop || !callbacks->status) {
+    if (!callbacks || !callbacks->start || !callbacks->stop ||
+        !callbacks->status) {
         return ESP_ERR_INVALID_ARG;
     }
     app_callbacks = *callbacks;

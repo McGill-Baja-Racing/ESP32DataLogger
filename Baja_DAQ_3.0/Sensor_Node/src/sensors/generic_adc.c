@@ -3,6 +3,8 @@
 #include "adc_input.h"
 #include "protocol/app_protocol.h"
 
+#if NODE_FIXED_ADC_CONFIG
+
 /* First-pass general analog channel: ESP32-C3 ADC1 GPIO1, reported in mV. */
 #define GENERIC_ADC_GPIO 1
 
@@ -20,3 +22,5 @@ sensor_t generic_adc_sensor = {
     .period_us = 10000, /* 100 Hz */
     .read = read_voltage_mv,
 };
+
+#endif /* NODE_FIXED_ADC_CONFIG */

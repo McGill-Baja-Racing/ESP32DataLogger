@@ -20,6 +20,9 @@
 #define CAN_ID_GENERIC_ADC          0x0BA
 #define CAN_ID_ENGINE_RPM           0x0BB
 
+#define CAN_MASTER_TIME_RECORDING_FLAG (UINT64_C(1) << 63)
+#define CAN_MASTER_TIME_VALUE_MASK     (CAN_MASTER_TIME_RECORDING_FLAG - 1)
+
 typedef enum {
     NODE_STATE_IDLE = 0,
     NODE_STATE_ACTIVE = 1,
@@ -30,4 +33,5 @@ typedef enum {
     NODE_STATE_REASON_STOP = 2,
     NODE_STATE_REASON_START = 3,
     NODE_STATE_REASON_RECOVERY = 4,
+    NODE_STATE_REASON_BEACON_SYNC = 5,
 } node_state_reason_t;

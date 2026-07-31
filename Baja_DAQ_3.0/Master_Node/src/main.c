@@ -12,14 +12,15 @@
 #include "storage/sd_card.h"
 #include "time/time_beacon.h"
 
-#define AUTO_START_DELAY_MS 500
-
+#define AUTO_START_DELAY_MS 5000
 /* Composition root: initializes modules and defines application-level flow. */
 static const char *TAG = "Master";
 
 static bool start_logging(void)
 {
     if (!data_logger_start()) return false;
+    node_registry_set_monitoring(true);
+    time_beacon_set_recording(true);
     ESP_ERROR_CHECK_WITHOUT_ABORT(can_master_start_nodes());
     return true;
 }
@@ -27,6 +28,8 @@ static bool start_logging(void)
 static bool stop_logging(void)
 {
     if (!data_logger_stop()) return false;
+    time_beacon_set_recording(false);
+    node_registry_set_monitoring(false);
     ESP_ERROR_CHECK_WITHOUT_ABORT(can_master_stop_nodes());
     return true;
 }
@@ -46,6 +49,7 @@ static void handle_can_message(const can_message_t *message)
     if (node_registry_is_state_frame(message)) {
         node_registry_update(message);
     } else if (protocol_is_sensor_id(message->id)) {
+        node_registry_record_sensor_frame(message);
         data_logger_enqueue(message);
     }
 }
@@ -62,6 +66,7 @@ void app_main(void)
 {
     ESP_ERROR_CHECK(sd_card_mount());
     ESP_ERROR_CHECK(data_logger_init());
+    ESP_ERROR_CHECK(node_registry_init());
     ESP_ERROR_CHECK(can_master_init(handle_can_message));
 
     /* Force nodes idle before the console and automatic session can start. */

@@ -3,13 +3,20 @@
 ESP32-P4 firmware that coordinates the Baja DAQ 3.0 sensor nodes and stores
 their synchronized CAN samples on an SD card.
 
+The bench CAN bus runs at 1 Mbit/s on master TX GPIO20/RX GPIO21 and Sensor
+Node TX GPIO21/RX GPIO20.
+
 ## Responsibilities
 
 - Mount the SD card and create numbered binary log files.
 - Broadcast START and STOP commands to fixed-configuration sensor nodes.
-- Broadcast a 64-bit master-time beacon every 100 ms.
+- Broadcast a master-time beacon with recording state every 100 ms so rebooted
+  nodes can rejoin an active session.
 - Receive the configured sensor CAN IDs and buffer them to the SD card.
-- Register node boot/start/stop/recovery state reports.
+- During recording, use received sensor frames to mark nodes active and report
+  a node offline after three seconds without data.
+- Select installed nodes with `MASTER_EXPECTED_NODE_MASK` in
+  `src/node_state/node_registry.h` (currently nodes 4 and 5).
 - Recover the CAN controller after bus-off.
 - Provide `start`, `stop`, and `status` serial commands at 115200 baud.
 
@@ -18,6 +25,9 @@ their synchronized CAN samples on an SD card.
 ```bash
 pio run -e MasterStable
 ```
+
+The master waits five seconds after boot before automatically opening a log and
+broadcasting START, giving sensor nodes and serial monitors time to initialize.
 
 ## Data flow
 

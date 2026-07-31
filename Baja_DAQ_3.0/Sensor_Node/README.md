@@ -18,6 +18,10 @@ starts and stops sampling but does not configure sensor hardware at runtime.
 
 All builds use CAN TX GPIO21 and RX GPIO20.
 
+The CAN bitrate is set with `NODE_CAN_BITRATE` and defaults to 1 Mbit/s. START
+and STOP commands are idempotent and acknowledgements are repeated so command
+retries do not restart or stop the sampler more than once.
+
 ## Build
 
 From this directory:
@@ -86,8 +90,14 @@ Sensor frames use eight little-endian bytes:
 | 0-3 | Signed 32-bit sensor value |
 | 4-7 | Synchronized timestamp in milliseconds |
 
-Node-state reports use CAN ID `0x0C0 + NODE_ID`. Full periodic health reports
-are intentionally not part of this bare-bones firmware.
+Node-state reports use CAN ID `0x0C0 + NODE_ID` for boot, start, stop, and CAN
+recovery transitions. Normal sensor traffic provides node-liveness information
+to the master while recording, so no heartbeat frames are sent. CAN controller
+error-counter changes are printed locally even without reaching bus-off.
+
+The high bit of each master-time beacon carries the Master's recording state.
+After a node reboot, the next beacon restarts sampling automatically when the
+Master is still recording; the lower 63 bits retain the master timestamp.
 
 The engine RPM input measures rising-edge timing on GPIO3. Its one-spark-per-
 revolution assumption, pulse rejection window, and stopped-engine timeout must
