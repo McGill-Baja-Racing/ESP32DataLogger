@@ -6,6 +6,8 @@ and store them safely on an SD card.
 ## Included features
 
 - FAT SD card mount at `/sdcard`
+- optional FAT formatting when an inserted card cannot be mounted, controlled
+  by the `SD_FORMAT_IF_MOUNT_FAILED` build flag
 - 1 Mbit/s TWAI/CAN on TX GPIO 20 and RX GPIO 21
 - fixed master-side list of accepted sensor CAN IDs
 - global node start and stop commands

@@ -11,6 +11,7 @@
 
 #define LOG_QUEUE_LENGTH        256
 #define LOG_RECORDS_PER_BLOCK   100
+#define LOG_FLUSH_INTERVAL_MS   15000
 #define LOG_PATH_LENGTH         64
 
 static const char *TAG = "DataLogger";
@@ -94,12 +95,27 @@ static bool write_records(const int64_t records[][2], size_t count)
     return true;
 }
 
+static bool checkpoint_file(void)
+{
+    if (xSemaphoreTake(file_mutex, portMAX_DELAY) != pdTRUE) return false;
+    if (log_file) fclose(log_file);
+    log_file = fopen(log_path, "ab");
+    xSemaphoreGive(file_mutex);
+    if (!log_file) {
+        ESP_LOGE(TAG, "Checkpoint saved, but cannot reopen %s", log_path);
+        return false;
+    }
+    ESP_LOGI(TAG, "Checkpoint saved; file closed and reopened: %s", log_path);
+    return true;
+}
+
 static void writer_task(void *argument)
 {
     (void)argument;
     int64_t records[LOG_RECORDS_PER_BLOCK][2];
     size_t count = 0;
     can_message_t message;
+    TickType_t last_checkpoint = xTaskGetTickCount();
     while (true) {
         if (xQueueReceive(log_queue, &message, pdMS_TO_TICKS(100)) == pdTRUE) {
             records[count][0] = message.id;
@@ -108,6 +124,15 @@ static void writer_task(void *argument)
                 (void)write_records(records, count);
                 count = 0;
             }
+        }
+        TickType_t now = xTaskGetTickCount();
+        if (state == LOGGER_RUNNING &&
+            now - last_checkpoint >= pdMS_TO_TICKS(LOG_FLUSH_INTERVAL_MS)) {
+            if (count == 0 || write_records(records, count)) {
+                count = 0;
+                (void)checkpoint_file();
+            }
+            last_checkpoint = now;
         }
         if (state == LOGGER_STOPPING && uxQueueMessagesWaiting(log_queue) == 0) {
             if (count > 0) {
@@ -122,6 +147,7 @@ static void writer_task(void *argument)
             state = LOGGER_IDLE;
             ESP_LOGI(TAG, "Logging stopped and file closed");
         }
+        if (state == LOGGER_IDLE) last_checkpoint = now;
     }
 }
 
