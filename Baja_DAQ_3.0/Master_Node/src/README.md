@@ -50,7 +50,7 @@ The following values in `protocol/app_protocol.h` must match the Sensor Node:
 | Node state | `0x0C0 + node ID` |
 | Front brake | `0x0B1` |
 | Rear brake | `0x0B2` |
-| Bearing encoder | `0x0B9` |
+| Signed bearing RPM | `0x0B9` |
 | Generic ADC voltage | `0x0BA` |
 | Engine RPM placeholder | `0x0BB` |
 
