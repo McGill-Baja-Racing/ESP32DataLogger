@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Baja DAQ</title>
+  <style>
+    :root{font-family:system-ui,sans-serif;color:#17202a;background:#f2f4f7;color-scheme:light}
+    body{max-width:960px;margin:auto;padding:18px}h1{margin:0 0 16px}h2{margin-top:0}
+    .card,.chart{background:#fff;border-radius:12px;padding:16px;margin:12px 0;box-shadow:0 2px 9px #0001}
+    .state{font-size:1.3rem;font-weight:700}.muted{color:#65707c;font-size:.9rem}.error{color:#b42318;min-height:1.2em}
+    button,.download,select,input{border:1px solid #ccd2d8;border-radius:8px;padding:9px 12px;margin:4px;font:inherit}
+    button,.download{font-weight:650;text-decoration:none;display:inline-block;cursor:pointer;background:#e8edf3;color:#17202a}
+    button:disabled,input:disabled,select:disabled{opacity:.45;cursor:not-allowed}#start,#liveEnable{background:#16833b;color:#fff}
+    #stop,#liveDisable{background:#c53232;color:#fff}.row,.controls{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+    .row{justify-content:space-between;border-top:1px solid #e7e9ec;padding:10px 0}.signals{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:5px}
+    .signals label{padding:7px;border:1px solid #e7e9ec;border-radius:7px}.warning{background:#fff8e6;padding:10px;border-radius:8px}
+    .chart header{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center}.chart h3{margin:0}
+    .chart canvas{width:100%;height:260px;display:block;touch-action:none}.axis input{width:85px}.value{font-size:1.1rem;font-weight:700}
+    @media(max-width:560px){body{padding:10px}.chart canvas{height:220px}.axis{display:block}}
+  </style>
+</head>
+<body>
+  <h1>Baja DAQ</h1>
+  <section class="card">
+    <div id="state" class="state">Connecting...</div><div id="file" class="muted"></div>
+    <p><button id="start">Start</button><button id="stop">Stop</button></p>
+    <div id="stats" class="muted"></div><div id="nodes" class="muted"></div><div id="error" class="error"></div>
+  </section>
+
+  <section class="card">
+    <h2>Live Data</h2>
+    <p class="warning">Live viewing adds Wi-Fi and browser load. It is available only during recording and switches off automatically when recording stops.</p>
+    <div class="controls">
+      <button id="liveEnable">Enable live data</button><button id="liveDisable" disabled>Disable</button>
+      <label>Display rate <select id="rate"><option>1</option><option>5</option><option selected>10</option><option>20</option></select> Hz</label>
+      <label>History <select id="window"><option>10</option><option selected>30</option><option>60</option><option>120</option></select> s</label>
+      <span id="liveState" class="muted">Disabled</span>
+    </div>
+    <p class="muted">Select up to four signals. The SD log still records each signal at its native rate.</p>
+    <div id="signals" class="signals"></div><div id="liveError" class="error"></div>
+  </section>
+  <div id="charts"></div>
+
+  <section class="card"><h2>Completed logs</h2><div id="logs">Loading...</div></section>
+
+<script>
+'use strict';
+const $=id=>document.getElementById(id);
+let loggerState='idle', token=null, timer=null, polling=false, metadata=[], charts=new Map();
+
+async function json(url,opt){
+  const response=await fetch(url,opt), body=await response.json().catch(()=>({error:'Request failed'}));
+  if(!response.ok) throw Error(body.error||('HTTP '+response.status)); return body;
+}
+function pretty(name){return name.split('_').map(x=>x[0].toUpperCase()+x.slice(1)).join(' ')}
+
+async function refreshStatus(){
+  try{
+    const s=await json('/api/status'); loggerState=s.logger_state;
+    $('state').textContent=pretty(s.logger_state); $('file').textContent=s.current_file==='none'?'No session yet':s.current_file;
+    $('stats').textContent=`CAN drops: ${s.can_drops} | Log drops: ${s.log_drops}`;
+    $('nodes').textContent=`Nodes — 1: ${s.nodes['1']}, 4: ${s.nodes['4']}, 5: ${s.nodes['5']}, 6: ${s.nodes['6']}`;
+    $('start').disabled=s.logger_state!=='idle'; $('stop').disabled=s.logger_state!=='running';
+    $('liveEnable').disabled=s.logger_state!=='running'||token!==null||s.live_enabled;
+    if(!token)$('liveState').textContent=s.live_enabled?'Another viewer active':'Disabled'; $('error').textContent='';
+    if(token&&(!s.live_enabled||s.logger_state!=='running')) endLive(false,'Live data stopped with the recording.');
+  }catch(e){$('error').textContent=e.message}
+}
+async function logging(action){
+  try{await json('/api/logging/'+action,{method:'POST'});await refreshStatus();await refreshLogs()}
+  catch(e){$('error').textContent=e.message}
+}
+
+async function loadSignals(){
+  try{metadata=await json('/api/live/signals');
+    for(const signal of metadata){
+      const label=document.createElement('label'), box=document.createElement('input'); box.type='checkbox'; box.dataset.id=signal.can_id;
+      box.addEventListener('change',()=>selectSignal(signal,box)); label.append(box,` ${pretty(signal.signal)} (${signal.units}, ${signal.native_rate_hz} Hz)`); $('signals').append(label);
+    }
+  }catch(e){$('liveError').textContent=e.message}
+}
+function selectSignal(signal,box){
+  if(box.checked&&charts.size>=4){box.checked=false;$('liveError').textContent='Select no more than four signals.';return}
+  $('liveError').textContent=''; if(box.checked) addChart(signal); else removeChart(signal.can_id);
+}
+
+function addChart(signal){
+  const section=document.createElement('section'); section.className='chart'; section.dataset.id=signal.can_id;
+  section.innerHTML=`<header><div><h3>${pretty(signal.signal)}</h3><span class="muted">${signal.node} · native ${signal.native_rate_hz} Hz</span></div><span class="value">Waiting...</span></header>
+    <div class="controls axis"><label><input class="auto" type="checkbox" checked> Auto Y</label><label>Min <input class="ymin" type="number" disabled></label><label>Max <input class="ymax" type="number" disabled></label><button class="pause">Pause</button><button class="reset">Reset view</button></div><canvas></canvas>`;
+  $('charts').append(section); const chart={signal,section,canvas:section.querySelector('canvas'),points:[],lastSequence:0,paused:false,zoom:1,offset:0,pointers:new Map(),pinchDistance:0};
+  charts.set(signal.can_id,chart); const auto=section.querySelector('.auto'), ymin=section.querySelector('.ymin'), ymax=section.querySelector('.ymax');
+  auto.onchange=()=>{ymin.disabled=ymax.disabled=auto.checked;draw(chart)};
+  ymin.oninput=ymax.oninput=()=>draw(chart); section.querySelector('.pause').onclick=()=>{chart.paused=!chart.paused;section.querySelector('.pause').textContent=chart.paused?'Resume':'Pause'};
+  section.querySelector('.reset').onclick=()=>{chart.zoom=1;chart.offset=0;draw(chart)};
+  chart.canvas.addEventListener('wheel',e=>{e.preventDefault();chart.zoom=Math.max(1,Math.min(20,chart.zoom*(e.deltaY>0?.8:1.25)));draw(chart)},{passive:false});
+  chart.canvas.addEventListener('pointerdown',e=>{chart.pointers.set(e.pointerId,e.clientX);chart.canvas.setPointerCapture(e.pointerId)});
+  chart.canvas.addEventListener('pointermove',e=>{if(!chart.pointers.has(e.pointerId))return;const previous=chart.pointers.get(e.pointerId);chart.pointers.set(e.pointerId,e.clientX);
+    if(chart.pointers.size===1){const span=historyMs()/chart.zoom;chart.offset+=(previous-e.clientX)*span/chart.canvas.clientWidth;chart.offset=Math.max(0,chart.offset)}
+    else{const positions=[...chart.pointers.values()],distance=Math.abs(positions[0]-positions[1]);if(chart.pinchDistance>0)chart.zoom=Math.max(1,Math.min(20,chart.zoom*distance/chart.pinchDistance));chart.pinchDistance=distance}draw(chart)});
+  const release=e=>{chart.pointers.delete(e.pointerId);chart.pinchDistance=0};chart.canvas.addEventListener('pointerup',release);chart.canvas.addEventListener('pointercancel',release); draw(chart);
+}
+function removeChart(id){const chart=charts.get(id);if(chart)chart.section.remove();charts.delete(id)}
+function historyMs(){return Number($('window').value)*1000}
+
+async function enableLive(){
+  try{const result=await json('/api/live/start',{method:'POST'});token=result.token;$('liveState').textContent='Enabled';$('liveDisable').disabled=false;$('liveEnable').disabled=true;$('liveError').textContent='';schedulePoll()}
+  catch(e){$('liveError').textContent=e.message}
+}
+async function disableLive(){
+  if(!token)return;try{await json('/api/live/stop?token='+encodeURIComponent(token),{method:'POST'})}catch(e){$('liveError').textContent=e.message}endLive(false)
+}
+function endLive(notice=false,message=''){
+  clearTimeout(timer);timer=null;token=null;polling=false;$('liveState').textContent='Disabled';$('liveDisable').disabled=true;$('liveEnable').disabled=loggerState!=='running';
+  for(const chart of charts.values()){chart.points=[];chart.lastSequence=0;draw(chart)} if(message)$('liveError').textContent=message;
+}
+function schedulePoll(){clearTimeout(timer);if(!token)return;timer=setTimeout(poll,1000/Number($('rate').value))}
+async function poll(){
+  if(!token||polling)return;polling=true;
+  try{const result=await json('/api/live/samples?token='+encodeURIComponent(token));
+    for(const sample of result.samples){const chart=charts.get(sample.can_id);if(!chart||chart.paused||chart.lastSequence===sample.sequence)continue;chart.lastSequence=sample.sequence;chart.points.push({t:sample.timestamp_ms,v:sample.value});chart.section.querySelector('.value').textContent=`${sample.value} ${chart.signal.units}`;trim(chart);draw(chart)}
+    $('liveError').textContent='';
+  }catch(e){endLive(false,e.message)}finally{polling=false;schedulePoll()}
+}
+function trim(chart){if(!chart.points.length)return;const cutoff=chart.points.at(-1).t-historyMs()*1.2;while(chart.points.length&&chart.points[0].t<cutoff)chart.points.shift()}
+
+function draw(chart){
+  const canvas=chart.canvas, ratio=devicePixelRatio||1,w=canvas.clientWidth||600,h=canvas.clientHeight||260;
+  if(canvas.width!==Math.round(w*ratio)||canvas.height!==Math.round(h*ratio)){canvas.width=Math.round(w*ratio);canvas.height=Math.round(h*ratio)}
+  const c=canvas.getContext('2d');c.setTransform(ratio,0,0,ratio,0,0);c.clearRect(0,0,w,h);const left=58,right=12,top=14,bottom=30,pw=w-left-right,ph=h-top-bottom;
+  const latest=chart.points.length?chart.points.at(-1).t:0,span=historyMs()/chart.zoom,end=latest-chart.offset,start=end-span,visible=chart.points.filter(p=>p.t>=start&&p.t<=end);
+  let ymin=0,ymax=1;const auto=chart.section.querySelector('.auto').checked;
+  if(auto&&visible.length){ymin=Math.min(...visible.map(p=>p.v));ymax=Math.max(...visible.map(p=>p.v));const pad=Math.max((ymax-ymin)*.1,1);ymin-=pad;ymax+=pad}
+  else if(!auto){ymin=Number(chart.section.querySelector('.ymin').value);ymax=Number(chart.section.querySelector('.ymax').value);if(!Number.isFinite(ymin)||!Number.isFinite(ymax)||ymax<=ymin){ymin=0;ymax=1}}
+  c.strokeStyle='#d7dce1';c.fillStyle='#65707c';c.font='12px system-ui';c.textAlign='right';c.textBaseline='middle';
+  for(let i=0;i<=4;i++){const y=top+ph*i/4,value=ymax-(ymax-ymin)*i/4;c.beginPath();c.moveTo(left,y);c.lineTo(w-right,y);c.stroke();c.fillText(value.toFixed(Math.abs(value)<10?1:0),left-6,y)}
+  c.textAlign='center';c.textBaseline='top';for(let i=0;i<=4;i++){const x=left+pw*i/4;c.fillText(`${(-span+(span*i/4))/1000|0}s`,x,h-bottom+7)}
+  if(visible.length){c.strokeStyle='#0875d1';c.lineWidth=2;c.beginPath();visible.forEach((p,i)=>{const x=left+(p.t-start)*pw/span,y=top+(ymax-p.v)*ph/(ymax-ymin);i?c.lineTo(x,y):c.moveTo(x,y)});c.stroke()}
+}
+
+async function refreshLogs(){
+  try{const logs=await json('/api/logs');$('logs').innerHTML=logs.length?'':'No completed sessions';for(const l of logs){const row=document.createElement('div');row.className='row';const label=document.createElement('span');label.textContent=`${l.name} (${(l.size_bytes/1024).toFixed(1)} KiB)`;row.append(label);const actions=document.createElement('span');for(const f of ['bin','csv']){const a=document.createElement('a');a.className='download';a.textContent=f.toUpperCase();a.href=`/api/logs/download?name=${encodeURIComponent(l.name)}&format=${f}`;actions.append(a)}row.append(actions);$('logs').append(row)}}catch(e){$('error').textContent=e.message}
+}
+$('start').onclick=()=>logging('start');$('stop').onclick=()=>logging('stop');$('liveEnable').onclick=enableLive;$('liveDisable').onclick=disableLive;$('rate').onchange=schedulePoll;$('window').onchange=()=>{for(const chart of charts.values()){trim(chart);draw(chart)}};
+window.addEventListener('resize',()=>{for(const chart of charts.values())draw(chart)});window.addEventListener('pagehide',()=>{if(token)fetch('/api/live/stop?token='+encodeURIComponent(token),{method:'POST',keepalive:true})});
+loadSignals();refreshStatus();refreshLogs();setInterval(refreshStatus,1000);
+</script>
+</body>
+</html>

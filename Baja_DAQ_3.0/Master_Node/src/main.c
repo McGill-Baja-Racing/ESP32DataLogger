@@ -6,6 +6,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "logger/data_logger.h"
+#include "live/live_data.h"
 #include "node_state/node_registry.h"
 #include "protocol/app_protocol.h"
 #include "storage/sd_card.h"
@@ -38,6 +39,7 @@ static void handle_can_message(const can_message_t *message)
     } else if (protocol_is_sensor_id(message->id)) {
         node_registry_record_sensor_frame(message);
         data_logger_enqueue(message);
+        live_data_record(message);
     }
 }
 
@@ -53,6 +55,7 @@ void app_main(void)
 {
     ESP_ERROR_CHECK(sd_card_mount());
     ESP_ERROR_CHECK(data_logger_init());
+    ESP_ERROR_CHECK(live_data_init());
     ESP_ERROR_CHECK(node_registry_init());
     ESP_ERROR_CHECK(can_master_init(handle_can_message));
     ESP_ERROR_CHECK(app_control_init());

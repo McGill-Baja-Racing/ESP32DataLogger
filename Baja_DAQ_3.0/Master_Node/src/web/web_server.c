@@ -19,6 +19,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "logger/data_logger.h"
+#include "live/live_data.h"
 #include "lwip/ip4_addr.h"
 #include "nvs_flash.h"
 
@@ -32,75 +33,12 @@ typedef struct {
     unsigned index;
 } log_entry_t;
 
-typedef struct {
-    uint32_t can_id;
-    const char *signal;
-    const char *node;
-    const char *units;
-} signal_metadata_t;
-
 static const char *TAG = "WebServer";
 static httpd_handle_t server;
 static SemaphoreHandle_t download_mutex;
 
-static const signal_metadata_t signal_metadata[] = {
-    {0x0B1, "front_brake_pressure", "brake_node_1", "psi"},
-    {0x0B2, "rear_brake_pressure", "brake_node_1", "psi"},
-    {0x0B9, "bearing_rpm", "encoder_node_4", "rpm"},
-    {0x0BA, "generic_adc_voltage", "adc_node_6", "mV"},
-    {0x0BB, "engine_rpm", "engine_node_5", "rpm_placeholder"},
-};
-
-static const char index_html[] =
-    "<!doctype html><html><head><meta charset=utf-8>"
-    "<meta name=viewport content='width=device-width,initial-scale=1'>"
-    "<title>Baja DAQ</title><style>"
-    ":root{font-family:system-ui,sans-serif;color:#17202a;background:#f2f4f7}"
-    "body{max-width:760px;margin:auto;padding:18px}h1{margin:0 0 16px}"
-    ".card{background:white;border-radius:12px;padding:16px;margin:12px 0;"
-    "box-shadow:0 2px 9px #0001}.state{font-size:1.3rem;font-weight:700}"
-    "button,.download{border:0;border-radius:8px;padding:12px 18px;margin:5px;"
-    "font-weight:650;text-decoration:none;display:inline-block;cursor:pointer}"
-    "#start{background:#16833b;color:white}#stop{background:#c53232;color:white}"
-    "button:disabled{opacity:.4;cursor:not-allowed}.download{background:#e8edf3;color:#17202a}"
-    ".row{display:flex;justify-content:space-between;gap:10px;align-items:center;"
-    "border-top:1px solid #e7e9ec;padding:10px 0;flex-wrap:wrap}"
-    ".muted{color:#65707c;font-size:.9rem}.error{color:#b42318}</style></head>"
-    "<body><h1>Baja DAQ</h1><section class=card>"
-    "<div id=state class=state>Connecting...</div><div id=file class=muted></div>"
-    "<p><button id=start>Start</button>"
-    "<button id=stop>Stop</button></p>"
-    "<div id=stats class=muted></div><div id=nodes class=muted></div>"
-    "<div id=error class=error></div></section>"
-    "<section class=card><h2>Completed logs</h2><div id=logs>Loading...</div></section>"
-    "<script>"
-    "const $=id=>document.getElementById(id);"
-    "async function json(url,opt){const r=await fetch(url,opt);"
-    "const body=await r.json().catch(()=>({error:'Request failed'}));"
-    "if(!r.ok)throw Error(body.error||('HTTP '+r.status));return body}"
-    "async function refresh(){try{const s=await json('/api/status');"
-    "$('state').textContent=s.logger_state[0].toUpperCase()+s.logger_state.slice(1);"
-    "$('file').textContent=s.current_file==='none'?'No session yet':s.current_file;"
-    "$('stats').textContent=`CAN drops: ${s.can_drops} | Log drops: ${s.log_drops}`;"
-    "$('nodes').textContent=`Nodes — 1: ${s.nodes['1']}, 4: ${s.nodes['4']}, "
-    "5: ${s.nodes['5']}, 6: ${s.nodes['6']}`;"
-    "$('start').disabled=s.logger_state!=='idle';"
-    "$('stop').disabled=s.logger_state!=='running';$('error').textContent='';"
-    "await refreshLogs()}catch(e){$('error').textContent=e.message}}"
-    "async function sendLoggingCommand(action){try{await json('/api/logging/'+action,{method:'POST'});"
-    "await refresh()}catch(e){$('error').textContent=e.message}}"
-    "async function refreshLogs(){const logs=await json('/api/logs');"
-    "$('logs').innerHTML=logs.length?'':'No completed sessions';"
-    "for(const l of logs){const row=document.createElement('div');row.className='row';"
-    "const label=document.createElement('span');"
-    "label.textContent=`${l.name} (${(l.size_bytes/1024).toFixed(1)} KiB)`;row.append(label);"
-    "const actions=document.createElement('span');"
-    "for(const f of ['bin','csv']){const a=document.createElement('a');a.className='download';"
-    "a.textContent=f.toUpperCase();a.href='/api/logs/download?name='+"
-    "encodeURIComponent(l.name)+'&format='+f;actions.append(a)}row.append(actions);$('logs').append(row)}}"
-    "$('start').addEventListener('click',()=>sendLoggingCommand('start'));"
-    "$('stop').addEventListener('click',()=>sendLoggingCommand('stop'));"
-    "refresh();setInterval(refresh,1000);</script></body></html>";
+extern const uint8_t web_index_html_start[];
+extern const uint8_t web_index_html_end[];
 
 static const char *base_name(const char *path)
 {
@@ -188,7 +126,8 @@ static esp_err_t send_json_error(httpd_req_t *request, const char *status,
 static esp_err_t root_handler(httpd_req_t *request)
 {
     httpd_resp_set_type(request, "text/html; charset=utf-8");
-    return httpd_resp_send(request, index_html, sizeof(index_html) - 1);
+    return httpd_resp_send(request, (const char *)web_index_html_start,
+                           web_index_html_end - web_index_html_start);
 }
 
 static esp_err_t status_handler(httpd_req_t *request)
@@ -199,10 +138,12 @@ static esp_err_t status_handler(httpd_req_t *request)
     snprintf(body, sizeof(body),
              "{\"logger_state\":\"%s\",\"current_file\":\"%s\","
              "\"can_drops\":%" PRIu32 ",\"log_drops\":%" PRIu32 ","
+             "\"live_enabled\":%s,"
              "\"nodes\":{\"1\":\"%s\",\"4\":\"%s\",\"5\":\"%s\","
              "\"6\":\"%s\"}}",
              data_logger_state_name(), base_name(status.current_file),
-             status.can_drops, status.log_drops, status.node_1, status.node_4,
+             status.can_drops, status.log_drops,
+             status.live_enabled ? "true" : "false", status.node_1, status.node_4,
              status.node_5, status.node_6);
     httpd_resp_set_type(request, "application/json");
     httpd_resp_set_hdr(request, "Cache-Control", "no-store");
@@ -249,10 +190,12 @@ static esp_err_t logs_handler(httpd_req_t *request)
     return httpd_resp_send_chunk(request, NULL, 0);
 }
 
-static const signal_metadata_t *metadata_for(uint32_t can_id)
+static const live_signal_metadata_t *metadata_for(uint32_t can_id)
 {
-    for (size_t i = 0; i < sizeof(signal_metadata) / sizeof(signal_metadata[0]); i++) {
-        if (signal_metadata[i].can_id == can_id) return &signal_metadata[i];
+    size_t count;
+    const live_signal_metadata_t *signals = live_data_signals(&count);
+    for (size_t i = 0; i < count; i++) {
+        if (signals[i].can_id == can_id) return &signals[i];
     }
     return NULL;
 }
@@ -289,7 +232,7 @@ static esp_err_t stream_csv(httpd_req_t *request, FILE *file)
         uint64_t packed = record[1];
         int32_t value = (int32_t)(packed & UINT32_MAX);
         uint32_t timestamp = (uint32_t)(packed >> 32);
-        const signal_metadata_t *metadata = metadata_for(can_id);
+        const live_signal_metadata_t *metadata = metadata_for(can_id);
         const char *signal = metadata ? metadata->signal : "";
         const char *node = metadata ? metadata->node : "";
         const char *units = metadata ? metadata->units : "raw";
@@ -353,11 +296,126 @@ static esp_err_t download_handler(httpd_req_t *request)
     return result;
 }
 
+static bool request_token(httpd_req_t *request, uint32_t *token)
+{
+    char query[64], value[16], *end;
+    if (httpd_req_get_url_query_str(request, query, sizeof(query)) != ESP_OK ||
+        httpd_query_key_value(query, "token", value, sizeof(value)) != ESP_OK) {
+        return false;
+    }
+    unsigned long parsed = strtoul(value, &end, 16);
+    if (*value == '\0' || *end != '\0' || parsed == 0 || parsed > UINT32_MAX) {
+        return false;
+    }
+    *token = (uint32_t)parsed;
+    return true;
+}
+
+static esp_err_t live_signals_handler(httpd_req_t *request)
+{
+    size_t count;
+    const live_signal_metadata_t *signals = live_data_signals(&count);
+    httpd_resp_set_type(request, "application/json");
+    httpd_resp_set_hdr(request, "Cache-Control", "no-store");
+    if (httpd_resp_send_chunk(request, "[", 1) != ESP_OK) return ESP_FAIL;
+    for (size_t i = 0; i < count; i++) {
+        char item[192];
+        int length = snprintf(item, sizeof(item),
+                              "%s{\"can_id\":%" PRIu32 ",\"can_id_hex\":\"0x%03" PRIX32
+                              "\",\"signal\":\"%s\",\"node\":\"%s\","
+                              "\"units\":\"%s\",\"native_rate_hz\":%u}",
+                              i ? "," : "", signals[i].can_id, signals[i].can_id,
+                              signals[i].signal, signals[i].node, signals[i].units,
+                              signals[i].native_rate_hz);
+        if (length < 0 || length >= (int)sizeof(item) ||
+            httpd_resp_send_chunk(request, item, length) != ESP_OK) return ESP_FAIL;
+    }
+    if (httpd_resp_send_chunk(request, "]", 1) != ESP_OK) return ESP_FAIL;
+    return httpd_resp_send_chunk(request, NULL, 0);
+}
+
+static esp_err_t live_start_handler(httpd_req_t *request)
+{
+    uint32_t token;
+    app_control_result_t result = app_control_start_live_data(&token);
+    if (result == APP_CONTROL_CONFLICT) {
+        return send_json_error(request, "409 Conflict",
+                               "Live data is available only while recording");
+    }
+    if (result == APP_CONTROL_BUSY) {
+        return send_json_error(request, "503 Service Unavailable",
+                               "Another live viewer is active");
+    }
+    if (result != APP_CONTROL_OK) {
+        return send_json_error(request, "500 Internal Server Error",
+                               "Unable to start live data");
+    }
+    char body[96];
+    snprintf(body, sizeof(body),
+             "{\"token\":\"%08" PRIx32 "\",\"lease_seconds\":%u}",
+             token, LIVE_DATA_LEASE_SECONDS);
+    httpd_resp_set_type(request, "application/json");
+    httpd_resp_set_hdr(request, "Cache-Control", "no-store");
+    return httpd_resp_sendstr(request, body);
+}
+
+static esp_err_t live_samples_handler(httpd_req_t *request)
+{
+    uint32_t token;
+    if (!request_token(request, &token)) {
+        return send_json_error(request, "400 Bad Request", "Missing or invalid token");
+    }
+    live_sample_t samples[LIVE_DATA_SIGNAL_COUNT];
+    size_t count;
+    live_data_result_t result =
+        live_data_snapshot(token, samples, LIVE_DATA_SIGNAL_COUNT, &count);
+    if (result == LIVE_DATA_DISABLED) {
+        return send_json_error(request, "409 Conflict", "Live data is disabled");
+    }
+    if (result != LIVE_DATA_OK) {
+        return send_json_error(request, "403 Forbidden", "Invalid live viewer token");
+    }
+    httpd_resp_set_type(request, "application/json");
+    httpd_resp_set_hdr(request, "Cache-Control", "no-store");
+    if (httpd_resp_send_chunk(request, "{\"samples\":[", 12) != ESP_OK) return ESP_FAIL;
+    bool first = true;
+    for (size_t i = 0; i < count; i++) {
+        if (!samples[i].valid) continue;
+        char item[160];
+        int length = snprintf(item, sizeof(item),
+                              "%s{\"can_id\":%" PRIu32 ",\"value\":%" PRId32
+                              ",\"timestamp_ms\":%" PRIu32 ",\"sequence\":%" PRIu32 "}",
+                              first ? "" : ",", samples[i].can_id, samples[i].value,
+                              samples[i].timestamp_ms, samples[i].sequence);
+        if (length < 0 || length >= (int)sizeof(item) ||
+            httpd_resp_send_chunk(request, item, length) != ESP_OK) return ESP_FAIL;
+        first = false;
+    }
+    if (httpd_resp_send_chunk(request, "]}", 2) != ESP_OK) return ESP_FAIL;
+    return httpd_resp_send_chunk(request, NULL, 0);
+}
+
+static esp_err_t live_stop_handler(httpd_req_t *request)
+{
+    uint32_t token;
+    if (!request_token(request, &token)) {
+        return send_json_error(request, "400 Bad Request", "Missing or invalid token");
+    }
+    live_data_result_t result = live_data_stop(token);
+    if (result == LIVE_DATA_INVALID_TOKEN) {
+        return send_json_error(request, "403 Forbidden", "Invalid live viewer token");
+    }
+    if (result == LIVE_DATA_DISABLED) {
+        return send_json_error(request, "409 Conflict", "Live data is disabled");
+    }
+    httpd_resp_set_type(request, "application/json");
+    return httpd_resp_sendstr(request, "{\"live_enabled\":false}");
+}
 static esp_err_t start_http_server(void)
 {
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.stack_size = 8192;
-    config.max_uri_handlers = 8;
+    config.max_uri_handlers = 12;
     esp_err_t error = httpd_start(&server, &config);
     if (error != ESP_OK) return error;
     const httpd_uri_t handlers[] = {
@@ -367,6 +425,10 @@ static esp_err_t start_http_server(void)
         {.uri = "/api/logging/stop", .method = HTTP_POST, .handler = command_handler},
         {.uri = "/api/logs", .method = HTTP_GET, .handler = logs_handler},
         {.uri = "/api/logs/download", .method = HTTP_GET, .handler = download_handler},
+        {.uri = "/api/live/signals", .method = HTTP_GET, .handler = live_signals_handler},
+        {.uri = "/api/live/start", .method = HTTP_POST, .handler = live_start_handler},
+        {.uri = "/api/live/samples", .method = HTTP_GET, .handler = live_samples_handler},
+        {.uri = "/api/live/stop", .method = HTTP_POST, .handler = live_stop_handler},
     };
     for (size_t i = 0; i < sizeof(handlers) / sizeof(handlers[0]); i++) {
         error = httpd_register_uri_handler(server, &handlers[i]);

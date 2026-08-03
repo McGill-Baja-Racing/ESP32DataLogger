@@ -7,6 +7,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "node_state/node_registry.h"
+#include "live/live_data.h"
 #include "time/time_beacon.h"
 
 static const char *TAG = "AppControl";
@@ -57,6 +58,7 @@ app_control_result_t app_control_stop_logging(void)
         xSemaphoreGive(lifecycle_mutex);
         return APP_CONTROL_CONFLICT;
     }
+    live_data_force_stop();
     if (!data_logger_stop()) {
         xSemaphoreGive(lifecycle_mutex);
         return APP_CONTROL_FAILED;
@@ -72,6 +74,22 @@ app_control_result_t app_control_stop_logging(void)
     return APP_CONTROL_OK;
 }
 
+app_control_result_t app_control_start_live_data(uint32_t *token)
+{
+    if (!lifecycle_mutex || !token ||
+        xSemaphoreTake(lifecycle_mutex, pdMS_TO_TICKS(1000)) != pdTRUE) {
+        return APP_CONTROL_FAILED;
+    }
+    if (data_logger_state() != LOGGER_RUNNING) {
+        xSemaphoreGive(lifecycle_mutex);
+        return APP_CONTROL_CONFLICT;
+    }
+    live_data_result_t result = live_data_start(token);
+    xSemaphoreGive(lifecycle_mutex);
+    if (result == LIVE_DATA_BUSY) return APP_CONTROL_BUSY;
+    return result == LIVE_DATA_OK ? APP_CONTROL_OK : APP_CONTROL_FAILED;
+}
+
 void app_control_get_status(app_status_t *status)
 {
     if (!status) return;
@@ -79,6 +97,7 @@ void app_control_get_status(app_status_t *status)
     status->current_file = data_logger_path();
     status->can_drops = can_master_rx_drop_count();
     status->log_drops = data_logger_drop_count();
+    status->live_enabled = live_data_is_enabled();
     status->node_1 = node_registry_state_name(1);
     status->node_4 = node_registry_state_name(4);
     status->node_5 = node_registry_state_name(5);
