@@ -10,6 +10,8 @@
 #include "freertos/queue.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
+#include "diagnostics/diagnostics.h"
+#include "protocol/app_protocol.h"
 
 /*
  * CAN/TWAI transport
@@ -48,6 +50,7 @@ static twai_node_handle_t can_handle;
 static can_node_callbacks_t app_callbacks;
 static node_state_t current_state = NODE_STATE_IDLE;
 static uint8_t reset_reason;
+static volatile uint32_t rx_drops;
 
 static bool receive_callback(twai_node_handle_t node,
                              const twai_rx_done_event_data_t *event,
@@ -68,7 +71,7 @@ static bool receive_callback(twai_node_handle_t node,
         for (uint8_t i = 0; i < message.dlc; i++) {
             message.data |= (uint64_t)bytes[i] << (8 * i);
         }
-        (void)xQueueSendFromISR(rx_queue, &message, &task_woken);
+        if(xQueueSendFromISR(rx_queue, &message, &task_woken)!=pdPASS)rx_drops++;
     }
     return task_woken == pdTRUE;
 }
@@ -126,6 +129,8 @@ static void dispatch_task(void *argument)
     (void)argument;
     can_message_t message;
     while (true) {
+        if(rx_drops){rx_drops=0;diagnostics_occurrence(DIAG_CAN_RX_OVERFLOW,DIAG_WARNING,true);}
+        else diagnostics_report(DIAG_CAN_RX_OVERFLOW,false,DIAG_WARNING,true);
         xQueueReceive(rx_queue, &message, portMAX_DELAY);
         if (message.id == CAN_ID_MASTER_TIME && message.dlc == 8) {
             if (app_callbacks.on_time_beacon) {
@@ -201,6 +206,10 @@ static void recovery_task(void *argument)
                          status.tx_error_count, status.rx_error_count,
                          record.bus_err_num);
                 previous = status.state;
+                if(status.state==TWAI_ERROR_WARNING)diagnostics_report(DIAG_CAN_WARNING,true,DIAG_WARNING,true);
+                if(status.state==TWAI_ERROR_PASSIVE)diagnostics_report(DIAG_CAN_PASSIVE,true,DIAG_ERROR,true);
+                if(status.state==TWAI_ERROR_BUS_OFF)diagnostics_report(DIAG_CAN_BUS_OFF,true,DIAG_ERROR,true);
+                if(status.state==TWAI_ERROR_ACTIVE){diagnostics_report(DIAG_CAN_WARNING,false,DIAG_WARNING,true);diagnostics_report(DIAG_CAN_PASSIVE,false,DIAG_ERROR,true);diagnostics_report(DIAG_CAN_BUS_OFF,false,DIAG_ERROR,true);}
             }
             TickType_t now = xTaskGetTickCount();
             bool errors_changed = status.tx_error_count != previous_tx_errors ||
@@ -227,6 +236,7 @@ static void recovery_task(void *argument)
                 esp_err_t error = twai_node_recover(can_handle);
                 recovering = error == ESP_OK;
                 if (error != ESP_OK) {
+                    diagnostics_report(DIAG_CAN_RECOVERY_FAILED,true,DIAG_ERROR,true);
                     ESP_LOGE(TAG, "CAN recovery start failed: %s",
                              esp_err_to_name(error));
                 }
@@ -235,6 +245,8 @@ static void recovery_task(void *argument)
                 ESP_LOGI(TAG, "CAN recovered; sampler remains %s",
                          current_state == NODE_STATE_ACTIVE ? "active" : "idle");
                 can_node_report_state(current_state, NODE_STATE_REASON_RECOVERY);
+                diagnostics_report(DIAG_CAN_RECOVERY_FAILED,false,DIAG_ERROR,true);
+                diagnostics_reannounce();
             }
         }
         vTaskDelay(pdMS_TO_TICKS(CAN_RECOVERY_POLL_MS));

@@ -2,6 +2,7 @@ idf_component_register(
     SRCS
         "main.c"
         "can/can_node.c"
+        "diagnostics/diagnostics.c"
         "sampler/sampler.c"
         "sensors/sensor_registry.c"
         "sensors/adc_input.c"

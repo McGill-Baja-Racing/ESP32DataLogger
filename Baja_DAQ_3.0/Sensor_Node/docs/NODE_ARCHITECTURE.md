@@ -62,6 +62,7 @@ microsecond timestamp.
 | `0x0A1` | Master to all nodes | Start sampling |
 | `0x0A2` | Master to all nodes | 64-bit microsecond time beacon |
 | `0x0C0 + node ID` | Node to master | State and transition reason |
+| `0x0D0 + node ID` | Node to master | Diagnostic transition |
 
 START and STOP have no payload and apply to every node.
 
@@ -71,6 +72,12 @@ and the synchronized millisecond timestamp in bytes 4-7.
 
 The state payload contains state, transition reason, and boot reset reason in
 bytes 0-2.
+
+Diagnostic payload bytes 0-1 contain a stable code, byte 2 contains active,
+severity, data-degraded, and timestamp-valid flags, byte 3 contains a
+saturating occurrence count, and bytes 4-7 contain timestamp_ms. The V1 code
+table is documented in the Master's docs/MASTER_ARCHITECTURE.md; both protocol
+headers must be updated together.
 
 ## Build commands
 

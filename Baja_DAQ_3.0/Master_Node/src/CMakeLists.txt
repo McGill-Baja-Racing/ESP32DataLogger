@@ -4,11 +4,13 @@ idf_component_register(
         "app/app_control.c"
         "can/can_master.c"
         "console/serial_console.c"
+        "diagnostics/diagnostic_registry.c"
         "logger/data_logger.c"
         "node_state/node_registry.c"
         "storage/sd_card.c"
         "time/time_beacon.c"
         "web/web_server.c"
+        "web/index_html.S"
     INCLUDE_DIRS "."
     REQUIRES
         fatfs

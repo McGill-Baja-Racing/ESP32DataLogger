@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Baja DAQ</title><style>
+:root{font-family:system-ui,sans-serif;color:#17202a;background:#f2f4f7}
+body{max-width:760px;margin:auto;padding:18px}h1{margin:0 0 16px}
+.card{background:#fff;border-radius:12px;padding:16px;margin:12px 0;box-shadow:0 2px 9px #0001}
+.state{font-size:1.3rem;font-weight:700}.muted{color:#65707c;font-size:.9rem}.error{color:#b42318}
+button,.download{border:0;border-radius:8px;padding:12px 18px;margin:5px;font-weight:650;text-decoration:none;display:inline-block;cursor:pointer}
+#start{background:#16833b;color:#fff}#stop{background:#c53232;color:#fff}button:disabled{opacity:.4;cursor:not-allowed}
+.download{background:#e8edf3;color:#17202a}.row{display:flex;justify-content:space-between;gap:10px;align-items:center;border-top:1px solid #e7e9ec;padding:10px 0;flex-wrap:wrap}
+</style></head><body><h1>Baja DAQ</h1>
+<section class="card"><div id="state" class="state">Connecting...</div><div id="file" class="muted"></div>
+<p><button id="start">Start</button><button id="stop">Stop</button></p>
+<div id="stats" class="muted"></div><div id="nodes" class="muted"></div><div id="error" class="error"></div></section>
+<section class="card"><h2>Diagnostics</h2><div id="diagnostics" class="muted">No diagnostic events</div></section>
+<section class="card"><h2>Completed logs</h2><div id="logs">Loading...</div></section>
+<script>'use strict';const $=id=>document.getElementById(id);
+async function json(url,opt){const r=await fetch(url,opt),b=await r.json().catch(()=>({error:'Request failed'}));if(!r.ok)throw Error(b.error||('HTTP '+r.status));return b}
+async function refreshStatus(){try{const s=await json('/api/status');$('state').textContent=s.logger_state[0].toUpperCase()+s.logger_state.slice(1);$('file').textContent=s.current_file==='none'?'No session yet':s.current_file;$('stats').textContent=`CAN drops: ${s.can_drops} | Log drops: ${s.log_drops}`;$('nodes').textContent=`Nodes — 1: ${s.nodes['1']}, 4: ${s.nodes['4']}, 5: ${s.nodes['5']}, 6: ${s.nodes['6']}`;$('start').disabled=s.logger_state!=='idle';$('stop').disabled=s.logger_state!=='running';$('error').textContent=''}catch(e){$('error').textContent=e.message}}
+async function logging(a){try{await json('/api/logging/'+a,{method:'POST'});await refreshStatus();await refreshLogs()}catch(e){$('error').textContent=e.message}}
+async function refreshLogs(){try{const logs=await json('/api/logs');$('logs').innerHTML=logs.length?'':'No completed sessions';for(const l of logs){const row=document.createElement('div');row.className='row';const label=document.createElement('span');label.textContent=`${l.name} (${(l.size_bytes/1024).toFixed(1)} KiB)`;row.append(label);const actions=document.createElement('span');for(const f of ['bin','csv']){const a=document.createElement('a');a.className='download';a.textContent=f.toUpperCase();a.href=`/api/logs/download?name=${encodeURIComponent(l.name)}&format=${f}`;actions.append(a)}row.append(actions);$('logs').append(row)}}catch(e){$('error').textContent=e.message}}
+async function refreshDiagnostics(){try{const events=await json('/api/diagnostics');$('diagnostics').innerHTML=events.length?'':'No diagnostic events';for(const e of events){const row=document.createElement('div');row.className='row';const age=e.age_ms===null?'unsynchronized timestamp':`${(e.age_ms/1000).toFixed(1)} s ago`;row.textContent=`Node ${e.node} · ${e.active?'ACTIVE':'CLEARED'} · ${e.severity.toUpperCase()} · ${e.name} (${e.code_hex}) · count ${e.count} · ${age}`;$('diagnostics').append(row)}}catch(e){$('diagnostics').textContent=e.message}}
+$('start').onclick=()=>logging('start');$('stop').onclick=()=>logging('stop');refreshStatus();refreshLogs();refreshDiagnostics();setInterval(refreshStatus,1000);setInterval(refreshDiagnostics,1000);
+</script></body></html>

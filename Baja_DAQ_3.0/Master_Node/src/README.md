@@ -14,6 +14,7 @@ src/
 ├── console/serial_console.*  Parsing of start/stop/status commands
 ├── logger/data_logger.*      Log lifecycle, queue, blocks, and file writes
 ├── node_state/node_registry.* Latest state reported by each sensor node
+├── diagnostics/diagnostic_registry.* Active/recent diagnostic transitions
 ├── storage/sd_card.*         ESP32-P4 SDMMC mount and pin configuration
 └── time/time_beacon.*        Periodic master microsecond beacon
 ```
@@ -48,6 +49,7 @@ The following values in `protocol/app_protocol.h` must match the Sensor Node:
 | START | `0x0A1` |
 | Master time | `0x0A2` |
 | Node state | `0x0C0 + node ID` |
+| Sensor diagnostic | `0x0D0 + node ID` |
 | Front brake | `0x0B1` |
 | Rear brake | `0x0B2` |
 | Signed bearing RPM | `0x0B9` |

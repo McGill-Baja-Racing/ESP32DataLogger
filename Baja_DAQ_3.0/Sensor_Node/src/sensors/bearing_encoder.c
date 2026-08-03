@@ -7,6 +7,7 @@
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "protocol/app_protocol.h"
+#include "diagnostics/diagnostics.h"
 
 /*
  * Bearing encoder configuration
@@ -25,6 +26,9 @@
 #define ENCODER_STOP_TIMEOUT_US             100000
 #define ENCODER_DIRECTION_SIGN              1
 #define ENCODER_ENABLE_INTERNAL_PULLUPS     1
+#define ENCODER_MAX_ABSOLUTE_RPM            3000
+#define ENCODER_INVALID_THRESHOLD           5
+#define ENCODER_INVALID_CLEAR_US             2000000LL
 
 #define ENCODER_COUNTS_PER_REVOLUTION \
     (ENCODER_PULSES_PER_REVOLUTION * ENCODER_QUADRATURE_EDGES_PER_PULSE)
@@ -84,6 +88,8 @@ static int encoder_is_stopped(int64_t last_edge_us, int64_t now_us)
 typedef struct {
     volatile int32_t pending_count;
     volatile int64_t last_valid_edge_us;
+    volatile uint32_t invalid_transitions;
+    volatile int64_t last_invalid_us;
     uint8_t last_state;
     portMUX_TYPE lock;
     int32_t count_window[ENCODER_WINDOW_SAMPLES];
@@ -113,6 +119,9 @@ static void IRAM_ATTR encoder_isr(void *argument)
     if (transition != 0) {
         context->pending_count += transition;
         context->last_valid_edge_us = esp_timer_get_time();
+    } else if(context->last_state!=state) {
+        context->invalid_transitions++;
+        context->last_invalid_us=esp_timer_get_time();
     }
     context->last_state = state;
     portEXIT_CRITICAL_ISR(&context->lock);
@@ -179,6 +188,8 @@ static int32_t read_rpm(sensor_t *sensor)
     int32_t count = context->pending_count;
     context->pending_count = 0;
     int64_t last_valid_edge_us = context->last_valid_edge_us;
+    uint32_t invalid=context->invalid_transitions;context->invalid_transitions=0;
+    int64_t last_invalid=context->last_invalid_us;
     portEXIT_CRITICAL(&context->lock);
 
     context->count_window[context->window_index] = count;
@@ -199,7 +210,13 @@ static int32_t read_rpm(sensor_t *sensor)
         window_count += context->count_window[i];
         window_elapsed_us += context->time_window_us[i];
     }
-    return calculate_rpm(window_count, window_elapsed_us);
+    static uint32_t invalid_window_count;static int64_t invalid_window_start;
+    if(!invalid_window_start)invalid_window_start=now_us;invalid_window_count+=invalid;
+    if(now_us-invalid_window_start>=1000000){if(invalid_window_count>=ENCODER_INVALID_THRESHOLD)diagnostics_report(DIAG_BEARING_TRANSITION,true,DIAG_WARNING,true);invalid_window_count=0;invalid_window_start=now_us;}
+    if(last_invalid&&now_us-last_invalid>=ENCODER_INVALID_CLEAR_US)diagnostics_report(DIAG_BEARING_TRANSITION,false,DIAG_WARNING,true);
+    int32_t rpm=calculate_rpm(window_count, window_elapsed_us);static uint8_t bad,good;
+    if(rpm>ENCODER_MAX_ABSOLUTE_RPM||rpm< -ENCODER_MAX_ABSOLUTE_RPM){good=0;if(++bad>=3)diagnostics_report(DIAG_BEARING_RPM,true,DIAG_WARNING,true);}else{bad=0;if(++good>=5)diagnostics_report(DIAG_BEARING_RPM,false,DIAG_WARNING,true);}
+    return rpm;
 }
 
 sensor_t bearing_encoder_sensor = {

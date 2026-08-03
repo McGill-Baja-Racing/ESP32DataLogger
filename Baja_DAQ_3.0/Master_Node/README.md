@@ -28,6 +28,29 @@ Node TX GPIO21/RX GPIO20.
 pio run -e MasterStable
 ```
 
+## Check a recorded log
+
+Use the loss checker after copying or downloading a completed binary log:
+
+```bash
+python3 tools/check_log.py /path/to/log_0001.bin
+python3 tools/check_log.py /path/to/log_0001.csv
+```
+
+The input may be the original binary log or a CSV produced by the decoder or
+AP download. It reads the expected nodes from `MASTER_EXPECTED_NODE_MASK`, reports timing
+gaps per sensor, and writes `log_0001_gaps.csv`. Override the hardware expected
+for a particular test with, for example, `--expected-nodes 4 5`. A reported
+missing message is inferred from the timestamp interval; the checker cannot
+determine whether a loss occurred in the Sensor Node, CAN bus, Master receive
+queue, log queue, or SD pipeline.
+
+Convert the same binary log into sample-by-sample CSV with:
+
+```bash
+python3 tools/decode_log.py /path/to/log_0001.bin
+```
+
 The master waits five seconds after boot before automatically opening a log and
 broadcasting START, giving sensor nodes and serial monitors time to initialize.
 

@@ -14,11 +14,14 @@
 #include "esp_hosted.h"
 #include "esp_http_server.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "esp_netif.h"
 #include "esp_wifi.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "logger/data_logger.h"
+#include "diagnostics/diagnostic_registry.h"
+#include "protocol/app_protocol.h"
 #include "lwip/ip4_addr.h"
 #include "nvs_flash.h"
 
@@ -39,68 +42,20 @@ typedef struct {
     const char *units;
 } signal_metadata_t;
 
-static const char *TAG = "WebServer";
-static httpd_handle_t server;
-static SemaphoreHandle_t download_mutex;
-
 static const signal_metadata_t signal_metadata[] = {
     {0x0B1, "front_brake_pressure", "brake_node_1", "psi"},
     {0x0B2, "rear_brake_pressure", "brake_node_1", "psi"},
     {0x0B9, "bearing_rpm", "encoder_node_4", "rpm"},
     {0x0BA, "generic_adc_voltage", "adc_node_6", "mV"},
-    {0x0BB, "engine_rpm", "engine_node_5", "rpm_placeholder"},
+    {0x0BB, "engine_rpm", "engine_node_5", "rpm"},
 };
 
-static const char index_html[] =
-    "<!doctype html><html><head><meta charset=utf-8>"
-    "<meta name=viewport content='width=device-width,initial-scale=1'>"
-    "<title>Baja DAQ</title><style>"
-    ":root{font-family:system-ui,sans-serif;color:#17202a;background:#f2f4f7}"
-    "body{max-width:760px;margin:auto;padding:18px}h1{margin:0 0 16px}"
-    ".card{background:white;border-radius:12px;padding:16px;margin:12px 0;"
-    "box-shadow:0 2px 9px #0001}.state{font-size:1.3rem;font-weight:700}"
-    "button,.download{border:0;border-radius:8px;padding:12px 18px;margin:5px;"
-    "font-weight:650;text-decoration:none;display:inline-block;cursor:pointer}"
-    "#start{background:#16833b;color:white}#stop{background:#c53232;color:white}"
-    "button:disabled{opacity:.4;cursor:not-allowed}.download{background:#e8edf3;color:#17202a}"
-    ".row{display:flex;justify-content:space-between;gap:10px;align-items:center;"
-    "border-top:1px solid #e7e9ec;padding:10px 0;flex-wrap:wrap}"
-    ".muted{color:#65707c;font-size:.9rem}.error{color:#b42318}</style></head>"
-    "<body><h1>Baja DAQ</h1><section class=card>"
-    "<div id=state class=state>Connecting...</div><div id=file class=muted></div>"
-    "<p><button id=start>Start</button>"
-    "<button id=stop>Stop</button></p>"
-    "<div id=stats class=muted></div><div id=nodes class=muted></div>"
-    "<div id=error class=error></div></section>"
-    "<section class=card><h2>Completed logs</h2><div id=logs>Loading...</div></section>"
-    "<script>"
-    "const $=id=>document.getElementById(id);"
-    "async function json(url,opt){const r=await fetch(url,opt);"
-    "const body=await r.json().catch(()=>({error:'Request failed'}));"
-    "if(!r.ok)throw Error(body.error||('HTTP '+r.status));return body}"
-    "async function refresh(){try{const s=await json('/api/status');"
-    "$('state').textContent=s.logger_state[0].toUpperCase()+s.logger_state.slice(1);"
-    "$('file').textContent=s.current_file==='none'?'No session yet':s.current_file;"
-    "$('stats').textContent=`CAN drops: ${s.can_drops} | Log drops: ${s.log_drops}`;"
-    "$('nodes').textContent=`Nodes — 1: ${s.nodes['1']}, 4: ${s.nodes['4']}, "
-    "5: ${s.nodes['5']}, 6: ${s.nodes['6']}`;"
-    "$('start').disabled=s.logger_state!=='idle';"
-    "$('stop').disabled=s.logger_state!=='running';$('error').textContent='';"
-    "await refreshLogs()}catch(e){$('error').textContent=e.message}}"
-    "async function sendLoggingCommand(action){try{await json('/api/logging/'+action,{method:'POST'});"
-    "await refresh()}catch(e){$('error').textContent=e.message}}"
-    "async function refreshLogs(){const logs=await json('/api/logs');"
-    "$('logs').innerHTML=logs.length?'':'No completed sessions';"
-    "for(const l of logs){const row=document.createElement('div');row.className='row';"
-    "const label=document.createElement('span');"
-    "label.textContent=`${l.name} (${(l.size_bytes/1024).toFixed(1)} KiB)`;row.append(label);"
-    "const actions=document.createElement('span');"
-    "for(const f of ['bin','csv']){const a=document.createElement('a');a.className='download';"
-    "a.textContent=f.toUpperCase();a.href='/api/logs/download?name='+"
-    "encodeURIComponent(l.name)+'&format='+f;actions.append(a)}row.append(actions);$('logs').append(row)}}"
-    "$('start').addEventListener('click',()=>sendLoggingCommand('start'));"
-    "$('stop').addEventListener('click',()=>sendLoggingCommand('stop'));"
-    "refresh();setInterval(refresh,1000);</script></body></html>";
+static const char *TAG = "WebServer";
+static httpd_handle_t server;
+static SemaphoreHandle_t download_mutex;
+
+extern const uint8_t web_index_html_start[];
+extern const uint8_t web_index_html_end[];
 
 static const char *base_name(const char *path)
 {
@@ -188,7 +143,8 @@ static esp_err_t send_json_error(httpd_req_t *request, const char *status,
 static esp_err_t root_handler(httpd_req_t *request)
 {
     httpd_resp_set_type(request, "text/html; charset=utf-8");
-    return httpd_resp_send(request, index_html, sizeof(index_html) - 1);
+    return httpd_resp_send(request, (const char *)web_index_html_start,
+                           web_index_html_end - web_index_html_start);
 }
 
 static esp_err_t status_handler(httpd_req_t *request)
@@ -278,7 +234,8 @@ static esp_err_t stream_binary(httpd_req_t *request, FILE *file)
 static esp_err_t stream_csv(httpd_req_t *request, FILE *file)
 {
     static const char header[] =
-        "sample_index,can_id,can_id_hex,signal,node,timestamp_ms,value,units,raw_data\r\n";
+        "sample_index,can_id,can_id_hex,signal,node,timestamp_ms,value,units,raw_data,"
+        "diagnostic_code,diagnostic_state,diagnostic_count\r\n";
     if (httpd_resp_send_chunk(request, header, sizeof(header) - 1) != ESP_OK) {
         return ESP_FAIL;
     }
@@ -293,12 +250,32 @@ static esp_err_t stream_csv(httpd_req_t *request, FILE *file)
         const char *signal = metadata ? metadata->signal : "";
         const char *node = metadata ? metadata->node : "";
         const char *units = metadata ? metadata->units : "raw";
-        char row[256];
+        char node_buffer[24] = "";
+        char diagnostic_code[8] = "";
+        char diagnostic_count[8] = "";
+        const char *diagnostic_state = "";
+        if (can_id > CAN_ID_DIAGNOSTIC_BASE &&
+            can_id < CAN_ID_DIAGNOSTIC_BASE + 7U) {
+            uint16_t code = (uint16_t)(packed & 0xffffU);
+            uint8_t flags = (uint8_t)((packed >> 16) & 0xffU);
+            snprintf(node_buffer, sizeof(node_buffer), "sensor_node_%" PRIu32,
+                     can_id - CAN_ID_DIAGNOSTIC_BASE);
+            snprintf(diagnostic_code, sizeof(diagnostic_code), "0x%04X", code);
+            snprintf(diagnostic_count, sizeof(diagnostic_count), "%u",
+                     (unsigned)((packed >> 24) & 0xffU));
+            signal = diagnostic_code_name(code);
+            node = node_buffer;
+            units = "diagnostic";
+            diagnostic_state = (flags & DIAG_FLAG_ACTIVE) ? "active" : "cleared";
+        }
+        char row[320];
         int length = snprintf(row, sizeof(row),
                               "%" PRIu64 ",%" PRIu32 ",0x%03" PRIX32
-                              ",%s,%s,%" PRIu32 ",%" PRId32 ",%s,%" PRIu64 "\r\n",
+                              ",%s,%s,%" PRIu32 ",%" PRId32 ",%s,%" PRIu64
+                              ",%s,%s,%s\r\n",
                               sample_index++, can_id, can_id, signal, node,
-                              timestamp, value, units, packed);
+                              timestamp, value, units, packed, diagnostic_code,
+                              diagnostic_state, diagnostic_count);
         if (length < 0 || length >= (int)sizeof(row) ||
             httpd_resp_send_chunk(request, row, length) != ESP_OK) {
             return ESP_FAIL;
@@ -353,11 +330,22 @@ static esp_err_t download_handler(httpd_req_t *request)
     return result;
 }
 
+static esp_err_t diagnostics_handler(httpd_req_t *request)
+{
+    diagnostic_event_t events[DIAGNOSTIC_HISTORY_COUNT];
+    size_t count=diagnostic_registry_snapshot(events,DIAGNOSTIC_HISTORY_COUNT);
+    httpd_resp_set_type(request,"application/json");httpd_resp_set_hdr(request,"Cache-Control","no-store");
+    httpd_resp_send_chunk(request,"[",1);
+    uint32_t now_ms=(uint32_t)(esp_timer_get_time()/1000);
+    for(size_t i=0;i<count;i++){char item[256];diagnostic_event_t*e=&events[i];char age[24]="null";if(e->flags&DIAG_FLAG_TIME_VALID)snprintf(age,sizeof(age),"%"PRIu32,now_ms-e->timestamp_ms);int n=snprintf(item,sizeof(item),"%s{\"node\":%u,\"code\":%u,\"code_hex\":\"0x%04X\",\"name\":\"%s\",\"active\":%s,\"severity\":\"%s\",\"count\":%u,\"timestamp_ms\":%"PRIu32",\"age_ms\":%s}",i?",":"",e->node_id,e->code,e->code,diagnostic_code_name(e->code),(e->flags&DIAG_FLAG_ACTIVE)?"true":"false",diagnostic_severity_name(e->flags),e->count,e->timestamp_ms,age);if(n<0||n>=(int)sizeof(item)||httpd_resp_send_chunk(request,item,n)!=ESP_OK)return ESP_FAIL;}
+    httpd_resp_send_chunk(request,"]",1);return httpd_resp_send_chunk(request,NULL,0);
+}
+
 static esp_err_t start_http_server(void)
 {
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.stack_size = 8192;
-    config.max_uri_handlers = 8;
+    config.max_uri_handlers = 9;
     esp_err_t error = httpd_start(&server, &config);
     if (error != ESP_OK) return error;
     const httpd_uri_t handlers[] = {
@@ -367,6 +355,7 @@ static esp_err_t start_http_server(void)
         {.uri = "/api/logging/stop", .method = HTTP_POST, .handler = command_handler},
         {.uri = "/api/logs", .method = HTTP_GET, .handler = logs_handler},
         {.uri = "/api/logs/download", .method = HTTP_GET, .handler = download_handler},
+        {.uri = "/api/diagnostics", .method = HTTP_GET, .handler = diagnostics_handler},
     };
     for (size_t i = 0; i < sizeof(handlers) / sizeof(handlers[0]); i++) {
         error = httpd_register_uri_handler(server, &handlers[i]);

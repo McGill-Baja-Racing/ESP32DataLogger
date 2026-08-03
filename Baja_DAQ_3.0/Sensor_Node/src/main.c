@@ -5,6 +5,7 @@
 #include "freertos/task.h"
 
 #include "can/can_node.h"
+#include "diagnostics/diagnostics.h"
 #include "sampler/sampler.h"
 #include "time/time_sync.h"
 
@@ -25,6 +26,7 @@
 static void handle_start(void)
 {
     sampler_start();
+    diagnostics_reannounce();
 }
 
 static void handle_stop(void)
@@ -42,6 +44,7 @@ void app_main(void)
     vTaskDelay(pdMS_TO_TICKS(SENSOR_STARTUP_DELAY_MS));
 
     /* Sensor hardware and sampling tasks exist before CAN can issue START. */
+    ESP_ERROR_CHECK(diagnostics_init());
     ESP_ERROR_CHECK(sampler_init());
 
 #if SENSOR_SERIAL_TEST

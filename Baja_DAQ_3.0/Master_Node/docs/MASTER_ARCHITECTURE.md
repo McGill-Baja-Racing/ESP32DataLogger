@@ -33,6 +33,7 @@ and store them safely on an SD card.
 | `logger/data_logger.c` | Log state, queue, binary blocks, and file writes |
 | `storage/sd_card.c` | SDMMC hardware and FAT mount |
 | `node_state/node_registry.c` | Latest node state acknowledgements |
+| `diagnostics/diagnostic_registry.c` | Deduplicated active/recent node faults |
 | `time/time_beacon.c` | Periodic master-clock broadcast |
 | `console/serial_console.c` | Serial command parsing |
 | `app/app_control.c` | Serialized logging lifecycle shared by serial and HTTP |
@@ -70,6 +71,22 @@ active while frames arrive, and offline after three seconds without sensor data.
 Unconfigured nodes appear as disabled. When the logger is stopped, configured
 node status is off and no liveness traffic is sent. State reports are control
 information and are not written to the sensor log.
+
+## Sensor diagnostics
+
+Sensor nodes send diagnostic transitions on CAN ID 0x0D0 + node ID. Payload
+bytes 0-1 are a stable code; byte 2 contains active, severity, data-degraded,
+and timestamp-valid flags; byte 3 is a saturating occurrence count; and bytes
+4-7 are synchronized timestamp_ms.
+
+Each transition is sent three times. The Master deduplicates it, keeps bounded
+active/recent state, prints it, exposes it at /api/diagnostics, and logs one
+logical event while recording. It never treats diagnostics as sensor liveness.
+V1 codes are: 0201 TX failure, 0202 RX overflow, 0203 warning, 0204 passive,
+0205 bus-off, 0206 recovery-start failure, 0301 stale time, 0401 missed period,
+0402 sample queue replacement, 0403 diagnostic queue overflow, 1101 invalid
+quadrature burst, 1102 bearing RPM limit, 1201 rejected engine-pulse burst, and
+1202 engine RPM limit. They are report-only and never alter sampling.
 
 ## Time synchronization
 
@@ -110,4 +127,13 @@ closes the file.
 ```bash
 pio run -e MasterStable
 python3 tools/decode_log.py log_0001.bin
+python3 tools/check_log.py log_0001.bin
 ```
+
+`check_log.py` compares consecutive timestamps independently for every known
+CAN ID. It uses a 50% timing tolerance, estimates missing messages from larger
+gaps, requires sensors belonging to the configured Master node mask, and writes
+a detailed `_gaps.csv` report. Its findings identify that a loss occurred
+somewhere in the acquisition pipeline, not which component caused it.
+Diagnostic records are summarized separately and excluded from sampling-loss
+and unknown-ID calculations.

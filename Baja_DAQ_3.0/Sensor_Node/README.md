@@ -102,3 +102,18 @@ Master is still recording; the lower 63 bits retain the master timestamp.
 The engine RPM input measures rising-edge timing on GPIO3. Its one-spark-per-
 revolution assumption, pulse rejection window, and stopped-engine timeout must
 be validated against the conditioned ignition signal on the vehicle.
+
+## Diagnostics
+
+The fixed-size diagnostic manager reports active/cleared transitions without
+changing sensor operation. It repeats each transition three times at 20 ms,
+retains failed sends through CAN recovery, and reannounces active faults after
+START and recovery. CAN ID is 0x0D0 + NODE_ID. Payload bytes are code (0-1),
+state/severity flags (2), saturating occurrence count (3), and timestamp_ms
+(4-7). Before synchronization, local time is used and timestamp-valid is clear.
+
+Common events cover CAN state/TX/RX, stale time, missed sample periods, sample
+queue replacement, and diagnostic queue overflow. Engine events cover rejected
+pulses and RPM over 4000; bearing events cover invalid transitions and absolute
+RPM over 3000. The named compile-time thresholds require bench/vehicle tuning.
+Zero RPM and idle inputs are intentionally not faults.

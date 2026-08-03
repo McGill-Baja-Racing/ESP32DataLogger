@@ -10,6 +10,8 @@
 #include "freertos/task.h"
 
 #include "can/can_node.h"
+#include "diagnostics/diagnostics.h"
+#include "protocol/app_protocol.h"
 #include "sensors/adc_input.h"
 #include "sensors/sensor.h"
 #include "time/time_sync.h"
@@ -87,12 +89,14 @@ bool sampler_is_active(void)
 static void enqueue_latest(sample_t *sample)
 {
     if (xQueueSend(sample_queue, sample, 0) == pdTRUE) {
+        diagnostics_report(DIAG_SAMPLE_QUEUE_OVERFLOW, false, DIAG_WARNING, true);
         return;
     }
     /* Prefer current measurements when the queue cannot keep up. */
     sample_t discarded;
     (void)xQueueReceive(sample_queue, &discarded, 0);
     (void)xQueueSend(sample_queue, sample, 0);
+    diagnostics_occurrence(DIAG_SAMPLE_QUEUE_OVERFLOW, DIAG_WARNING, true);
 }
 
 static void sample_task(void *argument)
@@ -103,9 +107,11 @@ static void sample_task(void *argument)
             vTaskDelay(pdMS_TO_TICKS(20));
             continue;
         }
+        diagnostics_report(DIAG_TIME_STALE,time_sync_is_stale(500000),DIAG_WARNING,true);
 
         int64_t now = esp_timer_get_time();
         int64_t next_due = now + 1000000;
+        bool missed_deadline = false;
         for (size_t i = 0; i < sensor_count; i++) {
             sensor_t *sensor = &sensors[i];
             if (now >= sensor->next_sample_us) {
@@ -116,14 +122,23 @@ static void sample_task(void *argument)
                     .timestamp_ms = time_sync_timestamp_ms(),
                     .value = sensor->read(sensor),
                 };
+                unsigned periods = 0;
                 while (sensor->next_sample_us <= now) {
                     sensor->next_sample_us += sensor->period_us;
+                    periods++;
+                }
+                if (periods > 1) {
+                    missed_deadline = true;
+                    diagnostics_occurrence(DIAG_SAMPLE_DEADLINE, DIAG_WARNING, true);
                 }
                 enqueue_latest(&sample);
             }
             if (sensor->next_sample_us < next_due) {
                 next_due = sensor->next_sample_us;
             }
+        }
+        if (!missed_deadline) {
+            diagnostics_report(DIAG_SAMPLE_DEADLINE, false, DIAG_WARNING, true);
         }
 
         int64_t sleep_us = next_due - esp_timer_get_time();
@@ -191,8 +206,11 @@ static void send_task(void *argument)
         memcpy(payload, &packed, sizeof(payload));
         esp_err_t error = can_node_send(sample.can_id, payload, sizeof(payload));
         if (error != ESP_OK) {
+            diagnostics_occurrence(DIAG_CAN_TX_FAILED, DIAG_WARNING, true);
             ESP_LOGW(TAG, "Sensor 0x%03" PRIX32 " TX failed: %s",
                      sample.can_id, esp_err_to_name(error));
+        } else {
+            diagnostics_report(DIAG_CAN_TX_FAILED, false, DIAG_WARNING, true);
         }
 #endif
     }

@@ -22,8 +22,9 @@ SIGNAL_METADATA = {
     0x0B2: ("rear_brake_pressure", "brake_node_1", "psi"),
     0x0B9: ("bearing_rpm", "encoder_node_4", "rpm"),
     0x0BA: ("generic_adc_voltage", "adc_node_6", "mV"),
-    0x0BB: ("engine_rpm", "engine_node_5", "rpm_placeholder"),
+    0x0BB: ("engine_rpm", "engine_node_5", "rpm"),
 }
+DIAGNOSTIC_NAMES = {0x0201:"can_tx_failed",0x0202:"can_rx_overflow",0x0203:"can_warning",0x0204:"can_passive",0x0205:"can_bus_off",0x0206:"can_recovery_failed",0x0301:"time_sync_stale",0x0401:"sample_deadline_missed",0x0402:"sample_queue_overflow",0x0403:"diagnostic_queue_overflow",0x1101:"bearing_invalid_transition",0x1102:"bearing_rpm_implausible",0x1201:"engine_rejected_pulse",0x1202:"engine_rpm_implausible"}
 
 
 def parse_args() -> argparse.Namespace:
@@ -68,6 +69,9 @@ def decode_log(input_path: Path, output_path: Path) -> list[str]:
                 "value",
                 "units",
                 "raw_data",
+                "diagnostic_code",
+                "diagnostic_state",
+                "diagnostic_count",
             ]
         )
 
@@ -79,6 +83,12 @@ def decode_log(input_path: Path, output_path: Path) -> list[str]:
             value = signed_u32(packed)
             timestamp_ms = (packed >> 32) & 0xFFFFFFFF
             signal, node, units = SIGNAL_METADATA.get(can_id, ("", "", "raw"))
+            diagnostic_code="";diagnostic_state="";diagnostic_count=""
+            if 0x0D1 <= can_id <= 0x0D6:
+                code=packed&0xffff;flags=(packed>>16)&0xff
+                signal=DIAGNOSTIC_NAMES.get(code,"unknown_diagnostic")
+                node=f"sensor_node_{can_id-0x0D0}";units="diagnostic"
+                diagnostic_code=f"0x{code:04X}";diagnostic_state="active" if flags&1 else "cleared";diagnostic_count=(packed>>24)&0xff
             counts_by_id[can_id] = counts_by_id.get(can_id, 0) + 1
 
             writer.writerow(
@@ -92,6 +102,9 @@ def decode_log(input_path: Path, output_path: Path) -> list[str]:
                     value,
                     units,
                     packed,
+                    diagnostic_code,
+                    diagnostic_state,
+                    diagnostic_count,
                 ]
             )
 

@@ -8,12 +8,15 @@
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "protocol/app_protocol.h"
+#include "diagnostics/diagnostics.h"
 
 #define ENGINE_RPM_GPIO             GPIO_NUM_3
 #define REVOLUTIONS_PER_SPARK       1U
 #define MAX_ENGINE_RPM              4000U
 #define MIN_SPARK_INTERVAL_US       3000U
 #define ENGINE_STOP_TIMEOUT_US      500000LL
+#define ENGINE_REJECT_THRESHOLD     5U
+#define ENGINE_REJECT_CLEAR_US      2000000LL
 
 /* At 4000 RPM, valid sparks are at least 15 ms apart. The shorter 3 ms
  * rejection window ignores ringing around a single pulse without masking the
@@ -25,6 +28,8 @@ _Static_assert(MIN_SPARK_INTERVAL_US <
 typedef struct {
     volatile int64_t last_spark_us;
     volatile uint32_t spark_period_us;
+    volatile uint32_t rejected_pulses;
+    volatile int64_t last_rejected_us;
     portMUX_TYPE lock;
 } engine_rpm_context_t;
 
@@ -46,6 +51,9 @@ static void IRAM_ATTR engine_rpm_isr(void *argument)
         if (elapsed_us >= MIN_SPARK_INTERVAL_US) {
             context->spark_period_us = elapsed_us;
             context->last_spark_us = now_us;
+        } else {
+            context->rejected_pulses++;
+            context->last_rejected_us = now_us;
         }
     }
     portEXIT_CRITICAL_ISR(&context->lock);
@@ -98,15 +106,25 @@ static int32_t read_engine_rpm(sensor_t *sensor)
     portENTER_CRITICAL(&context->lock);
     int64_t last_spark_us = context->last_spark_us;
     uint32_t period_us = context->spark_period_us;
+    uint32_t rejected = context->rejected_pulses;
+    context->rejected_pulses = 0;
+    int64_t last_rejected = context->last_rejected_us;
     portEXIT_CRITICAL(&context->lock);
 
     int64_t now_us = esp_timer_get_time();
+    static uint32_t reject_window_count;static int64_t reject_window_start;
+    if(!reject_window_start)reject_window_start=now_us;reject_window_count+=rejected;
+    if(now_us-reject_window_start>=1000000){if(reject_window_count>=ENGINE_REJECT_THRESHOLD)diagnostics_report(DIAG_ENGINE_REJECTED_PULSE,true,DIAG_WARNING,true);reject_window_count=0;reject_window_start=now_us;}
+    if(last_rejected&&now_us-last_rejected>=ENGINE_REJECT_CLEAR_US)diagnostics_report(DIAG_ENGINE_REJECTED_PULSE,false,DIAG_WARNING,true);
     if (last_spark_us == 0 || period_us == 0 ||
         now_us - last_spark_us > ENGINE_STOP_TIMEOUT_US) {
         return 0;
     }
 
-    return (int32_t)((60000000ULL * REVOLUTIONS_PER_SPARK) / period_us);
+    int32_t rpm=(int32_t)((60000000ULL * REVOLUTIONS_PER_SPARK) / period_us);
+    static uint8_t bad,good;
+    if(rpm>MAX_ENGINE_RPM){good=0;if(++bad>=3)diagnostics_report(DIAG_ENGINE_RPM,true,DIAG_WARNING,true);}else{bad=0;if(++good>=5)diagnostics_report(DIAG_ENGINE_RPM,false,DIAG_WARNING,true);}
+    return rpm;
 }
 
 sensor_t engine_rpm_sensor = {
