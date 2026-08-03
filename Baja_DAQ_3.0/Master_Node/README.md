@@ -21,6 +21,8 @@ Node TX GPIO21/RX GPIO20.
 - Provide `start`, `stop`, and `status` serial commands at 115200 baud.
 - Host an open `BajaDAQ` Wi-Fi access point with controls and log downloads at
   `http://192.168.4.1`.
+- Provide explicitly enabled live sensor graphs during recording at a capped
+  1-20 Hz display rate.
 
 ## Build
 
@@ -56,7 +58,10 @@ The Waveshare ESP32-P4-WIFI6 uses its ESP32-C6 coprocessor over SDIO through
 ESP-Hosted. Connect a phone or laptop to the open `BajaDAQ` network and browse
 to `http://192.168.4.1`. The page reports logger and node state, accepts Start
 and Stop commands, and offers completed sessions as their original binary log
-or as a streamed CSV conversion.
+or as a streamed CSV conversion. Live Data supports up to four independent
+graphs with adjustable axes. It must be enabled separately during each
+recording and turns off when recording stops or its viewer disconnects. The SD
+log continues to retain samples at their native rates.
 
 The C6 must run an ESP-Hosted slave firmware compatible with the version pinned
 in `dependencies.lock`. Network startup failures are reported on serial and do

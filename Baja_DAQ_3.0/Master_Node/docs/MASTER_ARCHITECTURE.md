@@ -20,6 +20,7 @@ and store them safely on an SD card.
 - registration of node boot, start, stop, and recovery states
 - open `BajaDAQ` SoftAP and HTTP controls at `http://192.168.4.1`
 - binary and streamed CSV downloads for completed log sessions
+- recording-only, explicitly enabled latest-value live graphs at 1-20 Hz
 - `tools/decode_log.py` to convert a log to CSV
 
 ## Source organization
@@ -36,6 +37,7 @@ and store them safely on an SD card.
 | `time/time_beacon.c` | Periodic master-clock broadcast |
 | `console/serial_console.c` | Serial command parsing |
 | `app/app_control.c` | Serialized logging lifecycle shared by serial and HTTP |
+| `live/live_data.c` | Fixed latest-value cache and exclusive viewer lease |
 | `web/web_server.c` | ESP-Hosted SoftAP, HTTP API, UI, and downloads |
 
 See `src/README.md` for dependencies and maintenance guidance.
