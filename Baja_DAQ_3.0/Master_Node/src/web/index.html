@@ -38,7 +38,7 @@
       <span id="liveState" class="muted">Disabled</span>
     </div>
     <p class="muted">Select up to four signals. The SD log still records each signal at its native rate.</p>
-    <div id="signals" class="signals"></div><div id="liveError" class="error"></div>
+    <div id="signals" class="signals"></div><div id="liveNotice" class="error"></div><div id="liveError" class="error"></div>
   </section>
   <div id="charts"></div>
 
@@ -47,13 +47,17 @@
 <script>
 'use strict';
 const $=id=>document.getElementById(id);
-let loggerState='idle', token=null, timer=null, polling=false, metadata=[], charts=new Map();
+let loggerState='idle', token=null, timer=null, noticeTimer=null, polling=false, metadata=[], charts=new Map();
 
 async function json(url,opt){
   const response=await fetch(url,opt), body=await response.json().catch(()=>({error:'Request failed'}));
   if(!response.ok) throw Error(body.error||('HTTP '+response.status)); return body;
 }
 function pretty(name){return name.split('_').map(x=>x[0].toUpperCase()+x.slice(1)).join(' ')}
+function showLiveNotice(message){
+  clearTimeout(noticeTimer);$('liveNotice').textContent=message;
+  noticeTimer=setTimeout(()=>$('liveNotice').textContent='',8000);
+}
 
 async function refreshStatus(){
   try{
@@ -81,7 +85,7 @@ async function loadSignals(){
   }catch(e){$('liveError').textContent=e.message}
 }
 function selectSignal(signal,box){
-  if(box.checked&&charts.size>=4){box.checked=false;$('liveError').textContent='Select no more than four signals.';return}
+  if(box.checked&&charts.size>=4){box.checked=false;showLiveNotice('Select no more than four signals.');return}
   $('liveError').textContent=''; if(box.checked) addChart(signal); else removeChart(signal.can_id);
 }
 

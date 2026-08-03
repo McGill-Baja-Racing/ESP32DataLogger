@@ -126,6 +126,7 @@ static esp_err_t send_json_error(httpd_req_t *request, const char *status,
 static esp_err_t root_handler(httpd_req_t *request)
 {
     httpd_resp_set_type(request, "text/html; charset=utf-8");
+    httpd_resp_set_hdr(request, "Cache-Control", "no-store");
     return httpd_resp_send(request, (const char *)web_index_html_start,
                            web_index_html_end - web_index_html_start);
 }
