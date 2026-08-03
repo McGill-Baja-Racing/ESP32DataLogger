@@ -120,7 +120,6 @@ async function poll(){
   if(!token||polling)return;polling=true;
   try{const result=await json('/api/live/samples?token='+encodeURIComponent(token));
     for(const sample of result.samples){const chart=charts.get(sample.can_id);if(!chart||chart.paused||chart.lastSequence===sample.sequence)continue;chart.lastSequence=sample.sequence;chart.points.push({t:sample.timestamp_ms,v:sample.value});chart.section.querySelector('.value').textContent=`${sample.value} ${chart.signal.units}`;trim(chart);draw(chart)}
-    $('liveError').textContent='';
   }catch(e){endLive(false,e.message)}finally{polling=false;schedulePoll()}
 }
 function trim(chart){if(!chart.points.length)return;const cutoff=chart.points.at(-1).t-historyMs()*1.2;while(chart.points.length&&chart.points[0].t<cutoff)chart.points.shift()}
