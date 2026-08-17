@@ -50,6 +50,7 @@ See `src/README.md` for dependencies and maintenance guidance.
 | 1 | Rear brake pressure | `0x0B2` | 100 Hz |
 | 4 | Signed bearing RPM | `0x0B9` | 50 Hz |
 | 5 | Engine RPM placeholder | `0x0BB` | 50 Hz |
+| 5 | Engine spark event | `0x0BC` | Per accepted spark |
 | 6 | Generic ADC voltage | `0x0BA` | 100 Hz |
 
 The accepted IDs are compiled into the master. The corresponding sensor type,
