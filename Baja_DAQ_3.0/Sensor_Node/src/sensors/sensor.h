@@ -15,6 +15,8 @@ struct sensor {
     const char *name;
     uint32_t can_id;
     uint32_t period_us;
+    bool synchronized_sampling;
+    /* Local-clock deadline normally; master-clock slot when synchronized. */
     int64_t next_sample_us;
     esp_err_t (*init)(sensor_t *sensor);
     void (*start)(sensor_t *sensor);

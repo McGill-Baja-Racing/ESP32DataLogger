@@ -42,11 +42,24 @@ static sensor_t *sensors;
 static size_t sensor_count;
 static volatile bool active;
 
+static int64_t next_grid_slot(int64_t master_time_us, uint32_t period_us)
+{
+    return ((master_time_us / period_us) + 1) * period_us;
+}
+
 static void arm_schedule(void)
 {
-    int64_t now = esp_timer_get_time();
+    int64_t local_now_us = esp_timer_get_time();
+    int64_t master_now_us = 0;
+    bool time_valid = time_sync_get_master_time_us(&master_now_us);
     for (size_t i = 0; i < sensor_count; i++) {
-        sensors[i].next_sample_us = now;
+        if (sensors[i].synchronized_sampling) {
+            sensors[i].next_sample_us = time_valid
+                ? next_grid_slot(master_now_us, sensors[i].period_us)
+                : INT64_MAX;
+        } else {
+            sensors[i].next_sample_us = local_now_us;
+        }
     }
 }
 
@@ -104,29 +117,64 @@ static void sample_task(void *argument)
             continue;
         }
 
-        int64_t now = esp_timer_get_time();
-        int64_t next_due = now + 1000000;
+        int64_t local_now_us = esp_timer_get_time();
+        int64_t master_now_us = 0;
+        bool time_valid = time_sync_get_master_time_us(&master_now_us);
+        int64_t next_due_local_us = local_now_us + 1000000;
         for (size_t i = 0; i < sensor_count; i++) {
             sensor_t *sensor = &sensors[i];
-            if (now >= sensor->next_sample_us) {
+            int32_t timestamp_ms = 0;
+            bool sample_due = false;
+
+            if (sensor->synchronized_sampling) {
+                if (sensor->next_sample_us == INT64_MAX && time_valid) {
+                    sensor->next_sample_us =
+                        next_grid_slot(master_now_us, sensor->period_us);
+                }
+                if (time_valid && master_now_us >= sensor->next_sample_us) {
+                    /* Use the newest grid slot and discard any missed slots. */
+                    int64_t sample_slot_us =
+                        (master_now_us / sensor->period_us) * sensor->period_us;
+                    timestamp_ms = (int32_t)(sample_slot_us / 1000);
+                    sensor->next_sample_us = sample_slot_us + sensor->period_us;
+                    sample_due = true;
+                }
+            } else if (local_now_us >= sensor->next_sample_us) {
+                timestamp_ms = time_sync_timestamp_ms();
+                while (sensor->next_sample_us <= local_now_us) {
+                    sensor->next_sample_us += sensor->period_us;
+                }
+                sample_due = true;
+            }
+
+            if (sample_due) {
                 /* Hardware-specific work is confined to the sensor callback. */
                 sample_t sample = {
                     .sensor_name = sensor->name,
                     .can_id = sensor->can_id,
-                    .timestamp_ms = time_sync_timestamp_ms(),
+                    .timestamp_ms = timestamp_ms,
                     .value = sensor->read(sensor),
                 };
-                while (sensor->next_sample_us <= now) {
-                    sensor->next_sample_us += sensor->period_us;
-                }
                 enqueue_latest(&sample);
             }
-            if (sensor->next_sample_us < next_due) {
-                next_due = sensor->next_sample_us;
+            int64_t sensor_due_local_us = sensor->next_sample_us;
+            if (sensor->synchronized_sampling) {
+                if (!time_valid || sensor->next_sample_us == INT64_MAX) {
+                    int64_t sync_retry_us = local_now_us + 20000;
+                    if (sync_retry_us < next_due_local_us) {
+                        next_due_local_us = sync_retry_us;
+                    }
+                    continue;
+                }
+                sensor_due_local_us = local_now_us +
+                    (sensor->next_sample_us - master_now_us);
+            }
+            if (sensor_due_local_us < next_due_local_us) {
+                next_due_local_us = sensor_due_local_us;
             }
         }
 
-        int64_t sleep_us = next_due - esp_timer_get_time();
+        int64_t sleep_us = next_due_local_us - esp_timer_get_time();
         if (sleep_us >= 2000) {
             vTaskDelay(pdMS_TO_TICKS((uint32_t)(sleep_us / 1000)));
         } else {
@@ -214,8 +262,10 @@ esp_err_t sampler_init(void)
                 return error;
             }
         }
-        ESP_LOGI(TAG, "%s: CAN=0x%03" PRIX32 " period=%" PRIu32 "us",
-                 sensors[i].name, sensors[i].can_id, sensors[i].period_us);
+        ESP_LOGI(TAG,
+                 "%s: CAN=0x%03" PRIX32 " period=%" PRIu32 "us%s",
+                 sensors[i].name, sensors[i].can_id, sensors[i].period_us,
+                 sensors[i].synchronized_sampling ? " synchronized" : "");
     }
 
     sample_queue = xQueueCreate(SAMPLE_QUEUE_LENGTH, sizeof(sample_t));
