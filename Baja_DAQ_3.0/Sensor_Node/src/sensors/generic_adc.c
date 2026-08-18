@@ -20,6 +20,7 @@ sensor_t generic_adc_sensor = {
     .name = "generic_adc_voltage",
     .can_id = CAN_ID_GENERIC_ADC,
     .period_us = 10000, /* 100 Hz */
+    .synchronized_sampling = false,
     .read = read_voltage_mv,
 };
 

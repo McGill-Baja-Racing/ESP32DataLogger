@@ -26,5 +26,6 @@ sensor_t front_brake_sensor = {
     .name = "front_brake_pressure",
     .can_id = CAN_ID_FRONT_BRAKE,
     .period_us = 10000,
+    .synchronized_sampling = false,
     .read = read_pressure,
 };

@@ -48,6 +48,7 @@ void app_main(void)
     /* Standalone bench mode: no CAN bus or START command is required. */
     ESP_LOGI("SensorTest",
              "Standalone serial mode enabled; CAN is disabled");
+    time_sync_use_local_clock();
     sampler_start();
 #else
     /* CAN translates protocol frames into these application-level actions. */

@@ -112,7 +112,8 @@ static int32_t read_engine_rpm(sensor_t *sensor)
 sensor_t engine_rpm_sensor = {
     .name = "engine_rpm",
     .can_id = CAN_ID_ENGINE_RPM,
-    .period_us = 20000, /* 50 Hz reporting rate */
+    .period_us = SYNCHRONIZED_SAMPLE_PERIOD_US,
+    .synchronized_sampling = true,
     .init = init_engine_rpm,
     .read = read_engine_rpm,
     .context = &engine,
