@@ -20,7 +20,6 @@
 #define ENCODER_GPIO_B                      7
 #define ENCODER_PULSES_PER_REVOLUTION       32
 #define ENCODER_QUADRATURE_EDGES_PER_PULSE  4
-#define ENCODER_SAMPLE_PERIOD_US            20000
 #define ENCODER_RPM_WINDOW_US               100000
 #define ENCODER_STOP_TIMEOUT_US             100000
 #define ENCODER_DIRECTION_SIGN              1
@@ -29,13 +28,13 @@
 #define ENCODER_COUNTS_PER_REVOLUTION \
     (ENCODER_PULSES_PER_REVOLUTION * ENCODER_QUADRATURE_EDGES_PER_PULSE)
 #define ENCODER_WINDOW_SAMPLES \
-    (ENCODER_RPM_WINDOW_US / ENCODER_SAMPLE_PERIOD_US)
+    (ENCODER_RPM_WINDOW_US / SYNCHRONIZED_SAMPLE_PERIOD_US)
 
 _Static_assert(ENCODER_PULSES_PER_REVOLUTION > 0,
                "Encoder pulses per revolution must be positive");
-_Static_assert(ENCODER_RPM_WINDOW_US >= ENCODER_SAMPLE_PERIOD_US,
+_Static_assert(ENCODER_RPM_WINDOW_US >= SYNCHRONIZED_SAMPLE_PERIOD_US,
                "RPM window must contain at least one sample");
-_Static_assert(ENCODER_RPM_WINDOW_US % ENCODER_SAMPLE_PERIOD_US == 0,
+_Static_assert(ENCODER_RPM_WINDOW_US % SYNCHRONIZED_SAMPLE_PERIOD_US == 0,
                "RPM window must be an exact number of sample periods");
 _Static_assert(ENCODER_DIRECTION_SIGN == 1 || ENCODER_DIRECTION_SIGN == -1,
                "Encoder direction sign must be 1 or -1");
@@ -205,7 +204,8 @@ static int32_t read_rpm(sensor_t *sensor)
 sensor_t bearing_encoder_sensor = {
     .name = "bearing_encoder",
     .can_id = CAN_ID_BEARING_ENCODER,
-    .period_us = ENCODER_SAMPLE_PERIOD_US,
+    .period_us = SYNCHRONIZED_SAMPLE_PERIOD_US,
+    .synchronized_sampling = true,
     .init = init_encoder,
     .start = start_encoder,
     .read = read_rpm,

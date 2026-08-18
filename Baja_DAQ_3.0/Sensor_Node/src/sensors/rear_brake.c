@@ -26,5 +26,6 @@ sensor_t rear_brake_sensor = {
     .name = "rear_brake_pressure",
     .can_id = CAN_ID_REAR_BRAKE,
     .period_us = 10000,
+    .synchronized_sampling = false,
     .read = read_pressure,
 };
