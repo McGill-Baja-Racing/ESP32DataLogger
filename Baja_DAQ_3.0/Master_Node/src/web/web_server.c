@@ -22,6 +22,7 @@
 #include "live/live_data.h"
 #include "lwip/ip4_addr.h"
 #include "nvs_flash.h"
+#include "protocol/app_protocol.h"
 
 #define AP_SSID "BajaDAQ"
 #define SD_ROOT "/sdcard"
@@ -193,11 +194,15 @@ static esp_err_t logs_handler(httpd_req_t *request)
 
 static const live_signal_metadata_t *metadata_for(uint32_t can_id)
 {
+    static const live_signal_metadata_t engine_spark = {
+        CAN_ID_ENGINE_SPARK, "engine_spark", "engine_node_5", "event", 67
+    };
     size_t count;
     const live_signal_metadata_t *signals = live_data_signals(&count);
     for (size_t i = 0; i < count; i++) {
         if (signals[i].can_id == can_id) return &signals[i];
     }
+    if (can_id == CAN_ID_ENGINE_SPARK) return &engine_spark;
     return NULL;
 }
 

@@ -7,13 +7,16 @@
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
+#include "freertos/queue.h"
 #include "protocol/app_protocol.h"
+#include "time/time_sync.h"
 
 #define ENGINE_RPM_GPIO             GPIO_NUM_3
 #define REVOLUTIONS_PER_SPARK       1U
 #define MAX_ENGINE_RPM              4000U
 #define MIN_SPARK_INTERVAL_US       3000U
 #define ENGINE_STOP_TIMEOUT_US      500000LL
+#define SPARK_EVENT_QUEUE_LENGTH    16
 
 /* At 4000 RPM, valid sparks are at least 15 ms apart. The shorter 3 ms
  * rejection window ignores ringing around a single pulse without masking the
@@ -25,6 +28,7 @@ _Static_assert(MIN_SPARK_INTERVAL_US <
 typedef struct {
     volatile int64_t last_spark_us;
     volatile uint32_t spark_period_us;
+    QueueHandle_t spark_events;
     portMUX_TYPE lock;
 } engine_rpm_context_t;
 
@@ -40,12 +44,14 @@ static void IRAM_ATTR engine_rpm_isr(void *argument)
     portENTER_CRITICAL_ISR(&context->lock);
     if (context->last_spark_us == 0) {
         context->last_spark_us = now_us;
+        (void)xQueueSendFromISR(context->spark_events, &now_us, NULL);
     } else {
         uint32_t elapsed_us =
             (uint32_t)(now_us - context->last_spark_us);
         if (elapsed_us >= MIN_SPARK_INTERVAL_US) {
             context->spark_period_us = elapsed_us;
             context->last_spark_us = now_us;
+            (void)xQueueSendFromISR(context->spark_events, &now_us, NULL);
         }
     }
     portEXIT_CRITICAL_ISR(&context->lock);
@@ -54,6 +60,12 @@ static void IRAM_ATTR engine_rpm_isr(void *argument)
 static esp_err_t init_engine_rpm(sensor_t *sensor)
 {
     engine_rpm_context_t *context = sensor->context;
+
+    context->spark_events =
+        xQueueCreate(SPARK_EVENT_QUEUE_LENGTH, sizeof(int64_t));
+    if (!context->spark_events) {
+        return ESP_ERR_NO_MEM;
+    }
 
     esp_err_t error = gpio_reset_pin(ENGINE_RPM_GPIO);
     if (error != ESP_OK) {
@@ -91,6 +103,19 @@ static esp_err_t init_engine_rpm(sensor_t *sensor)
     return ESP_OK;
 }
 
+static bool read_spark_event(sensor_t *sensor, int32_t *timestamp_ms,
+                             int32_t *value)
+{
+    engine_rpm_context_t *context = sensor->context;
+    int64_t spark_us;
+    if (xQueueReceive(context->spark_events, &spark_us, 0) != pdTRUE) {
+        return false;
+    }
+    *timestamp_ms = time_sync_timestamp_ms_at(spark_us);
+    *value = 1;
+    return true;
+}
+
 static int32_t read_engine_rpm(sensor_t *sensor)
 {
     engine_rpm_context_t *context = sensor->context;
@@ -109,11 +134,20 @@ static int32_t read_engine_rpm(sensor_t *sensor)
     return (int32_t)((60000000ULL * REVOLUTIONS_PER_SPARK) / period_us);
 }
 
+static void start_engine_rpm(sensor_t *sensor)
+{
+    engine_rpm_context_t *context = sensor->context;
+    xQueueReset(context->spark_events);
+}
+
 sensor_t engine_rpm_sensor = {
     .name = "engine_rpm",
     .can_id = CAN_ID_ENGINE_RPM,
     .period_us = 20000, /* 50 Hz reporting rate */
     .init = init_engine_rpm,
+    .start = start_engine_rpm,
     .read = read_engine_rpm,
+    .read_event = read_spark_event,
+    .event_can_id = CAN_ID_ENGINE_SPARK,
     .context = &engine,
 };
