@@ -1,5 +1,6 @@
 #pragma once
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -19,6 +20,9 @@ struct sensor {
     esp_err_t (*init)(sensor_t *sensor);
     void (*start)(sensor_t *sensor);
     int32_t (*read)(sensor_t *sensor);
+    bool (*read_event)(sensor_t *sensor, int32_t *timestamp_ms,
+                       int32_t *value);
+    uint32_t event_can_id;
     void *context;
 };
 

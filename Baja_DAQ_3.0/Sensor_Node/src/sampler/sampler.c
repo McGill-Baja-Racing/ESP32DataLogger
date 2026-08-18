@@ -121,6 +121,20 @@ static void sample_task(void *argument)
                 }
                 enqueue_latest(&sample);
             }
+            if (sensor->read_event) {
+                int32_t event_timestamp_ms;
+                int32_t event_value;
+                while (sensor->read_event(sensor, &event_timestamp_ms,
+                                          &event_value)) {
+                    sample_t event = {
+                        .sensor_name = sensor->name,
+                        .can_id = sensor->event_can_id,
+                        .timestamp_ms = event_timestamp_ms,
+                        .value = event_value,
+                    };
+                    enqueue_latest(&event);
+                }
+            }
             if (sensor->next_sample_us < next_due) {
                 next_due = sensor->next_sample_us;
             }

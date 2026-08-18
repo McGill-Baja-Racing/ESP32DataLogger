@@ -13,7 +13,7 @@ starts and stops sampling but does not configure sensor hardware at runtime.
 |---|---:|---|
 | `NodeBrake` | 1 | Front brake pressure on GPIO1 and rear brake pressure on GPIO2, both at 100 Hz |
 | `NodeEncoder` | 4 | Signed bearing RPM on GPIO6/GPIO7 at 50 Hz |
-| `NodeEngine` | 5 | Engine RPM on GPIO3 at 50 Hz |
+| `NodeEngine` | 5 | Engine RPM on GPIO3 at 50 Hz plus one timestamped event per spark |
 | `NodeADC` | 6 | Generic ADC voltage on GPIO1 at 100 Hz |
 
 All builds use CAN TX GPIO21 and RX GPIO20.
@@ -102,3 +102,8 @@ Master is still recording; the lower 63 bits retain the master timestamp.
 The engine RPM input measures rising-edge timing on GPIO3. Its one-spark-per-
 revolution assumption, pulse rejection window, and stopped-engine timeout must
 be validated against the conditioned ignition signal on the vehicle.
+
+Each accepted spark also produces CAN ID `0x0BC`. Its standard 8-byte sensor
+payload contains the synchronized spark timestamp in the upper 32 bits and the
+event marker `1` in the lower 32 bits. The periodic RPM signal remains on
+`0x0BB` unchanged.
