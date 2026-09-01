@@ -33,7 +33,7 @@
 
 ## Encountered Issues
 
-### Symptom: Spark plug signal from inductor was occasionly missing sparks
+#### Symptom: Spark plug signal from inductor was occasionly missing sparks
 
 **Possible causes:**
 - Spark plug being wet (covered in black). See the engine manual provided by SAE outlining how to solve the issue.
@@ -45,8 +45,7 @@
 - Unknown
    - **Solution:** Replace wire with 16 gauge one.
 
-
-## Symptoms: transceiver resistor not detected on CAN bus but continuity check passes.
+### Symptoms: transceiver resistor not detected on CAN bus but continuity check passes.
 
 **Possible causes:**
 - Unknown
