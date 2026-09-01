@@ -21,3 +21,33 @@
 
 - The esp32 or development board is damaged.
   - **Solution:** Verify the circuit wiring, make any necessary corrections, then test with a replacement board.
+
+---
+
+# Hardware Troubleshooting
+
+## Checks
+
+1. Continuity Check.
+
+
+## Encountered Issues
+
+### Symptom: Spark plug signal from inductor was occasionly missing sparks
+
+**Possible causes:**
+- Spark plug being wet (covered in black). See the engine manual provided by SAE outlining how to solve the issue.
+   - **Solution:** Clean/ Replace spark plug. 
+
+### Symptom: Wire inductor not picking up signal
+
+**Possible causes:**
+- Unknown
+   - **Solution:** Replace wire with 16 gauge one.
+
+
+## Symptoms: transceiver resistor not detected on CAN bus but continuity check passes.
+
+**Possible causes:**
+- Unknown
+   - **Solution:** Remove current sodder and then resodder. (Do not ask me why this worked) 
