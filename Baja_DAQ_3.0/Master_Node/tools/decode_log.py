@@ -23,6 +23,7 @@ SIGNAL_METADATA = {
     0x0B9: ("bearing_rpm", "encoder_node_4", "rpm"),
     0x0BA: ("generic_adc_voltage", "adc_node_6", "mV"),
     0x0BB: ("engine_rpm", "engine_node_5", "rpm_placeholder"),
+    0x0B3: ("cvt_belt_temperature", "temp_node_2", "C")
 }
 
 

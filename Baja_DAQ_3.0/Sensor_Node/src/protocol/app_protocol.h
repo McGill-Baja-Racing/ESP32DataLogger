@@ -13,7 +13,7 @@
 #define CAN_ID_START                0x0A1
 #define CAN_ID_MASTER_TIME          0x0A2
 #define CAN_ID_NODE_STATE           (0x0C0 + NODE_ID)
-
+#define CAN_ID_CVT_TEMP             0x0B3
 #define CAN_ID_FRONT_BRAKE          0x0B1
 #define CAN_ID_REAR_BRAKE           0x0B2
 #define CAN_ID_BEARING_ENCODER      0x0B9

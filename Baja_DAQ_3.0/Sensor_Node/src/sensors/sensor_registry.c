@@ -17,6 +17,10 @@ static sensor_t sensors[1];
 #elif NODE_FIXED_ENGINE_CONFIG
 extern sensor_t engine_rpm_sensor;
 
+#elif NODE_FIXED_CVT_TEMP_CONFIG
+extern sensor_t cvt_belt_sensor;
+static sensor_t sensors[1];
+
 static sensor_t sensors[1];
 #elif NODE_FIXED_ADC_CONFIG
 extern sensor_t generic_adc_sensor;
@@ -35,6 +39,8 @@ sensor_t *sensor_registry(size_t *count)
     sensors[0] = bearing_encoder_sensor;
 #elif NODE_FIXED_ENGINE_CONFIG
     sensors[0] = engine_rpm_sensor;
+#elif NODE_FIXED_CVT_TEMP_CONFIG
+    sensors[0] = cvt_belt_sensor;
 #else
     sensors[0] = generic_adc_sensor;
 #endif
