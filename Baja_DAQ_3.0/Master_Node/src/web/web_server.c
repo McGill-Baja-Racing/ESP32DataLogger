@@ -20,6 +20,7 @@
 #include "freertos/semphr.h"
 #include "logger/data_logger.h"
 #include "live/live_data.h"
+#include "protocol/app_protocol.h"
 #include "lwip/ip4_addr.h"
 #include "nvs_flash.h"
 
@@ -219,6 +220,41 @@ static esp_err_t stream_binary(httpd_req_t *request, FILE *file)
     return result;
 }
 
+/* Pair independent node samples only while exporting. Wheel values may be
+ * reused for engine samples within 100 ms; stale/future values are omitted. */
+static esp_err_t stream_paired_csv(httpd_req_t *request, FILE *file)
+{
+    static const char header[] = "Timestamp,Engine RPM,Wheel RPM\r\n";
+    if (httpd_resp_send_chunk(request, header, sizeof(header) - 1) != ESP_OK) {
+        return ESP_FAIL;
+    }
+    uint64_t record[2];
+    uint32_t wheel_timestamp = 0;
+    int32_t wheel_rpm = 0;
+    bool have_wheel = false;
+    while (fread(record, sizeof(record), 1, file) == 1) {
+        uint32_t can_id = (uint32_t)record[0] & 0x7ffU;
+        uint32_t timestamp = (uint32_t)(record[1] >> 32);
+        int32_t value = (int32_t)(uint32_t)record[1];
+        if (can_id == CAN_ID_BEARING_ENCODER) {
+            wheel_timestamp = timestamp;
+            wheel_rpm = value;
+            have_wheel = true;
+            continue;
+        }
+        if (can_id != CAN_ID_ENGINE_RPM || !have_wheel ||
+            (uint32_t)(timestamp - wheel_timestamp) > 100) continue;
+        char row[128];
+        int length = snprintf(row, sizeof(row), "%" PRIu32 ",%" PRId32
+                              ",%" PRId32 "\r\n", timestamp, value, wheel_rpm);
+        if (length < 0 || length >= (int)sizeof(row) ||
+            httpd_resp_send_chunk(request, row, length) != ESP_OK) {
+            return ESP_FAIL;
+        }
+    }
+    return ferror(file) ? ESP_FAIL : httpd_resp_send_chunk(request, NULL, 0);
+}
+
 static esp_err_t stream_csv(httpd_req_t *request, FILE *file)
 {
     static const char header[] =
@@ -258,9 +294,10 @@ static esp_err_t download_handler(httpd_req_t *request)
         httpd_query_key_value(query, "name", name, sizeof(name)) != ESP_OK ||
         httpd_query_key_value(query, "format", format, sizeof(format)) != ESP_OK ||
         !parse_log_name(name, NULL) ||
-        (strcmp(format, "bin") != 0 && strcmp(format, "csv") != 0)) {
+        (strcmp(format, "bin") != 0 && strcmp(format, "csv") != 0 &&
+         strcmp(format, "paired") != 0)) {
         return send_json_error(request, "400 Bad Request",
-                               "Expected a valid log filename and bin or csv format");
+                               "Expected a valid log filename and bin, csv or paired format");
     }
     if (data_logger_state() != LOGGER_IDLE &&
         strcmp(name, base_name(data_logger_path())) == 0) {
@@ -279,10 +316,13 @@ static esp_err_t download_handler(httpd_req_t *request)
         return send_json_error(request, "404 Not Found", "Log file not found");
     }
     char attachment[80];
-    if (strcmp(format, "csv") == 0) {
-        char csv_name[32];
-        snprintf(csv_name, sizeof(csv_name), "%.*s.csv",
-                 (int)(strlen(name) - 4), name);
+    bool paired = strcmp(format, "paired") == 0;
+    bool csv_format = paired || strcmp(format, "csv") == 0;
+    if (csv_format) {
+        char csv_name[48];
+        snprintf(csv_name, sizeof(csv_name), "%.*s%s.csv",
+                 (int)(strlen(name) - 4), name,
+                 paired ? "_rpm_paired" : "");
         snprintf(attachment, sizeof(attachment), "attachment; filename=\"%s\"", csv_name);
         httpd_resp_set_type(request, "text/csv; charset=utf-8");
     } else {
@@ -290,8 +330,9 @@ static esp_err_t download_handler(httpd_req_t *request)
         httpd_resp_set_type(request, "application/octet-stream");
     }
     httpd_resp_set_hdr(request, "Content-Disposition", attachment);
-    esp_err_t result = strcmp(format, "csv") == 0
-                     ? stream_csv(request, file) : stream_binary(request, file);
+    esp_err_t result = paired ? stream_paired_csv(request, file)
+                     : csv_format ? stream_csv(request, file)
+                     : stream_binary(request, file);
     fclose(file);
     xSemaphoreGive(download_mutex);
     return result;

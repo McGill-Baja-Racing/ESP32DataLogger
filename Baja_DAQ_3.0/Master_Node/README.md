@@ -115,3 +115,15 @@ RPM on GPIO6/GPIO7 and sends `bearing_rpm` (0x0B9) every 20 ms, averaged over
 100 ms. The sensors run on separate boards. The master logs and displays
 these original channels without generating another wheel RPM signal.
 NodeEngineBench uses the shared throttled serial format for engine RPM only.
+
+### Powertrain CSV export
+
+**Powertrain CSV** downloads `log_XXXX_rpm_paired.csv` with the columns
+`Timestamp,Engine RPM,Wheel RPM`. Timestamp is the engine sample time in
+milliseconds. Each engine sample uses the latest previously recorded bearing
+RPM sample, provided it is no more than 100 ms old. Missing, future, or stale
+wheel samples omit the row; zeros and signed RPM values are preserved.
+Wheel RPM is the raw bearing reading, without gear scaling.
+
+Endpoint: `/api/logs/download?name=log_0001.bin&format=paired`.
+Validate the exporter with `python3 tests/test_paired_csv.py`.
