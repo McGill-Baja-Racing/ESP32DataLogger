@@ -7,7 +7,7 @@ import struct
 import tempfile
 import threading
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
-from urllib.parse import urlparse
+from urllib.parse import urlparse, parse_qs
 from playwright.sync_api import sync_playwright
 ROOT=Path(__file__).resolve().parents[1]
 spec=importlib.util.spec_from_file_location('mock',ROOT/'tools/cvt_reference/make_mock_log.py')
@@ -18,7 +18,10 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self,*args):pass
     def do_GET(self):
         path=urlparse(self.path).path
-        if path=='/api/logs/download':data=records;mime='application/octet-stream'
+        if path=='/api/logs/download':
+            if parse_qs(urlparse(self.path).query).get('format')==['cvt']:
+                data=frame[frame.can_id.isin([185,187])].to_csv(index=False).encode();mime='text/csv'
+            else:data=records;mime='application/octet-stream'
         elif path=='/api/logs':data=json.dumps([{'name':'log_0001.bin','size_bytes':len(records)}]).encode();mime='application/json'
         elif path=='/api/status':data=json.dumps({'logger_state':'idle','current_file':'none','can_drops':0,'log_drops':0,'nodes':{str(i):'off' for i in range(1,7)},'live_enabled':False}).encode();mime='application/json'
         elif path=='/api/live/signals':data=b'[]';mime='application/json'
@@ -26,7 +29,9 @@ class Handler(BaseHTTPRequestHandler):
             file=ROOT/'src/web'/({'/':'index.html','/analysis':'analysis.html'}.get(path,path.lstrip('/')))
             if not file.is_file():self.send_error(404);return
             data=file.read_bytes();mime='text/html' if file.suffix=='.html' else 'application/javascript'
-        self.send_response(200);self.send_header('Content-Type',mime);self.send_header('Content-Length',str(len(data)));self.end_headers();self.wfile.write(data)
+        self.send_response(200)
+        if path=='/api/logs/download' and mime=='text/csv':self.send_header('Content-Disposition','attachment; filename="log_0001_cvt_input.csv"')
+        self.send_header('Content-Type',mime);self.send_header('Content-Length',str(len(data)));self.end_headers();self.wfile.write(data)
 server=ThreadingHTTPServer(('127.0.0.1',0),Handler)
 threading.Thread(target=server.serve_forever,daemon=True).start()
 base=f'http://127.0.0.1:{server.server_port}'
@@ -40,7 +45,10 @@ with sync_playwright() as p:
         else:request.continue_()
     context.route('**/*',route)
     page=context.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
-    page.goto(base);page.get_by_role('link',name='CVT analysis',exact=True).click()
+    page.goto(base)
+    with page.expect_download() as download:page.get_by_role('link',name='CVT input CSV',exact=True).click()
+    assert download.value.suggested_filename=='log_0001_cvt_input.csv'
+    page.get_by_role('link',name='CVT analysis',exact=True).click()
     page.wait_for_function("document.getElementById('status').textContent==='Analysis complete'")
     assert page.locator('#ratio').input_value()=='1.69565'
     assert page.locator('#segment option').count()>=4
