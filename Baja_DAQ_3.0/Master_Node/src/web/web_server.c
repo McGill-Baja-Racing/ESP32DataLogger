@@ -247,16 +247,25 @@ static esp_err_t stream_binary(httpd_req_t *request, FILE *file)
  * missing value forward or substitute zero for a missing sensor record. */
 static esp_err_t stream_paired_csv(httpd_req_t *request, FILE *file)
 {
-    static const char header[] = "Timestamp,Engine RPM,Wheel RPM\r\n";
+    static const char header[] = "Timestamp,Engine RPM,Wheel RPM,Car Speed (km/h)\r\n";
     if (httpd_resp_send_chunk(request, header, sizeof(header) - 1) != ESP_OK) {
         return ESP_FAIL;
     }
+    bool have_speed = false;
+    int32_t speed_x100 = 0;
+    uint32_t speed_timestamp = 0;
     uint64_t record[2];
     uint32_t pending_timestamp = 0;
     int32_t engine_rpm = 0, wheel_rpm = 0;
     bool have_engine = false, have_wheel = false;
     while (fread(record, sizeof(record), 1, file) == 1) {
         uint32_t can_id = (uint32_t)record[0] & 0x7ffU;
+        if (can_id == CAN_ID_GPS_SPEED) {
+            speed_x100 = (int32_t)(uint32_t)record[1];
+            speed_timestamp = (uint32_t)(record[1] >> 32);
+            have_speed = true;
+            continue;
+        }
         if (can_id != CAN_ID_ENGINE_RPM && can_id != CAN_ID_ENGINE_WHEEL_RPM) {
             continue;
         }
@@ -274,9 +283,15 @@ static esp_err_t stream_paired_csv(httpd_req_t *request, FILE *file)
             have_wheel = true;
         }
         if (!have_engine || !have_wheel) continue;
-        char row[96];
+        /* Hold the last encountered GPS reading; leave unavailable/future
+         * readings blank. Unsigned subtraction handles clock rollover. */
+        char speed_text[32] = "";
+        if (have_speed && (uint32_t)(timestamp - speed_timestamp) < 0x80000000U) {
+            snprintf(speed_text, sizeof(speed_text), "%.2f", speed_x100 / 100.0);
+        }
+        char row[128];
         int length = snprintf(row, sizeof(row), "%" PRIu32 ",%" PRId32
-                              ",%" PRId32 "\r\n", timestamp, engine_rpm, wheel_rpm);
+                              ",%" PRId32 ",%s\r\n", timestamp, engine_rpm, wheel_rpm, speed_text);
         if (length < 0 || length >= (int)sizeof(row) ||
             httpd_resp_send_chunk(request, row, length) != ESP_OK) {
             return ESP_FAIL;

@@ -36,9 +36,10 @@ with tempfile.TemporaryDirectory() as directory:
     def export(records):
         p=temp/'input.bin';p.write_bytes(b''.join(struct.pack('<qQ',cid,(ts<<32)|(value&0xffffffff)) for cid,ts,value in records))
         text=subprocess.check_output([str(temp/'test'),str(p)],text=True)
-        assert text.splitlines()[0]=='Timestamp,Engine RPM,Wheel RPM'
+        assert text.splitlines()[0]=='Timestamp,Engine RPM,Wheel RPM,Car Speed (km/h)'
         rows=list(csv.DictReader(io.StringIO(text)))
-        assert all(len(row)==3 and all(v!='' for v in row.values()) for row in rows)
+        assert all(len(row)==4 for row in rows)
+        export.speeds=[row['Car Speed (km/h)'] for row in rows]
         return [[int(row[k]) for k in ('Timestamp','Engine RPM','Wheel RPM')] for row in rows]
     E,W,RAW,SPARK,GPS=187,189,185,188,0x700
     records=[
@@ -58,6 +59,13 @@ with tempfile.TemporaryDirectory() as directory:
         (E,24,3020),                         # incomplete final record pair
     ]
     assert export(records)==[[0,0,0],[1000,3000,1000],[1080,3300,1200],[1100,0,500],[1120,3000,-500],[1160,3600,1400],[1160,3650,1500],[0xffffffff,3000,1000],[4,3010,1010]]
+    assert export.speeds[:7]==['','0.04','0.04','0.04','0.04','0.04','0.04']
+    assert export([(GPS,100,1234),(E,100,3000),(W,100,1000),(GPS,120,0),(E,120,3000),(W,120,1000)])==[[100,3000,1000],[120,3000,1000]]
+    assert export.speeds==['12.34','0.00']
+    export([(GPS,101,1234),(E,100,3000),(W,100,1000)])
+    assert export.speeds==['']
+    export([(GPS,0xfffffffe,1),(E,4,3000),(W,4,1000)])
+    assert export.speeds==['0.01']
     assert export([])==[]
     assert export([(RAW,1000,1000),(E,1000,3000)])==[]
     assert export([(W,1000,1000)])==[]
