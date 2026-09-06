@@ -71,6 +71,7 @@ not a pixel-identical Matplotlib rendering. The original log is never modified.
 ```
 node tests/test_cvt_core.js
 python3 tests/test_cvt_export.py
+python3 tests/test_paired_csv.py
 python3 tests/test_cvt_analysis.py
 python3 tests/test_cvt_browser.py
 pio run -e MasterStable -t buildprog
@@ -111,3 +112,28 @@ python cvt_plot.py log_0001_cvt_input.csv
 
 HTTP endpoint: `/api/logs/download?name=log_0001.bin&format=cvt`.
 It has the same completed-log checks and download lock as BIN/full CSV.
+
+## Three-column paired RPM download
+
+**Paired RPM CSV** downloads `log_XXXX_rpm_paired.csv`, with exactly:
+
+```
+Timestamp,Engine RPM,Wheel RPM
+```
+
+Timestamp is the master-clock time in milliseconds. Every data row has both
+an engine and wheel value. This export matches recorded engine RPM (0x0BB)
+with master-paired wheel RPM (0x0BD) at the same timestamp; that wheel value
+was selected by the master from a node 4 reading at most 100 ms old.
+Unrelated CAN records can interleave. Unmatched engine/wheel records are
+omitted; a value is never invented or carried forward to fill a missing half.
+Actual zero RPM is valid, including engine=0 with a moving wheel. Signed
+wheel RPM is preserved. The formatter streams in constant memory.
+
+This format uses the recorded pairs, not a new resampling or interpolation.
+Logs without complete recorded pairs (including older logs without 0x0BD)
+produce a header-only CSV. Use full CSV/CVT input CSV to inspect their raw
+channels. The original Python script still expects **CVT input CSV**, not
+this new compact three-column format.
+
+Endpoint: `/api/logs/download?name=log_0001.bin&format=paired`.
