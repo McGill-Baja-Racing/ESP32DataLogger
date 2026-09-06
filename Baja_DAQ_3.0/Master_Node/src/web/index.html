@@ -37,7 +37,7 @@
       <label>History <select id="window"><option>10</option><option selected>30</option><option>60</option><option>120</option></select> s</label>
       <span id="liveState" class="muted">Disabled</span>
     </div>
-    <p class="muted">Select up to four signals. The SD log still records each signal at its native rate.</p>
+    <p class="muted">Select up to four signals. Raw bearing, secondary and wheel RPM can be viewed together. The SD log still records each signal at its native rate.</p>
     <div id="signals" class="signals"></div><div id="liveNotice" class="error"></div><div id="liveError" class="error"></div>
   </section>
   <div id="charts"></div>
@@ -47,13 +47,14 @@
 <script>
 'use strict';
 const $=id=>document.getElementById(id);
+const SECONDARY_RPM_RATIO=3.389286, WHEEL_RPM_DIVISOR=3.589;
 let loggerState='idle', token=null, timer=null, noticeTimer=null, polling=false, metadata=[], charts=new Map();
 
 async function json(url,opt){
   const response=await fetch(url,opt), body=await response.json().catch(()=>({error:'Request failed'}));
   if(!response.ok) throw Error(body.error||('HTTP '+response.status)); return body;
 }
-function pretty(name){return name.split('_').map(x=>x[0].toUpperCase()+x.slice(1)).join(' ')}
+function pretty(name){return name.split('_').map(x=>x==='rpm'?'RPM':x[0].toUpperCase()+x.slice(1)).join(' ')}
 function showLiveNotice(message){
   clearTimeout(noticeTimer);$('liveNotice').textContent=message;
   noticeTimer=setTimeout(()=>$('liveNotice').textContent='',8000);
@@ -76,25 +77,39 @@ async function logging(action){
   catch(e){$('error').textContent=e.message}
 }
 
+// Several display views can share one CAN source without changing the log.
+function signalKey(signal){return signal.view_key??signal.can_id}
+function liveSignalViews(signals){
+  return signals.flatMap(signal=>{
+    if(signal.can_id===0x0B9)return [
+      {...signal,signal:'raw_bearing_rpm'},
+      {...signal,signal:'secondary_rpm',view_key:'secondary_rpm',scale:SECONDARY_RPM_RATIO,description:`Raw bearing RPM × ${SECONDARY_RPM_RATIO}`},
+      {...signal,signal:'wheel_rpm',view_key:'wheel_rpm',scale:1/WHEEL_RPM_DIVISOR,description:`Raw bearing RPM ÷ ${WHEEL_RPM_DIVISOR}`}
+    ];
+    if(signal.can_id===0x0BD)return [{...signal,signal:'engine_paired_bearing_rpm',description:'Unscaled bearing RPM paired with engine samples'}];
+    return [signal];
+  });
+}
+
 async function loadSignals(){
-  try{metadata=await json('/api/live/signals');
+  try{metadata=liveSignalViews(await json('/api/live/signals'));
     for(const signal of metadata){
-      const label=document.createElement('label'), box=document.createElement('input'); box.type='checkbox'; box.dataset.id=signal.can_id;
+      const label=document.createElement('label'), box=document.createElement('input'); box.type='checkbox'; box.dataset.id=signalKey(signal);
       box.addEventListener('change',()=>selectSignal(signal,box)); label.append(box,` ${pretty(signal.signal)} (${signal.units}, ${signal.native_rate_hz} Hz)`); $('signals').append(label);
     }
   }catch(e){$('liveError').textContent=e.message}
 }
 function selectSignal(signal,box){
   if(box.checked&&charts.size>=4){box.checked=false;showLiveNotice('Select no more than four signals.');return}
-  $('liveError').textContent=''; if(box.checked) addChart(signal); else removeChart(signal.can_id);
+  $('liveError').textContent=''; if(box.checked) addChart(signal); else removeChart(signalKey(signal));
 }
 
 function addChart(signal){
-  const section=document.createElement('section'); section.className='chart'; section.dataset.id=signal.can_id;
-  section.innerHTML=`<header><div><h3>${pretty(signal.signal)}</h3><span class="muted">${signal.node} · native ${signal.native_rate_hz} Hz</span></div><span class="value">Waiting...</span></header>
+  const section=document.createElement('section'); section.className='chart'; section.dataset.id=signalKey(signal);
+  section.innerHTML=`<header><div><h3>${pretty(signal.signal)}</h3><span class="muted">${signal.node} · native ${signal.native_rate_hz} Hz${signal.description?' · '+signal.description:''}</span></div><span class="value">Waiting...</span></header>
     <div class="controls axis"><label><input class="auto" type="checkbox" checked> Auto Y</label><label>Min <input class="ymin" type="number" disabled></label><label>Max <input class="ymax" type="number" disabled></label><button class="pause">Pause</button><button class="reset">Reset view</button></div><canvas></canvas>`;
   $('charts').append(section); const chart={signal,section,canvas:section.querySelector('canvas'),points:[],lastSequence:0,paused:false,zoom:1,offset:0,pointers:new Map(),pinchDistance:0};
-  charts.set(signal.can_id,chart); const auto=section.querySelector('.auto'), ymin=section.querySelector('.ymin'), ymax=section.querySelector('.ymax');
+  charts.set(signalKey(signal),chart); const auto=section.querySelector('.auto'), ymin=section.querySelector('.ymin'), ymax=section.querySelector('.ymax');
   auto.onchange=()=>{ymin.disabled=ymax.disabled=auto.checked;draw(chart)};
   ymin.oninput=ymax.oninput=()=>draw(chart); section.querySelector('.pause').onclick=()=>{chart.paused=!chart.paused;section.querySelector('.pause').textContent=chart.paused?'Resume':'Pause'};
   section.querySelector('.reset').onclick=()=>{chart.zoom=1;chart.offset=0;draw(chart)};
@@ -125,7 +140,16 @@ async function poll(){
   try{const result=await json('/api/live/samples?token='+encodeURIComponent(token));
     const pairedWheel=charts.get(0x0BD);
     if(pairedWheel&&!pairedWheel.paused&&!result.samples.some(sample=>sample.can_id===0x0BD))pairedWheel.section.querySelector('.value').textContent='Unavailable';
-    for(const sample of result.samples){const chart=charts.get(sample.can_id);if(!chart||chart.paused||chart.lastSequence===sample.sequence)continue;chart.lastSequence=sample.sequence;chart.points.push({t:sample.timestamp_ms,v:sample.value});chart.section.querySelector('.value').textContent=`${sample.value} ${chart.signal.units}`;trim(chart);draw(chart)}
+    for(const sample of result.samples){
+      for(const chart of charts.values()){
+        if(chart.signal.can_id!==sample.can_id||chart.paused||chart.lastSequence===sample.sequence)continue;
+        chart.lastSequence=sample.sequence;
+        const value=sample.value*(chart.signal.scale??1);
+        chart.points.push({t:sample.timestamp_ms,v:value});
+        chart.section.querySelector('.value').textContent=`${chart.signal.scale===undefined?value:value.toFixed(1)} ${chart.signal.units}`;
+        trim(chart);draw(chart);
+      }
+    }
   }catch(e){endLive(false,e.message)}finally{polling=false;schedulePoll()}
 }
 function trim(chart){if(!chart.points.length)return;const cutoff=chart.points.at(-1).t-historyMs()*1.2;while(chart.points.length&&chart.points[0].t<cutoff)chart.points.shift()}

@@ -48,7 +48,7 @@ IDLER_CAN_ID  = 185             # 0x0B9
 
 # >>> UNKNOWN: N_driven_clutch / N_idler. Count the teeth.
 #     --calibrate gives a stopgap estimate. Every ratio and torque scales with it.
-IDLER_TO_DRIVEN = 1.69565
+IDLER_TO_DRIVEN = 3.389286
 
 # Plausibility gate. Period-measurement glitches (a missed or extra edge) throw
 # wildly wrong instantaneous values, sometimes in runs long enough to survive a

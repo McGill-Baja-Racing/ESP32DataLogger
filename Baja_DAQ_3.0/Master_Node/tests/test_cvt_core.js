@@ -1,6 +1,7 @@
 'use strict';
 const assert=require('node:assert/strict');
 const CVT=require('../src/web/cvt_analysis.js');
+assert.equal(CVT.defaults.idlerRatio,3.389286);
 const raw={engine:[],idler:[]};
 for(let i=0;i<=100;i++){raw.engine.push([i*.02,3000]);raw.idler.push([i*.02,1000]);}
 const r=CVT.analyse(raw,{idlerRatio:1.5});

@@ -57,7 +57,7 @@ with sync_playwright() as p:
     assert Path(download.value.path()).read_text().splitlines()==['Timestamp,Engine RPM,Wheel RPM','1000,3000,1000','1020,0,500']
     page.get_by_role('link',name='CVT analysis',exact=True).click()
     page.wait_for_function("document.getElementById('status').textContent==='Analysis complete'")
-    assert page.locator('#ratio').input_value()=='1.69565'
+    assert page.locator('#ratio').input_value()=='3.389286'
     assert page.locator('#segment option').count()>=4
     assert page.locator('#results').is_visible()
     # Compare at the mock's known ratio and download all outputs.
