@@ -12,6 +12,7 @@ idf_component_register(
         "time/time_beacon.c"
         "web/web_server.c"
         "web/index_html.S"
+        "web/analysis_assets.S"
     INCLUDE_DIRS "."
     REQUIRES
         fatfs
@@ -27,3 +28,8 @@ idf_component_register(
         nvs_flash
         espressif__esp_hosted
 )
+
+# Re-embed changed browser assets, including after switching implementations.
+set_source_files_properties("web/index_html.S" PROPERTIES OBJECT_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/web/index.html")
+set_source_files_properties("web/analysis_assets.S" PROPERTIES OBJECT_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/web/analysis.html;${CMAKE_CURRENT_SOURCE_DIR}/web/cvt_analysis.js;${CMAKE_CURRENT_SOURCE_DIR}/web/cvt_worker.js;${CMAKE_CURRENT_SOURCE_DIR}/web/cvt_ui.js;${CMAKE_CURRENT_SOURCE_DIR}/web/chart.umd.min.js;${CMAKE_CURRENT_SOURCE_DIR}/web/Chart.LICENSE.md")

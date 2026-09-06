@@ -1,0 +1,26 @@
+'use strict';
+const assert=require('node:assert/strict');
+const CVT=require('../src/web/cvt_analysis.js');
+const raw={engine:[],idler:[]};
+for(let i=0;i<=100;i++){raw.engine.push([i*.02,3000]);raw.idler.push([i*.02,1000]);}
+const r=CVT.analyse(raw,{idlerRatio:1.5});
+assert.equal(r.summary.outOfRange,0);
+assert.ok(r.rows.every(r=>Math.abs(r.cvt_ratio-2)<1e-10));
+assert.ok(r.rows.every(r=>Math.abs(r.driven_torque_ftlb-28.22)<1e-8));
+assert.throws(()=>CVT.analyse({engine:[],idler:[]}),/engine RPM/);
+assert.throws(()=>CVT.analyse(raw,{idlerRatio:0}),/shaft ratio/);
+assert.throws(()=>CVT.analyse(raw,{segment:99}),/run/);
+assert.throws(()=>CVT.analyse({engine:[[0,3000],[12000,3000]],idler:[]}),/too long/);
+const gap=CVT.resample([0,.02,.5,.52],[1,2,3,4],[0,.01,.02,.25,.5,.52]);
+assert.ok(Number.isNaN(gap[3]));assert.equal(gap[2],2);assert.equal(gap[4],3);
+const dup={engine:[[0,3000],[0,9999],[.02,3000],[.04,20000],[.06,3000]],idler:[]};
+const cleaned=CVT.clean(dup,{});assert.equal(cleaned.engine.t.length,3);assert.equal(cleaned.stats.engine.dropped,1);
+const wrapped=CVT.clean({engine:[[4294967.28,3000],[.004,3000],[.024,3000]],idler:[]},{});
+assert.ok(wrapped.engine.t[1]>wrapped.engine.t[0]);
+const bin=new ArrayBuffer(32),v=new DataView(bin);
+v.setUint32(0,187,true);v.setInt32(8,3000,true);v.setUint32(12,1234,true);
+v.setUint32(16,185,true);v.setInt32(24,-1000,true);v.setUint32(28,1235,true);
+const parsed=CVT.parse(bin,'bin');assert.deepEqual(parsed.engine,[[1.234,3000]]);assert.deepEqual(parsed.idler,[[1.235,-1000]]);
+const empty=new TextEncoder().encode('wrong,header\n1,2');assert.throws(()=>CVT.parse(empty.buffer,'csv'),/CSV needs/);
+assert.ok(!CVT.csv(r.rows).includes('NaN'));
+console.log('CVT core checks passed');

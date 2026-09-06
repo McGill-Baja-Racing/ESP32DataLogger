@@ -115,3 +115,10 @@ RPM on GPIO6/GPIO7 and sends `bearing_rpm` (0x0B9) every 20 ms, averaged over
 100 ms. The sensors run on separate boards. The master logs and displays
 these original channels without generating another wheel RPM signal.
 NodeEngineBench uses the shared throttled serial format for engine RPM only.
+
+
+### Quick CVT processing
+
+Completed logs have a **CVT analysis** button after CSV. It runs the supplied
+transmission analysis offline in your browser and exports a figure, processed
+CSV and summary. See [settings, assumptions and tests](docs/CVT_ANALYSIS.md).
