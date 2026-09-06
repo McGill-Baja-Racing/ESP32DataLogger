@@ -131,3 +131,7 @@ input schema used by `cvt_plot.py`. This differs from the processed results CSV.
 
 **Paired RPM CSV** exports only `Timestamp,Engine RPM,Wheel RPM` (milliseconds),
 with one complete recorded engine/wheel pair per row and no partial rows.
+
+Live Data provides **Raw Bearing RPM**, **Secondary RPM** (raw × 3.389286), and
+**Wheel RPM** (raw ÷ 3.589) as independently selectable views. CVT analysis uses
+3.389286 as its editable default shaft ratio, including the bundled Python tool.

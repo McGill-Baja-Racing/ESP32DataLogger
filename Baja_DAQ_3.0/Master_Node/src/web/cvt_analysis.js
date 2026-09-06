@@ -1,7 +1,7 @@
 /* Browser port of the team's cvt_plot.py. No network or DOM dependencies. */
 'use strict';
 const CVT = (() => {
-  const defaults = Object.freeze({idlerRatio:1.69565, maxRpm:4000, segment:0});
+  const defaults = Object.freeze({idlerRatio:3.389286, maxRpm:4000, segment:0});
   const C = Object.freeze({hz:50, off:10, low:3.01, high:.44, efficiency:.85,
     drivenMin:50, maxGap:.2, segmentGap:2, minPlot:1500, maxPoints:500000});
   const dynoRpm=[2400,2600,2800,3000,3200,3400,3600];

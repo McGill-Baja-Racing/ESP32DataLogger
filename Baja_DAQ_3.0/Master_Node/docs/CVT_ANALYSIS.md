@@ -22,13 +22,14 @@ Outputs:
 ## Inputs and assumptions
 
 The browser port follows the supplied `tools/cvt_reference/cvt_plot.py`.
-The original analysis and mock generator are preserved unchanged for desktop
-use and numerical comparisons. Their four Python dependencies are listed in
+The supplied analysis and mock generator are kept for desktop use and numerical
+comparisons. The analysis default shaft ratio has been updated to 3.389286.
+The four Python dependencies are listed in
 `tools/cvt_reference/requirements.txt`.
 
 Engine input is CAN 0x0BB (node 5); idler input is 0x0B9 (node 4). Extra spark,
 wheel-edge and master-paired records are ignored. Driven RPM = idler RPM ×
-**1.69565**, the user-confirmed editable default. The analysis uses raw shaft
+**3.389286**, the user-confirmed editable default. The analysis uses raw shaft
 streams on a common 50 Hz grid, independently of the master's latest-value
 pairing. Both firmware branches therefore produce compatible input logs.
 
@@ -48,7 +49,7 @@ forward-positive idler RPM. Fix encoder direction before interpreting results.
 percentile of engine/idler speed ratios. It is marked as estimated; tooth
 counts remain the way to confirm the ratio. Calibration cleans with ratio=1
 so a previously selected shaft ratio does not bias its idler plausibility gate.
-The mock generator uses **2.75**, not the default 1.69565, and does not necessarily
+The mock generator uses **2.75**, not the default 3.389286, and does not necessarily
 reach full overdrive. Use 2.75 when interpreting the mock's known truth.
 
 ## Limits and deliberate robustness changes
@@ -74,6 +75,7 @@ python3 tests/test_cvt_export.py
 python3 tests/test_paired_csv.py
 python3 tests/test_cvt_analysis.py
 python3 tests/test_cvt_browser.py
+python3 tests/test_live_rpm_views.py
 pio run -e MasterStable -t buildprog
 ```
 
@@ -137,3 +139,27 @@ channels. The original Python script still expects **CVT input CSV**, not
 this new compact three-column format.
 
 Endpoint: `/api/logs/download?name=log_0001.bin&format=paired`.
+
+## Live RPM display choices
+
+The Live Data selector offers three independent views of node 4:
+
+| View | Calculation |
+| --- | --- |
+| Raw Bearing RPM | Recorded bearing RPM |
+| Secondary RPM | Raw bearing RPM × 3.389286 |
+| Wheel RPM | Raw bearing RPM ÷ 3.589 |
+
+Select any combination, including all three plus engine RPM within the existing
+four-chart limit. Derived numeric labels show one decimal place; plots retain
+full calculation precision, including signed/zero readings. Each view has its
+own pause, zoom and axis controls. The displayed formulas identify the conversion.
+The engine-paired bearing stream is labeled **Engine Paired Bearing RPM** to
+identify it as unscaled rather than physical wheel RPM.
+
+These conversions affect the live browser display only. Raw CAN/SD readings
+and CSV downloads keep their recorded values, including the existing paired
+CSV's `Wheel RPM` column (the unscaled bearing reading paired by the master).
+The corrected **3.389286** also applies to the Python/browser CVT analysis
+shaft-ratio default; the browser analysis field remains editable. The standalone
+mock generator keeps its deliberate 2.75 fixture ratio for regression testing.

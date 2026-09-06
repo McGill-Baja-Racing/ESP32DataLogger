@@ -18,6 +18,7 @@ def module(name):
     spec=importlib.util.spec_from_file_location(name,ROOT/'tools/cvt_reference'/f'{name}.py')
     mod=importlib.util.module_from_spec(spec);spec.loader.exec_module(mod);return mod
 ref=module('cvt_plot');mock=module('make_mock_log')
+assert ref.IDLER_TO_DRIVEN == 3.389286
 runner=r'''
 const fs=require('fs'),CVT=require(process.argv[1]);
 const request=JSON.parse(fs.readFileSync(0,'utf8'));
@@ -49,7 +50,7 @@ def compare(frame,ratio=2.75,segment=0):
 frame=mock.make_log(3,7)
 compare(frame)
 compare(frame,segment=2)
-compare(frame,ratio=1.69565)
+compare(frame,ratio=3.389286)
 compare(frame[frame.can_id==187])
 # Calibration is an assumption, not a recovery guarantee: the mock does not
 # necessarily reach the 0.44 full-overdrive ratio that calibration assumes.
