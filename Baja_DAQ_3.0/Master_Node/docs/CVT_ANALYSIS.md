@@ -115,12 +115,12 @@ python cvt_plot.py log_0001_cvt_input.csv
 HTTP endpoint: `/api/logs/download?name=log_0001.bin&format=cvt`.
 It has the same completed-log checks and download lock as BIN/full CSV.
 
-## Three-column paired RPM download
+## Paired RPM and vehicle speed download
 
 **Paired RPM CSV** downloads `log_XXXX_rpm_paired.csv`, with exactly:
 
 ```
-Timestamp,Engine RPM,Wheel RPM
+Timestamp,Engine RPM,Wheel RPM,Car Speed (km/h)
 ```
 
 Timestamp is the master-clock time in milliseconds. Every data row has both
@@ -132,11 +132,17 @@ omitted; a value is never invented or carried forward to fill a missing half.
 Actual zero RPM is valid, including engine=0 with a moving wheel. Signed
 wheel RPM is preserved. The formatter streams in constant memory.
 
+Car Speed (km/h) uses the latest GPS speed record encountered before the
+pair is emitted, divided by 100 and formatted to two decimal places. Its
+GPS timestamp must be no later than the pair timestamp (with clock rollover
+supported). The field is blank when no eligible reading is available. GPS
+speed is held between updates without interpolation or an age cutoff.
+
 This format uses the recorded pairs, not a new resampling or interpolation.
 Logs without complete recorded pairs (including older logs without 0x0BD)
 produce a header-only CSV. Use full CSV/CVT input CSV to inspect their raw
 channels. The original Python script still expects **CVT input CSV**, not
-this new compact three-column format.
+this compact four-column format.
 
 Endpoint: `/api/logs/download?name=log_0001.bin&format=paired`.
 
