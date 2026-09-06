@@ -128,3 +128,6 @@ CSV and summary. See [settings, assumptions and tests](docs/CVT_ANALYSIS.md).
 
 Use **CVT input CSV** to download only the two raw RPM channels in the exact
 input schema used by `cvt_plot.py`. This differs from the processed results CSV.
+
+**Paired RPM CSV** exports only `Timestamp,Engine RPM,Wheel RPM` (milliseconds),
+with one complete recorded engine/wheel pair per row and no partial rows.

@@ -21,6 +21,8 @@ class Handler(BaseHTTPRequestHandler):
         if path=='/api/logs/download':
             if parse_qs(urlparse(self.path).query).get('format')==['cvt']:
                 data=frame[frame.can_id.isin([185,187])].to_csv(index=False).encode();mime='text/csv'
+            elif parse_qs(urlparse(self.path).query).get('format')==['paired']:
+                data=b'Timestamp,Engine RPM,Wheel RPM\r\n1000,3000,1000\r\n1020,0,500\r\n';mime='text/csv'
             else:data=records;mime='application/octet-stream'
         elif path=='/api/logs':data=json.dumps([{'name':'log_0001.bin','size_bytes':len(records)}]).encode();mime='application/json'
         elif path=='/api/status':data=json.dumps({'logger_state':'idle','current_file':'none','can_drops':0,'log_drops':0,'nodes':{str(i):'off' for i in range(1,7)},'live_enabled':False}).encode();mime='application/json'
@@ -30,7 +32,9 @@ class Handler(BaseHTTPRequestHandler):
             if not file.is_file():self.send_error(404);return
             data=file.read_bytes();mime='text/html' if file.suffix=='.html' else 'application/javascript'
         self.send_response(200)
-        if path=='/api/logs/download' and mime=='text/csv':self.send_header('Content-Disposition','attachment; filename="log_0001_cvt_input.csv"')
+        if path=='/api/logs/download' and mime=='text/csv':
+            filename='log_0001_rpm_paired.csv' if parse_qs(urlparse(self.path).query).get('format')==['paired'] else 'log_0001_cvt_input.csv'
+            self.send_header('Content-Disposition',f'attachment; filename="{filename}"')
         self.send_header('Content-Type',mime);self.send_header('Content-Length',str(len(data)));self.end_headers();self.wfile.write(data)
 server=ThreadingHTTPServer(('127.0.0.1',0),Handler)
 threading.Thread(target=server.serve_forever,daemon=True).start()
@@ -48,6 +52,9 @@ with sync_playwright() as p:
     page.goto(base)
     with page.expect_download() as download:page.get_by_role('link',name='CVT input CSV',exact=True).click()
     assert download.value.suggested_filename=='log_0001_cvt_input.csv'
+    with page.expect_download() as download:page.get_by_role('link',name='Paired RPM CSV',exact=True).click()
+    assert download.value.suggested_filename=='log_0001_rpm_paired.csv'
+    assert Path(download.value.path()).read_text().splitlines()==['Timestamp,Engine RPM,Wheel RPM','1000,3000,1000','1020,0,500']
     page.get_by_role('link',name='CVT analysis',exact=True).click()
     page.wait_for_function("document.getElementById('status').textContent==='Analysis complete'")
     assert page.locator('#ratio').input_value()=='1.69565'
