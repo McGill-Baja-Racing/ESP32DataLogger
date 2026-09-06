@@ -21,6 +21,7 @@ and store them safely on an SD card.
 - open `BajaDAQ` SoftAP and HTTP controls at `http://192.168.4.1`
 - binary and streamed CSV downloads for completed log sessions
 - recording-only, explicitly enabled latest-value live graphs at 1-20 Hz
+- 9600-baud NMEA GPS input on UART1 (RX GPIO 33, TX GPIO 32)
 - `tools/decode_log.py` to convert a log to CSV
 
 ## Source organization
@@ -35,6 +36,7 @@ and store them safely on an SD card.
 | `storage/sd_card.c` | SDMMC hardware and FAT mount |
 | `node_state/node_registry.c` | Latest node state acknowledgements |
 | `time/time_beacon.c` | Periodic master-clock broadcast |
+| `gps/gps_receiver.c` | GPS UART ownership, NMEA validation, and RMC parsing |
 | `console/serial_console.c` | Serial command parsing |
 | `app/app_control.c` | Serialized logging lifecycle shared by serial and HTTP |
 | `live/live_data.c` | Fixed latest-value cache and exclusive viewer lease |
@@ -48,13 +50,23 @@ See `src/README.md` for dependencies and maintenance guidance.
 |---|---|---:|---:|
 | 1 | Front brake pressure | `0x0B1` | 100 Hz |
 | 1 | Rear brake pressure | `0x0B2` | 100 Hz |
+| 3 | Acceleration X/Y/Z (mg) | `0x0B3–0x0B5` | 100 Hz each |
+| 3 | Gyroscope X/Y/Z (mdps) | `0x0B6–0x0B8` | 100 Hz each |
 | 4 | Signed bearing RPM | `0x0B9` | 50 Hz |
-| 5 | Engine RPM placeholder | `0x0BB` | 50 Hz |
+| 5 | Engine RPM | `0x0BB` | 25 Hz |
 | 6 | Generic ADC voltage | `0x0BA` | 100 Hz |
+| Master | GPS speed | `0x700` | GPS update rate |
+| Master | GPS latitude | `0x701` | GPS update rate |
+| Master | GPS longitude | `0x702` | GPS update rate |
 
 The accepted IDs are compiled into the master. The corresponding sensor type,
 rate, CAN ID, and GPIO configuration is compiled into each sensor node. There
 is no runtime configuration protocol.
+
+The GPS module accepts checksum-valid RMC sentences with an active fix. Speed
+is stored in hundredths of km/h and coordinates are stored as signed degrees
+times 10,000,000. GPS samples use the master's millisecond clock and enter the
+same logger and optional live-view pipelines as CAN sensor samples.
 
 The generic ADC value is calibrated millivolts. Engine RPM is reserved in the
 protocol and log decoder but currently reports zero until the analog tach peak
@@ -67,7 +79,7 @@ node that reboots during a recording therefore resumes sampling on its next
 beacon without requiring the Master to repeat the original START command.
 While recording, the master uses normal sensor frames as proof that configured
 nodes are active. The expected-node mask in `node_registry.h` currently enables
-nodes 4 and 5. The `status` output shows waiting until the first frame,
+nodes 1, 3, 4, and 5. The `status` output shows waiting until the first frame,
 active while frames arrive, and offline after three seconds without sensor data.
 Unconfigured nodes appear as disabled. When the logger is stopped, configured
 node status is off and no liveness traffic is sent. State reports are control
@@ -111,5 +123,10 @@ closes the file.
 
 ```bash
 pio run -e MasterStable
+pio run -e MasterNoCAN
 python3 tools/decode_log.py log_0001.bin
 ```
+
+`MasterNoCAN` is the bench configuration for operating the master without a
+CAN transceiver or bus. It retains GPS, SD logging, serial, web, downloads, and
+live data while omitting TWAI initialization and all node/beacon traffic.

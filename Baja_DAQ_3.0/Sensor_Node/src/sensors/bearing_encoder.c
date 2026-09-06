@@ -83,6 +83,7 @@ static int encoder_is_stopped(int64_t last_edge_us, int64_t now_us)
 
 typedef struct {
     volatile int32_t pending_count;
+    int64_t total_count;
     volatile int64_t last_valid_edge_us;
     uint8_t last_state;
     portMUX_TYPE lock;
@@ -112,6 +113,7 @@ static void IRAM_ATTR encoder_isr(void *argument)
         encoder_transition(context->last_state, state);
     if (transition != 0) {
         context->pending_count += transition;
+        context->total_count += transition;
         context->last_valid_edge_us = esp_timer_get_time();
     }
     context->last_state = state;
@@ -211,3 +213,18 @@ sensor_t bearing_encoder_sensor = {
     .read = read_rpm,
     .context = &encoder,
 };
+
+/* Called from the spark ISR; cumulative counts preserve the exact interval
+ * even when the consumer task runs late. */
+int64_t IRAM_ATTR bearing_encoder_count_from_isr(void)
+{
+    portENTER_CRITICAL_ISR(&encoder.lock);
+    int64_t count = encoder.total_count;
+    portEXIT_CRITICAL_ISR(&encoder.lock);
+    return count;
+}
+
+int32_t bearing_encoder_interval_rpm(int64_t counts, int64_t elapsed_us)
+{
+    return calculate_rpm(counts, elapsed_us);
+}

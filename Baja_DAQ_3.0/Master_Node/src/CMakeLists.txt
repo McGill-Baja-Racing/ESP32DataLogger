@@ -4,6 +4,7 @@ idf_component_register(
         "app/app_control.c"
         "can/can_master.c"
         "console/serial_console.c"
+        "gps/gps_receiver.c"
         "logger/data_logger.c"
         "live/live_data.c"
         "node_state/node_registry.c"
@@ -18,6 +19,7 @@ idf_component_register(
         esp_driver_sdmmc
         esp_driver_twai
         esp_driver_gpio
+        esp_driver_uart
         esp_timer
         esp_http_server
         esp_netif
