@@ -20,6 +20,7 @@
 #include "freertos/semphr.h"
 #include "logger/data_logger.h"
 #include "live/live_data.h"
+#include "protocol/app_protocol.h"
 #include "lwip/ip4_addr.h"
 #include "nvs_flash.h"
 
@@ -241,7 +242,7 @@ static esp_err_t stream_binary(httpd_req_t *request, FILE *file)
     return result;
 }
 
-static esp_err_t stream_csv(httpd_req_t *request, FILE *file)
+static esp_err_t stream_csv(httpd_req_t *request, FILE *file, bool cvt_only)
 {
     static const char header[] =
         "sample_index,can_id,can_id_hex,signal,node,timestamp_ms,value,units,raw_data\r\n";
@@ -252,6 +253,10 @@ static esp_err_t stream_csv(httpd_req_t *request, FILE *file)
     uint64_t sample_index = 0;
     while (fread(record, sizeof(record), 1, file) == 1) {
         uint32_t can_id = (uint32_t)record[0] & 0x7ffU;
+        /* Raw inputs expected by cvt_plot.py; do not export derived/event
+         * channels or apply the analysis filters to this input download. */
+        if (cvt_only && can_id != CAN_ID_ENGINE_RPM &&
+            can_id != CAN_ID_BEARING_ENCODER) continue;
         uint64_t packed = record[1];
         int32_t value = (int32_t)(packed & UINT32_MAX);
         uint32_t timestamp = (uint32_t)(packed >> 32);
@@ -280,9 +285,10 @@ static esp_err_t download_handler(httpd_req_t *request)
         httpd_query_key_value(query, "name", name, sizeof(name)) != ESP_OK ||
         httpd_query_key_value(query, "format", format, sizeof(format)) != ESP_OK ||
         !parse_log_name(name, NULL) ||
-        (strcmp(format, "bin") != 0 && strcmp(format, "csv") != 0)) {
+        (strcmp(format, "bin") != 0 && strcmp(format, "csv") != 0 &&
+         strcmp(format, "cvt") != 0)) {
         return send_json_error(request, "400 Bad Request",
-                               "Expected a valid log filename and bin or csv format");
+                               "Expected a valid log filename and bin, csv or cvt format");
     }
     if (data_logger_state() != LOGGER_IDLE &&
         strcmp(name, base_name(data_logger_path())) == 0) {
@@ -301,10 +307,12 @@ static esp_err_t download_handler(httpd_req_t *request)
         return send_json_error(request, "404 Not Found", "Log file not found");
     }
     char attachment[80];
-    if (strcmp(format, "csv") == 0) {
-        char csv_name[32];
-        snprintf(csv_name, sizeof(csv_name), "%.*s.csv",
-                 (int)(strlen(name) - 4), name);
+    bool cvt_only = strcmp(format, "cvt") == 0;
+    bool csv_format = cvt_only || strcmp(format, "csv") == 0;
+    if (csv_format) {
+        char csv_name[48];
+        snprintf(csv_name, sizeof(csv_name), "%.*s%s.csv",
+                 (int)(strlen(name) - 4), name, cvt_only ? "_cvt_input" : "");
         snprintf(attachment, sizeof(attachment), "attachment; filename=\"%s\"", csv_name);
         httpd_resp_set_type(request, "text/csv; charset=utf-8");
     } else {
@@ -312,8 +320,8 @@ static esp_err_t download_handler(httpd_req_t *request)
         httpd_resp_set_type(request, "application/octet-stream");
     }
     httpd_resp_set_hdr(request, "Content-Disposition", attachment);
-    esp_err_t result = strcmp(format, "csv") == 0
-                     ? stream_csv(request, file) : stream_binary(request, file);
+    esp_err_t result = csv_format
+                     ? stream_csv(request, file, cvt_only) : stream_binary(request, file);
     fclose(file);
     xSemaphoreGive(download_mutex);
     return result;

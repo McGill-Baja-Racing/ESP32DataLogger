@@ -70,6 +70,7 @@ not a pixel-identical Matplotlib rendering. The original log is never modified.
 
 ```
 node tests/test_cvt_core.js
+python3 tests/test_cvt_export.py
 python3 tests/test_cvt_analysis.py
 python3 tests/test_cvt_browser.py
 pio run -e MasterStable -t buildprog
@@ -86,3 +87,27 @@ Hardware validation of SD download/Wi-Fi still requires the flashed master.
 Chart.js 4.5.1: https://www.chartjs.org/docs/latest/getting-started/integration.html
 Vendored from https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js
 License (including bundled @kurkle/color): `src/web/Chart.LICENSE.md`.
+
+## Download input for the original Python script
+
+The **CVT input CSV** button beside CSV downloads `log_XXXX_cvt_input.csv`.
+It contains only raw engine RPM (187 / 0x0BB) and idler RPM (185 / 0x0B9), in the
+original nine-column format:
+
+```
+sample_index,can_id,can_id_hex,signal,node,timestamp_ms,value,units,raw_data
+```
+
+Timestamps, signed values, zeros and sensor glitches are preserved. Rows are
+numbered consecutively in file order. The Python script performs its own
+filtering, resampling and analysis. This input file is different from the
+**processed CSV** downloaded from the analysis results page.
+The ordinary full CSV also works with the supplied Python; this extra export
+simply omits unrelated channels to make testing and transfers easier.
+
+```
+python cvt_plot.py log_0001_cvt_input.csv
+```
+
+HTTP endpoint: `/api/logs/download?name=log_0001.bin&format=cvt`.
+It has the same completed-log checks and download lock as BIN/full CSV.
