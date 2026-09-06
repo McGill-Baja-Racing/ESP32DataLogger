@@ -119,3 +119,9 @@ The original bearing and engine records remain available. This is a recent
 wheel-speed estimate, not wheel rotation measured between spark edges.
 Node 5 reports zero engine RPM every 100 ms without sparks; wheel RPM remains
 independent. Flash the updated master and NodeEngine; node 4 is unchanged.
+
+### Quick CVT processing
+
+Completed logs have a **CVT analysis** button after CSV. It runs the supplied
+transmission analysis offline in your browser and exports a figure, processed
+CSV and summary. See [settings, assumptions and tests](docs/CVT_ANALYSIS.md).

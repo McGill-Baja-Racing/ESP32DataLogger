@@ -40,6 +40,28 @@ static SemaphoreHandle_t download_mutex;
 extern const uint8_t web_index_html_start[];
 extern const uint8_t web_index_html_end[];
 
+typedef struct { const uint8_t *start, *end; const char *type; } web_asset_t;
+extern const uint8_t analysis_html_start[], analysis_html_end[];
+static const web_asset_t analysis_html_asset = {analysis_html_start, analysis_html_end, "text/html; charset=utf-8"};
+extern const uint8_t cvt_analysis_js_start[], cvt_analysis_js_end[];
+static const web_asset_t cvt_analysis_js_asset = {cvt_analysis_js_start, cvt_analysis_js_end, "application/javascript"};
+extern const uint8_t cvt_worker_js_start[], cvt_worker_js_end[];
+static const web_asset_t cvt_worker_js_asset = {cvt_worker_js_start, cvt_worker_js_end, "application/javascript"};
+extern const uint8_t cvt_ui_js_start[], cvt_ui_js_end[];
+static const web_asset_t cvt_ui_js_asset = {cvt_ui_js_start, cvt_ui_js_end, "application/javascript"};
+extern const uint8_t chart_js_start[], chart_js_end[];
+static const web_asset_t chart_js_asset = {chart_js_start, chart_js_end, "application/javascript"};
+extern const uint8_t chart_license_start[], chart_license_end[];
+static const web_asset_t chart_license_asset = {chart_license_start, chart_license_end, "text/plain; charset=utf-8"};
+
+static esp_err_t analysis_asset_handler(httpd_req_t *request)
+{
+    const web_asset_t *asset = request->user_ctx;
+    httpd_resp_set_type(request, asset->type);
+    httpd_resp_set_hdr(request, "Cache-Control", "no-cache");
+    return httpd_resp_send(request, (const char *)asset->start, asset->end - asset->start);
+}
+
 static const char *base_name(const char *path)
 {
     const char *slash = strrchr(path, '/');
@@ -416,11 +438,18 @@ static esp_err_t start_http_server(void)
 {
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.stack_size = 8192;
-    config.max_uri_handlers = 12;
+    config.max_uri_handlers = 20;
     esp_err_t error = httpd_start(&server, &config);
     if (error != ESP_OK) return error;
     const httpd_uri_t handlers[] = {
         {.uri = "/", .method = HTTP_GET, .handler = root_handler},
+        {.uri = "/analysis", .method = HTTP_GET, .handler = analysis_asset_handler, .user_ctx = (void *)&analysis_html_asset},
+        {.uri = "/cvt_analysis.js", .method = HTTP_GET, .handler = analysis_asset_handler, .user_ctx = (void *)&cvt_analysis_js_asset},
+        {.uri = "/cvt_worker.js", .method = HTTP_GET, .handler = analysis_asset_handler, .user_ctx = (void *)&cvt_worker_js_asset},
+        {.uri = "/cvt_ui.js", .method = HTTP_GET, .handler = analysis_asset_handler, .user_ctx = (void *)&cvt_ui_js_asset},
+        {.uri = "/chart.umd.min.js", .method = HTTP_GET, .handler = analysis_asset_handler, .user_ctx = (void *)&chart_js_asset},
+        {.uri = "/Chart.LICENSE.md", .method = HTTP_GET, .handler = analysis_asset_handler, .user_ctx = (void *)&chart_license_asset},
+
         {.uri = "/api/status", .method = HTTP_GET, .handler = status_handler},
         {.uri = "/api/logging/start", .method = HTTP_POST, .handler = command_handler},
         {.uri = "/api/logging/stop", .method = HTTP_POST, .handler = command_handler},
