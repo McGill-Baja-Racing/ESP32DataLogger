@@ -104,6 +104,8 @@ void app_control_get_status(app_status_t *status)
     status->logger_state = data_logger_state();
     status->current_file = data_logger_path();
     status->can_drops = can_master_rx_drop_count();
+    status->can_errors_available = can_master_error_counts(
+        &status->can_rx_errors, &status->can_tx_errors) == ESP_OK;
     status->log_drops = data_logger_drop_count();
     status->live_enabled = live_data_is_enabled();
     status->node_1 = node_registry_state_name(1);

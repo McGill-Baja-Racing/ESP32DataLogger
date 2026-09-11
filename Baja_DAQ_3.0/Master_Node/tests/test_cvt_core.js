@@ -25,3 +25,39 @@ const parsed=CVT.parse(bin,'bin');assert.deepEqual(parsed.engine,[[1.234,3000]])
 const empty=new TextEncoder().encode('wrong,header\n1,2');assert.throws(()=>CVT.parse(empty.buffer,'csv'),/CSV needs/);
 assert.ok(!CVT.csv(r.rows).includes('NaN'));
 console.log('CVT core checks passed');
+
+// GPS parsing, time alignment, units, and complete-row export.
+const gpsCsv=new TextEncoder().encode('can_id,timestamp_ms,value\n1792,500,1234\n1792,1000,0\n');
+const gpsRaw=CVT.parse(gpsCsv.buffer,'csv');
+assert.deepEqual(gpsRaw.gps,[[.5,1234],[1,0]]);
+const withGps=CVT.analyse({...raw,gps:gpsRaw.gps},{idlerRatio:1.5});
+assert.ok(Number.isNaN(withGps.rows[0].gps_speed_kmh));
+assert.equal(withGps.rows.find(r=>r.t_s>=.5).gps_speed_kmh,12.34);
+assert.equal(withGps.rows.find(r=>r.t_s>=1).gps_speed_kmh,0);
+const exported=CVT.csv(withGps.rows).trimEnd().split('\n');
+assert.equal(exported[0],'engine_rpm,bearing_rpm,gps_speed_kmh,timestamp_ms');
+assert.equal(exported.length-1,withGps.rows.filter(r=>r.t_s>=.5).length);
+assert.ok(exported.slice(1).every(line=>line.split(',').length===4&&line.split(',').every(v=>v!==''&&Number.isFinite(Number(v)))));
+assert.equal(CVT.csv(r.rows),'engine_rpm,bearing_rpm,gps_speed_kmh,timestamp_ms\n');
+assert.equal(CVT.csv([{t_s:1,engine_rpm:0,idler_rpm:0,gps_speed_kmh:0},{engine_rpm:1,idler_rpm:NaN,gps_speed_kmh:1}]),'engine_rpm,bearing_rpm,gps_speed_kmh,timestamp_ms\n0,0,0,1000\n');
+v.setUint32(16,0x700,true);v.setInt32(24,1234,true);
+assert.deepEqual(CVT.parse(bin,'bin').gps,[[1.235,1234]]);
+const rollover=CVT.analyse({engine:[[4294967.28,3000],[.004,3000],[.024,3000]],idler:[[4294967.28,1000],[.004,1000],[.024,1000]],gps:[[4294967.28,100],[.004,200]]});
+assert.equal(rollover.rows[0].gps_speed_kmh,1);
+assert.equal(rollover.rows.at(-1).gps_speed_kmh,2);
+console.log('CVT complete GPS CSV checks passed');
+
+assert.throws(()=>CVT.options({maxRpm:4001}),/between 100 and 4000/);
+const boundary=CVT.clean({engine:[[0,4000],[.02,4001],[.04,3000]],idler:[]},{});
+assert.deepEqual(boundary.engine.v,[4000,3000]);
+const stepRaw={engine:[],idler:[],gps:[[0,1234]]};
+for(let i=0;i<=100;i++){stepRaw.engine.push([i*.02,i<50?2000:4000]);stepRaw.idler.push([i*.02,1000]);}
+assert.ok(CVT.smooth(stepRaw.engine.map(r=>r[1])).some(v=>v>4000));
+const limited=CVT.analyse(stepRaw);
+assert.ok(limited.rows.every(r=>!Number.isFinite(r.engine_rpm)||r.engine_rpm<=4000));
+const limitCsv=CVT.csv(limited.rows).trim().split('\n').slice(1);
+assert.ok(limitCsv.length>0);
+assert.ok(limitCsv.every(line=>Number(line.split(',')[0])<=4000&&line.split(',').every(v=>v!=='')));
+assert.equal(CVT.csv([{t_s:1,engine_rpm:4001,idler_rpm:100,gps_speed_kmh:1}]),'engine_rpm,bearing_rpm,gps_speed_kmh,timestamp_ms\n');
+assert.equal(exported[1].split(',')[3],'500');
+console.log('Four-column export and strict 4000 RPM ceiling passed');

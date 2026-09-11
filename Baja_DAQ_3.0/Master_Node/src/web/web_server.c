@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <time.h>
 
 #include "app/app_control.h"
 #include "esp_event.h"
@@ -162,11 +163,15 @@ static esp_err_t status_handler(httpd_req_t *request)
     snprintf(body, sizeof(body),
              "{\"logger_state\":\"%s\",\"current_file\":\"%s\","
              "\"can_drops\":%" PRIu32 ",\"log_drops\":%" PRIu32 ","
+             "\"can_rx_errors\":%" PRIu32 ",\"can_tx_errors\":%" PRIu32 ","
+             "\"can_errors_available\":%s,"
              "\"live_enabled\":%s,"
              "\"nodes\":{\"1\":\"%s\",\"3\":\"%s\",\"4\":\"%s\",\"5\":\"%s\","
              "\"6\":\"%s\"}}",
              data_logger_state_name(), base_name(status.current_file),
              status.can_drops, status.log_drops,
+             status.can_rx_errors, status.can_tx_errors,
+             status.can_errors_available ? "true" : "false",
              status.live_enabled ? "true" : "false", status.node_1, status.node_3, status.node_4,
              status.node_5, status.node_6);
     httpd_resp_set_type(request, "application/json");
@@ -301,16 +306,29 @@ static esp_err_t stream_paired_csv(httpd_req_t *request, FILE *file)
     return ferror(file) ? ESP_FAIL : httpd_resp_send_chunk(request, NULL, 0);
 }
 
-static esp_err_t stream_csv(httpd_req_t *request, FILE *file, bool cvt_only)
+static esp_err_t stream_csv(httpd_req_t *request, FILE *file, bool cvt_only, FILE *utc_file)
 {
     static const char header[] =
-        "sample_index,can_id,can_id_hex,signal,node,timestamp_ms,value,units,raw_data\r\n";
+        "sample_index,can_id,can_id_hex,signal,node,timestamp_ms,absolute_time_utc,value,units,raw_data\r\n";
     if (httpd_resp_send_chunk(request, header, sizeof(header) - 1) != ESP_OK) {
         return ESP_FAIL;
     }
     uint64_t record[2];
     uint64_t sample_index = 0;
     while (fread(record, sizeof(record), 1, file) == 1) {
+        /* Consume one companion entry per binary record, even when filtered. */
+        char absolute_time[32] = "";
+        int64_t utc_ms = 0;
+        if (utc_file && fread(&utc_ms, sizeof(utc_ms), 1, utc_file) == 1 && utc_ms > 0) {
+            time_t seconds = (time_t)(utc_ms / 1000);
+            struct tm utc;
+            char date[24];
+            if (gmtime_r(&seconds, &utc) &&
+                strftime(date, sizeof(date), "%Y-%m-%dT%H:%M:%S", &utc)) {
+                snprintf(absolute_time, sizeof(absolute_time), "%s.%03uZ",
+                         date, (unsigned)(utc_ms % 1000));
+            }
+        }
         uint32_t can_id = (uint32_t)record[0] & 0x7ffU;
         /* Raw inputs expected by cvt_plot.py; do not export derived/event
          * channels or apply the analysis filters to this input download. */
@@ -333,9 +351,9 @@ static esp_err_t stream_csv(httpd_req_t *request, FILE *file, bool cvt_only)
         char row[256];
         int length = snprintf(row, sizeof(row),
                               "%" PRIu64 ",%" PRIu32 ",0x%03" PRIX32
-                              ",%s,%s,%" PRIu32 ",%s,%s,%" PRIu64 "\r\n",
+                              ",%s,%s,%" PRIu32 ",%s,%s,%s,%" PRIu64 "\r\n",
                               sample_index++, can_id, can_id, signal, node,
-                              timestamp, value_text, units, packed);
+                              timestamp, absolute_time, value_text, units, packed);
         if (length < 0 || length >= (int)sizeof(row) ||
             httpd_resp_send_chunk(request, row, length) != ESP_OK) {
             return ESP_FAIL;
@@ -388,9 +406,16 @@ static esp_err_t download_handler(httpd_req_t *request)
         httpd_resp_set_type(request, "application/octet-stream");
     }
     httpd_resp_set_hdr(request, "Content-Disposition", attachment);
+    FILE *utc_file = NULL;
+    if (csv_format && !paired) {
+        char utc_path[104];
+        snprintf(utc_path, sizeof(utc_path), "%s.utc", path);
+        utc_file = fopen(utc_path, "rb");
+    }
     esp_err_t result = paired ? stream_paired_csv(request, file)
-                     : csv_format ? stream_csv(request, file, cvt_only)
+                     : csv_format ? stream_csv(request, file, cvt_only, utc_file)
                      : stream_binary(request, file);
+    if (utc_file) fclose(utc_file);
     fclose(file);
     xSemaphoreGive(download_mutex);
     return result;

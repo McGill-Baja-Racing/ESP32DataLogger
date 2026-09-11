@@ -6,3 +6,5 @@ sdkconfig.*
 .vscode/launch.json
 .vscode/ipch
 .vscode/settings.json
+
+/build/

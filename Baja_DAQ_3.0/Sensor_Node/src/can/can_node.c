@@ -2,6 +2,8 @@
 
 #include <inttypes.h>
 #include <stdbool.h>
+#include <stdatomic.h>
+#include <string.h>
 
 #include "esp_log.h"
 #include "esp_twai.h"
@@ -33,6 +35,7 @@
 #define CAN_RX_QUEUE_LENGTH     16
 #define CAN_TX_TIMEOUT_MS       50
 #define CAN_RECOVERY_POLL_MS    250
+#define CAN_RECOVERY_WARN_MS    5000
 #define CAN_ERROR_LOG_MS        1000
 
 typedef struct {
@@ -48,6 +51,24 @@ static twai_node_handle_t can_handle;
 static can_node_callbacks_t app_callbacks;
 static node_state_t current_state = NODE_STATE_IDLE;
 static uint8_t reset_reason;
+
+static atomic_uint bus_off_generation;
+/* The driver retains pointers; keep timed-out transmissions alive. Protected by tx_mutex. */
+static twai_frame_t tx_frame;
+static uint8_t tx_payload[8];
+static bool tx_pending;
+
+static bool state_change_callback(twai_node_handle_t node,
+                                  const twai_state_change_event_data_t *event,
+                                  void *context)
+{
+    (void)node;
+    (void)context;
+    if (event->new_sta == TWAI_ERROR_BUS_OFF) {
+        atomic_fetch_add(&bus_off_generation, 1);
+    }
+    return false;
+}
 
 static bool receive_callback(twai_node_handle_t node,
                              const twai_rx_done_event_data_t *event,
@@ -87,20 +108,34 @@ esp_err_t can_node_send(uint32_t can_id, const uint8_t *payload, uint8_t length)
     if (length > 8 || (length > 0 && !payload)) {
         return ESP_ERR_INVALID_ARG;
     }
-    if (!tx_mutex ||
-        xSemaphoreTake(tx_mutex, pdMS_TO_TICKS(CAN_TX_TIMEOUT_MS)) != pdTRUE) {
+    if (!tx_mutex || xSemaphoreTake(tx_mutex, pdMS_TO_TICKS(CAN_TX_TIMEOUT_MS)) != pdTRUE) {
         return ESP_ERR_TIMEOUT;
     }
-    twai_frame_t frame = {
+    esp_err_t error;
+    if (tx_pending) {
+        error = twai_node_transmit_wait_all_done(can_handle, CAN_TX_TIMEOUT_MS);
+        if (error != ESP_OK) {
+            xSemaphoreGive(tx_mutex);
+            return error;
+        }
+        tx_pending = false;
+    }
+    if (length) {
+        memcpy(tx_payload, payload, length);
+    }
+    tx_frame = (twai_frame_t){
         .header.id = can_id,
         .header.ide = false,
-        .buffer = (uint8_t *)payload,
+        .buffer = tx_payload,
         .buffer_len = length,
     };
-    esp_err_t error = twai_node_transmit(can_handle, &frame, CAN_TX_TIMEOUT_MS);
+    error = twai_node_transmit(can_handle, &tx_frame, CAN_TX_TIMEOUT_MS);
     if (error == ESP_OK) {
-        /* The TWAI queue retains these pointers until transmission finishes. */
-        error = twai_node_transmit_wait_all_done(can_handle, -1);
+        tx_pending = true;
+        error = twai_node_transmit_wait_all_done(can_handle, CAN_TX_TIMEOUT_MS);
+        if (error == ESP_OK) {
+            tx_pending = false;
+        }
     }
     xSemaphoreGive(tx_mutex);
     return error;
@@ -185,15 +220,20 @@ static void recovery_task(void *argument)
     /* Recovery preserves current_state; only unsent samples are discarded. */
     (void)argument;
     bool recovering = false;
+    unsigned int recovery_generation = 0;
+    TickType_t recovery_warning_at = 0;
     twai_error_state_t previous = TWAI_ERROR_ACTIVE;
-    uint8_t previous_tx_errors = 0;
-    uint8_t previous_rx_errors = 0;
+    uint16_t previous_tx_errors = 0;
+    uint16_t previous_rx_errors = 0;
     uint32_t previous_bus_errors = 0;
     TickType_t last_error_log = 0;
     while (true) {
         twai_node_status_t status = {0};
         twai_node_record_t record = {0};
-        if (twai_node_get_info(can_handle, &status, &record) == ESP_OK) {
+        /* Capture every bus-off, including re-entry between polls. */
+        unsigned int generation = atomic_load(&bus_off_generation);
+        esp_err_t info_error = twai_node_get_info(can_handle, &status, &record);
+        if (info_error == ESP_OK) {
             bool state_changed = status.state != previous;
             if (state_changed) {
                 ESP_LOGW(TAG, "State %s -> %s; tx=%u rx=%u errors=%" PRIu32,
@@ -216,26 +256,34 @@ static void recovery_task(void *argument)
             previous_tx_errors = status.tx_error_count;
             previous_rx_errors = status.rx_error_count;
             previous_bus_errors = record.bus_err_num;
-            /* A failed recovery can pass through PASSIVE and return to BUS_OFF.
-             * Start a fresh recovery each time BUS_OFF is entered so a later
-             * physical reconnection can restore communication automatically. */
             if (status.state == TWAI_ERROR_BUS_OFF &&
-                (!recovering || state_changed)) {
+                (!recovering || generation != recovery_generation)) {
                 if (app_callbacks.on_bus_off) {
                     app_callbacks.on_bus_off();
                 }
                 esp_err_t error = twai_node_recover(can_handle);
                 recovering = error == ESP_OK;
-                if (error != ESP_OK) {
+                if (recovering) {
+                    recovery_generation = generation;
+                    recovery_warning_at = xTaskGetTickCount();
+                    ESP_LOGW(TAG, "CAN bus-off recovery started");
+                } else {
                     ESP_LOGE(TAG, "CAN recovery start failed: %s",
                              esp_err_to_name(error));
                 }
-            } else if (recovering && status.state == TWAI_ERROR_ACTIVE) {
+            } else if (recovering && status.state != TWAI_ERROR_BUS_OFF) {
                 recovering = false;
                 ESP_LOGI(TAG, "CAN recovered; sampler remains %s",
                          current_state == NODE_STATE_ACTIVE ? "active" : "idle");
                 can_node_report_state(current_state, NODE_STATE_REASON_RECOVERY);
+            } else if (recovering &&
+                       now - recovery_warning_at >= pdMS_TO_TICKS(CAN_RECOVERY_WARN_MS)) {
+                ESP_LOGW(TAG, "CAN recovery still waiting for bus idle; tx=%u rx=%u",
+                         status.tx_error_count, status.rx_error_count);
+                recovery_warning_at = now;
             }
+        } else {
+            ESP_LOGW(TAG, "CAN status read failed: %s", esp_err_to_name(info_error));
         }
         vTaskDelay(pdMS_TO_TICKS(CAN_RECOVERY_POLL_MS));
     }
@@ -264,7 +312,10 @@ esp_err_t can_node_init(const can_node_callbacks_t *callbacks,
     if (error != ESP_OK) {
         return error;
     }
-    twai_event_callbacks_t driver_callbacks = {.on_rx_done = receive_callback};
+    twai_event_callbacks_t driver_callbacks = {
+        .on_rx_done = receive_callback,
+        .on_state_change = state_change_callback,
+    };
     error = twai_node_register_event_callbacks(can_handle, &driver_callbacks, NULL);
     if (error != ESP_OK) {
         return error;

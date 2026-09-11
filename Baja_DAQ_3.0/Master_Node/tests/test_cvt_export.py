@@ -9,6 +9,8 @@ source=(ROOT/'src/web/web_server.c').read_text()
 start=source.index('static esp_err_t stream_csv(')
 end=source.index('static esp_err_t download_handler',start)
 harness=r'''
+#define _POSIX_C_SOURCE 200809L
+#include <time.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <inttypes.h>
@@ -39,7 +41,7 @@ int main(int argc,char **argv) {
         fwrite(record,sizeof(record),1,file);
     }
     rewind(file);httpd_req_t request=0;
-    int result=stream_csv(&request,file,argc>1);fclose(file);return result;
+    int result=stream_csv(&request,file,argc>1,NULL);fclose(file);return result;
 }
 '''
 with tempfile.TemporaryDirectory() as directory:
@@ -48,7 +50,7 @@ with tempfile.TemporaryDirectory() as directory:
     full=subprocess.check_output([str(temp/'test')],text=True)
     exported=subprocess.check_output([str(temp/'test'),'cvt'],text=True)
     rows=list(csv.DictReader(io.StringIO(exported)))
-    assert exported.splitlines()[0]=='sample_index,can_id,can_id_hex,signal,node,timestamp_ms,value,units,raw_data'
+    assert exported.splitlines()[0]=='sample_index,can_id,can_id_hex,signal,node,timestamp_ms,absolute_time_utc,value,units,raw_data'
     full_rows=list(csv.DictReader(io.StringIO(full)))
     assert len(full_rows)==11
     assert [r['value'] for r in full_rows[-3:]]==['12.34','0.00','0.01']

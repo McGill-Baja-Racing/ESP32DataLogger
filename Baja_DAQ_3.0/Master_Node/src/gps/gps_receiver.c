@@ -14,6 +14,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "protocol/app_protocol.h"
+#include "time/absolute_clock.h"
 
 #define GPS_UART_NUM           UART_NUM_1
 #define GPS_UART_BAUD_RATE     9600
@@ -139,6 +140,7 @@ static void gps_task(void *argument)
     (void)argument;
     char line[GPS_NMEA_LINE_MAX] = {0};
     size_t length = 0;
+    bool overflow = false;
     uint8_t byte;
     ESP_LOGI(TAG, "UART ready: uart=%d baud=%d rx_gpio=%d tx_gpio=%d",
              GPS_UART_NUM, GPS_UART_BAUD_RATE, GPS_UART_RX_GPIO, GPS_UART_TX_GPIO);
@@ -146,6 +148,8 @@ static void gps_task(void *argument)
         if (uart_read_bytes(GPS_UART_NUM, &byte, 1, pdMS_TO_TICKS(1000)) <= 0) continue;
         if (byte == '\n') {
             line[length] = '\0';
+            if (overflow) { length = 0; overflow = false; continue; }
+            absolute_clock_observe_rmc(line);
             gps_fix_t fix = {0};
             if (length && parse_rmc(line, &fix) && fix.valid && fix.has_location) {
                 uint32_t timestamp_ms = (uint32_t)(esp_timer_get_time() / 1000);
@@ -159,7 +163,7 @@ static void gps_task(void *argument)
             length = 0;
         } else if (byte != '\r') {
             if (length < sizeof(line) - 1) line[length++] = (char)byte;
-            else length = 0;
+            else overflow = true;
         }
     }
 }

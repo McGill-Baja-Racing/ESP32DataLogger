@@ -50,12 +50,11 @@ with sync_playwright() as p:
     context.route('**/*',route)
     page=context.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
     page.goto(base)
-    with page.expect_download() as download:page.get_by_role('link',name='CVT input CSV',exact=True).click()
-    assert download.value.suggested_filename=='log_0001_cvt_input.csv'
-    with page.expect_download() as download:page.get_by_role('link',name='Paired RPM CSV',exact=True).click()
+    assert page.locator('#logs a').all_text_contents()==['BIN','CSV','Powertrain CSV']
+    with page.expect_download() as download:page.get_by_role('link',name='Powertrain CSV',exact=True).click()
     assert download.value.suggested_filename=='log_0001_rpm_paired.csv'
     assert Path(download.value.path()).read_text().splitlines()==['Timestamp,Engine RPM,Wheel RPM','1000,3000,1000','1020,0,500']
-    page.get_by_role('link',name='CVT analysis',exact=True).click()
+    page.goto(base+'/analysis?name=log_0001.bin')
     page.wait_for_function("document.getElementById('status').textContent==='Analysis complete'")
     assert page.locator('#ratio').input_value()=='3.389286'
     assert page.locator('#segment option').count()>=4

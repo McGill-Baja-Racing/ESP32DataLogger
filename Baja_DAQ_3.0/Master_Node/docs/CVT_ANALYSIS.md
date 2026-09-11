@@ -15,7 +15,7 @@ Outputs:
   and shaft speeds/CVT ratio versus time.
 - Engine running time, median/p95 RPM, ratio span, time in the power band,
   estimated driven torque and rejected-sample counts.
-- Figure PNG, complete processed CSV, and a text summary with settings.
+- Figure PNG, four-column processed CSV, and a text summary with settings.
 - All runs or one run, an editable RPM ceiling and shaft ratio, and an optional
   ratio estimate. Local BIN/CSV files can also be opened on the same page.
 
@@ -64,7 +64,7 @@ Per-channel 32-bit millisecond rollovers are unwrapped before sorting.
 Quick analysis accepts up to 128 MiB and 500,000 resampled time points. Choose
 an individual run for long spans, or use the Python tool for larger logs.
 Plots reduce display points when necessary and retain missing-data breaks;
-processed CSV contains every analysis point. PNG layout is adapted to the web,
+processed CSV contains only complete analysis points with GPS speed. PNG layout is adapted to the web,
 not a pixel-identical Matplotlib rendering. The original log is never modified.
 
 ## Validation
@@ -117,7 +117,7 @@ It has the same completed-log checks and download lock as BIN/full CSV.
 
 ## Paired RPM and vehicle speed download
 
-**Paired RPM CSV** downloads `log_XXXX_rpm_paired.csv`, with exactly:
+**Powertrain CSV** downloads `log_XXXX_rpm_paired.csv`, with exactly:
 
 ```
 Timestamp,Engine RPM,Wheel RPM,Car Speed (km/h)
@@ -169,3 +169,25 @@ CSV's `Wheel RPM` column (the unscaled bearing reading paired by the master).
 The corrected **3.389286** also applies to the Python/browser CVT analysis
 shaft-ratio default; the browser analysis field remains editable. The standalone
 mock generator keeps its deliberate 2.75 fixture ratio for regression testing.
+
+## Processed CSV format
+
+**Download processed CSV** contains exactly:
+
+```
+engine_rpm,bearing_rpm,gps_speed_kmh,timestamp_ms
+```
+
+Engine and bearing RPM are smoothed 50 Hz analysis samples for the selected
+run. GPS speed comes from recorded CAN 0x700 values divided by 100 to obtain
+km/h. Each sample uses the most recent GPS reading at or before its timestamp,
+held between GPS updates without an age cutoff, like the paired CSV export.
+Rows missing any of the four values are omitted; actual zeros remain valid.
+Logs without GPS speed produce a header-only processed CSV. Use the full CSV
+or binary log as input: the RPM-only CVT input CSV has no GPS records.
+
+`timestamp_ms` is logger time in milliseconds. `bearing_rpm` is the unscaled
+bearing RPM. Engine RPM ceilings above 4000 are rejected. Input samples
+above the configured ceiling are rejected before processing; smoothing results
+above that ceiling are marked unavailable and omitted from the CSV. The export
+also independently excludes engine RPM above 4000, without clamping it to 4000.
