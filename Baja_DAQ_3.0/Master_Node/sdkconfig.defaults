@@ -4,3 +4,8 @@
 CONFIG_FATFS_LFN_HEAP=y
 CONFIG_FATFS_MAX_LFN=64
 CONFIG_FATFS_API_ENCODING_ANSI_OEM=y
+
+# This hardware uses an ESP32-P4 v1.x engineering-sample chip (pre-rev3).
+# ESP32-P4 rev1.x and rev3.x use incompatible memory layouts.
+CONFIG_ESP32P4_SELECTS_REV_LESS_V3=y
+CONFIG_ESP32P4_REV_MIN_1=y
