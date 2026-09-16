@@ -323,10 +323,15 @@ static esp_err_t stream_csv(httpd_req_t *request, FILE *file, bool cvt_only, FIL
             time_t seconds = (time_t)(utc_ms / 1000);
             struct tm utc;
             char date[24];
-            if (gmtime_r(&seconds, &utc) &&
+            /* America/Montreal, see tzset(3) */ 
+            setenv("TZ", "EST5EDT,M3.2.0,M11.1.0", 1);
+            tzset(); // tzset() must be called before localtime_r(...)
+            if (localtime_r(&seconds, &utc) &&
                 strftime(date, sizeof(date), "%Y-%m-%dT%H:%M:%S", &utc)) {
-                snprintf(absolute_time, sizeof(absolute_time), "%s.%03uZ",
-                         date, (unsigned)(utc_ms % 1000));
+                snprintf(absolute_time, sizeof(absolute_time), "%s.%03u%s",
+                         date, (unsigned)(utc_ms % 1000),
+                         /* EST/EDT, display the offset from UTC in effect */
+                         utc.tm_isdst == 0 ? "-05:00" : "-04:00");
             }
         }
         uint32_t can_id = (uint32_t)record[0] & 0x7ffU;
