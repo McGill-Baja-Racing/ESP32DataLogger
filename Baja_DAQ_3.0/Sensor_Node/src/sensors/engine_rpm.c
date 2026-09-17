@@ -14,7 +14,7 @@
 #define ENGINE_RPM_GPIO             GPIO_NUM_3
 #define REVOLUTIONS_PER_SPARK       1U
 #define MIN_ENGINE_RPM              1000U
-#define MAX_ENGINE_RPM              6000U
+#define MAX_ENGINE_RPM              4000U
 #define ENGINE_STOP_TIMEOUT_US      100000
 #define MIN_SPARK_INTERVAL_US \
     ((60000000U * REVOLUTIONS_PER_SPARK) / MAX_ENGINE_RPM)
