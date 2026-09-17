@@ -135,3 +135,7 @@ with one complete recorded engine/wheel pair per row and no partial rows.
 Live Data provides **Raw Bearing RPM**, **Secondary RPM** (raw × 3.389286), and
 **Wheel RPM** (raw ÷ 3.589) as independently selectable views. CVT analysis uses
 3.389286 as its editable default shaft ratio, including the bundled Python tool.
+
+
+CSV exports retain `timestamp_ms` and add `absolute_time_utc` from GPS.
+See [GPS absolute time](docs/ABSOLUTE_TIME.md) for wiring, accuracy, and UTC companion files.

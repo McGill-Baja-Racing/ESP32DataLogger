@@ -10,6 +10,8 @@ idf_component_register(
         "node_state/node_registry.c"
         "storage/sd_card.c"
         "time/time_beacon.c"
+        "time/gps_time.c"
+        "time/absolute_clock.c"
         "web/web_server.c"
         "web/index_html.S"
         "web/analysis_assets.S"
