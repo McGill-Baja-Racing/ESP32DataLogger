@@ -10,7 +10,7 @@ const CVT = (() => {
   function options(input={}) {
     const o={...defaults,...input};
     if(!finite(o.idlerRatio)||o.idlerRatio<=0||o.idlerRatio>100)throw Error('Enter a shaft ratio greater than 0 and at most 100.');
-    if(!finite(o.maxRpm)||o.maxRpm<100||o.maxRpm>50000)throw Error('Enter an engine RPM ceiling between 100 and 50000.');
+    if(!finite(o.maxRpm)||o.maxRpm<100||o.maxRpm>4000)throw Error('Enter an engine RPM ceiling between 100 and 4000.');
     if(!Number.isInteger(o.segment)||o.segment<0)throw Error('Choose a valid run.');
     return o;
   }
@@ -37,9 +37,9 @@ const CVT = (() => {
     if(quote)throw Error('Unclosed quote in CSV. Use the DAQ CSV export.');out.push(s);return out;
   }
   function parse(buffer,format) {
-    const raw={engine:[],idler:[],warnings:[]};
+    const raw={engine:[],idler:[],gps:[],warnings:[]};
     function add(id,ms,value) {
-      const key=id===187?'engine':id===185?'idler':null;if(!key)return;
+      const key=id===187?'engine':id===185?'idler':id===0x700?'gps':null;if(!key)return;
       if(!finite(ms)||ms<0||ms>0xffffffff)return;
       raw[key].push([ms/1000,value]);
     }
@@ -119,15 +119,23 @@ const CVT = (() => {
     if(hi<=lo)throw Error('Need at least two engine samples and overlapping engine/idler times for a paired analysis.');
     const n=Math.ceil((hi-lo)*C.hz);if(n>C.maxPoints)throw Error('This time span is too long for quick analysis. Select an individual run.');
     const step=(lo+1/C.hz)-lo,grid=Array.from({length:n},(_,i)=>lo+i*step);
-    const eng=smooth(resample(ch.engine.t,ch.engine.v,grid));
+    const eng=smooth(resample(ch.engine.t,ch.engine.v,grid)).map(v=>v>o.maxRpm?NaN:v);
     const idl=have?smooth(resample(ch.idler.t,ch.idler.v,grid)):grid.map(()=>NaN);
+    // Hold the latest GPS reading at or before each analysis timestamp.
+    // GPS speed records contain hundredths of km/h, as in the paired exporter.
+    let gpsWrap=0,gpsLast=null,gpsIndex=0,gpsSpeed=NaN;
+    const gps=(raw.gps||[]).map(([t,v])=>{
+      if(gpsLast!==null&&gpsLast>4026531.84&&t<268435.456)gpsWrap+=4294967.296;
+      gpsLast=t;return [t+gpsWrap,v/100];
+    }).sort((a,b)=>a[0]-b[0]);
     let outOfRange=0;
     const rows=grid.map((t,i)=>{
+      while(gpsIndex<gps.length&&gps[gpsIndex][0]<=t){gpsSpeed=gps[gpsIndex++][1];}
       const e=eng[i],driven=idl[i]*o.idlerRatio;let ratio=e/driven;
       if(!finite(ratio)||driven<C.drivenMin)ratio=NaN;
       if(finite(ratio)&&(ratio>C.low*1.05||ratio<C.high*.95)){ratio=NaN;outOfRange++;}
       const tq=torque(e),dt=tq*ratio*C.efficiency;
-      return {t_s:t,t_rel_s:t-grid[0],engine_rpm:e,idler_rpm:idl[i],driven_rpm:driven,cvt_ratio:ratio,
+      return {gps_speed_kmh:gpsSpeed,t_s:t,t_rel_s:t-grid[0],engine_rpm:e,idler_rpm:idl[i],driven_rpm:driven,cvt_ratio:ratio,
         engine_torque_ftlb:tq,engine_power_hp:power(e),engine_rpm_outside_dyno_map:e<2400||e>3600,
         driven_torque_ftlb:dt,driven_power_hp:dt*driven/5252};
     });
@@ -139,6 +147,7 @@ const CVT = (() => {
       bandPercent:engaged.length?100*engaged.filter(r=>r.engine_rpm>=band[0]&&r.engine_rpm<=band[1]).length/engaged.length:NaN,
       drivenTorqueMax:engaged.length?torqueRange[1]:NaN,drivenTorqueMedian:quantile(engaged.map(r=>r.driven_torque_ftlb),.5),outOfRange,peak,band};
     const warnings=ch.warnings;
+    if(!rows.some(r=>[r.engine_rpm,r.idler_rpm,r.gps_speed_kmh].every(finite)))warnings.push('No complete engine/bearing/GPS samples: processed CSV will contain only its header. Load a full CSV or BIN log with GPS speed records.');
     if(!have)warnings.push('No usable idler RPM (0x0B9): engine-only analysis. CVT ratio and driven torque are unavailable.');
     else if(!engaged.length)warnings.push('No valid CVT ratios. Check shaft motion, the shaft ratio and sensor readings.');
     if(outOfRange)warnings.push(`${outOfRange} samples outside the mechanical CVT range were excluded; check shaft ratio, belt slip or sensor faults.`);
@@ -148,8 +157,12 @@ const CVT = (() => {
     const result=analyse(raw,{...input,idlerRatio:1}),a=result.rows.filter(r=>finite(r.engine_rpm)&&finite(r.idler_rpm)&&r.idler_rpm>C.drivenMin&&r.engine_rpm>C.minPlot).map(r=>r.engine_rpm/r.idler_rpm);
     const k=quantile(a,.01)/C.high;if(!finite(k))throw Error('Not enough moving engine/idler data to estimate the shaft ratio.');return k;
   }
-  const columns=['t_s','t_rel_s','engine_rpm','idler_rpm','driven_rpm','cvt_ratio','engine_torque_ftlb','engine_power_hp','engine_rpm_outside_dyno_map','driven_torque_ftlb','driven_power_hp'];
-  function csv(rows){return columns.join(',')+'\n'+rows.map(r=>columns.map(k=>typeof r[k]==='boolean'?(r[k]?'True':'False'):finite(r[k])?r[k]:'').join(',')).join('\n')+'\n';}
+  const columns=['engine_rpm','bearing_rpm','gps_speed_kmh','timestamp_ms'];
+  function csv(rows){
+    const lines=rows.filter(r=>[r.t_s*1000,r.engine_rpm,r.idler_rpm,r.gps_speed_kmh].every(finite)&&r.engine_rpm<=4000)
+      .map(r=>[r.engine_rpm,r.idler_rpm,r.gps_speed_kmh,Number((r.t_s*1000).toFixed(6))].join(','));
+    return columns.join(',')+'\n'+lines.join('\n')+(lines.length?'\n':'');
+  }
   return {defaults,C,parse,clean,segments,analyse,calibrate,smooth,resample,quantile,torque,power,peak,band,csv,options};
 })();
 if(typeof module!=='undefined')module.exports=CVT;
