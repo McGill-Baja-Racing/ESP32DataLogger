@@ -16,9 +16,17 @@
 
 #define CAN_ID_FRONT_BRAKE          0x0B1
 #define CAN_ID_REAR_BRAKE           0x0B2
+#define CAN_ID_MPU_ACCEL_X          0x0B3
+#define CAN_ID_MPU_ACCEL_Y          0x0B4
+#define CAN_ID_MPU_ACCEL_Z          0x0B5
+#define CAN_ID_MPU_GYRO_X           0x0B6
+#define CAN_ID_MPU_GYRO_Y           0x0B7
+#define CAN_ID_MPU_GYRO_Z           0x0B8
 #define CAN_ID_BEARING_ENCODER      0x0B9
 #define CAN_ID_GENERIC_ADC          0x0BA
 #define CAN_ID_ENGINE_RPM           0x0BB
+#define CAN_ID_ENGINE_SPARK         0x0BC
+#define CAN_ID_ENGINE_WHEEL_RPM     0x0BD
 
 #define CAN_MASTER_TIME_RECORDING_FLAG (UINT64_C(1) << 63)
 #define CAN_MASTER_TIME_VALUE_MASK     (CAN_MASTER_TIME_RECORDING_FLAG - 1)

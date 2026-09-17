@@ -20,9 +20,20 @@ RECORD_SIZE_BYTES = 16
 SIGNAL_METADATA = {
     0x0B1: ("front_brake_pressure", "brake_node_1", "psi"),
     0x0B2: ("rear_brake_pressure", "brake_node_1", "psi"),
+    0x0B3: ("mpu_accel_x", "mpu_node_3", "mg"),
+    0x0B4: ("mpu_accel_y", "mpu_node_3", "mg"),
+    0x0B5: ("mpu_accel_z", "mpu_node_3", "mg"),
+    0x0B6: ("mpu_gyro_x", "mpu_node_3", "mdps"),
+    0x0B7: ("mpu_gyro_y", "mpu_node_3", "mdps"),
+    0x0B8: ("mpu_gyro_z", "mpu_node_3", "mdps"),
     0x0B9: ("bearing_rpm", "encoder_node_4", "rpm"),
     0x0BA: ("generic_adc_voltage", "adc_node_6", "mV"),
-    0x0BB: ("engine_rpm", "engine_node_5", "rpm_placeholder"),
+    0x0BB: ("engine_rpm", "engine_node_5", "rpm"),
+    0x0BC: ("engine_spark", "engine_node_5", "event"),
+    0x0BD: ("engine_wheel_rpm", "master_pair_node_4_5", "rpm"),
+    0x700: ("gps_speed", "master_gps", "km/h"),
+    0x701: ("gps_latitude", "master_gps", "deg_e7"),
+    0x702: ("gps_longitude", "master_gps", "deg_e7"),
 }
 
 
@@ -89,7 +100,7 @@ def decode_log(input_path: Path, output_path: Path) -> list[str]:
                     signal,
                     node,
                     timestamp_ms,
-                    value,
+                    f"{value / 100:.2f}" if can_id == 0x700 else value,
                     units,
                     packed,
                 ]

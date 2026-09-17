@@ -17,9 +17,13 @@ typedef struct {
     logger_state_t logger_state;
     const char *current_file;
     uint32_t can_drops;
+    uint32_t can_rx_errors;
+    uint32_t can_tx_errors;
+    bool can_errors_available;
     uint32_t log_drops;
     bool live_enabled;
     const char *node_1;
+    const char *node_3;
     const char *node_4;
     const char *node_5;
     const char *node_6;

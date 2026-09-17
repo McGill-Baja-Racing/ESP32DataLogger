@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CVT analysis · Baja DAQ</title>
+<style>
+:root{font:16px system-ui,sans-serif;color:#17202a;background:#f2f4f7;color-scheme:light}body{max-width:1200px;margin:auto;padding:18px}h1{margin-bottom:6px}h2{font-size:1.2rem}.card{background:white;border-radius:12px;padding:18px;margin:14px 0;box-shadow:0 2px 9px #0001}.controls{display:flex;gap:12px;align-items:end;flex-wrap:wrap}label{display:grid;gap:5px}input,select,button,a.download{font:inherit;padding:9px;border:1px solid #ccd2d8;border-radius:7px}input[type=number]{width:130px}button{cursor:pointer;background:#e8edf3;font-weight:650}button.primary{background:#16833b;color:white}button:disabled{opacity:.45;cursor:default}.muted{color:#65707c}.note{padding:12px;background:#fff8e6;border-radius:8px}.error{color:#b42318}.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.plot{height:350px;min-width:0}.metrics{display:flex;gap:14px;flex-wrap:wrap}.metric{padding:10px;background:#f2f4f7;min-width:160px}.metric strong{display:block;font-size:1.25rem}pre{white-space:pre-wrap;font:14px system-ui}.downloads{display:flex;gap:8px;flex-wrap:wrap}[hidden]{display:none!important}@media(max-width:700px){body{padding:10px}.grid{grid-template-columns:1fr}.plot{height:320px}}
+</style></head><body>
+<a href="/">← Baja DAQ</a><h1>CVT analysis</h1>
+<p class="muted">Shift curve, shaft speeds and estimated torque from engine and idler RPM. Works offline on this device.</p>
+<section class="card"><h2 id="filename">Select a completed log</h2>
+<label>Or open a downloaded log <input id="localFile" type="file" accept=".bin,.csv"></label>
+<p class="note">Node 4 must measure the idler shaft. Driven-clutch RPM = idler RPM × shaft ratio. Torque and power are estimates from the supplied wide-open-throttle engine map, not measured torque.</p>
+<div class="controls"><label>Shaft ratio <input id="ratio" type="number" min="0.0001" max="100" step="any" value="3.389286"></label>
+<label>Engine RPM ceiling <input id="maxRpm" type="number" min="100" max="4000" value="4000"></label>
+<label>Run <select id="segment"><option value="0">All runs</option></select></label>
+<button id="run" class="primary" disabled>Run analysis</button><button id="calibrate" disabled>Estimate shaft ratio</button></div>
+<p class="muted">Ratio estimation assumes the CVT reaches full overdrive (0.44). Use tooth counts for a confirmed ratio.</p>
+<div id="status" role="status" aria-live="polite">Ready</div><div id="error" class="error" role="alert"></div></section>
+<section id="results" class="card" hidden><h2>Results</h2><p id="settings" class="muted"></p><div id="metrics" class="metrics"></div><pre id="summary"></pre><div id="warnings" class="note" hidden></div>
+<div class="downloads"><button id="png">Download figure PNG</button><button id="csv">Download processed CSV</button><button id="report">Download summary</button></div>
+<p class="muted">Processing uses a 50 Hz grid, 0.10 s median and 0.40 s quadratic smoothing. Gaps over 0.20 s remain unavailable; gaps over 2 s separate runs. Plots may reduce displayed points for speed; processed CSV contains every analysis sample.</p>
+<div class="grid"><div class="plot"><canvas id="shift" aria-label="CVT shift curve" role="img"></canvas></div><div class="plot"><canvas id="torqueRatio" aria-label="Driven torque versus CVT ratio" role="img"></canvas></div><div class="plot"><canvas id="torqueTime" aria-label="Estimated torque versus time" role="img"></canvas></div><div class="plot"><canvas id="speeds" aria-label="Shaft speeds and CVT ratio versus time" role="img"></canvas></div></div></section>
+<script src="/chart.umd.min.js"></script><script src="/cvt_analysis.js"></script><script src="/cvt_ui.js"></script>
+</body></html>

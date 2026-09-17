@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <time.h>
 
 #include "app/app_control.h"
 #include "esp_event.h"
@@ -20,6 +21,7 @@
 #include "freertos/semphr.h"
 #include "logger/data_logger.h"
 #include "live/live_data.h"
+#include "protocol/app_protocol.h"
 #include "lwip/ip4_addr.h"
 #include "nvs_flash.h"
 
@@ -39,6 +41,28 @@ static SemaphoreHandle_t download_mutex;
 
 extern const uint8_t web_index_html_start[];
 extern const uint8_t web_index_html_end[];
+
+typedef struct { const uint8_t *start, *end; const char *type; } web_asset_t;
+extern const uint8_t analysis_html_start[], analysis_html_end[];
+static const web_asset_t analysis_html_asset = {analysis_html_start, analysis_html_end, "text/html; charset=utf-8"};
+extern const uint8_t cvt_analysis_js_start[], cvt_analysis_js_end[];
+static const web_asset_t cvt_analysis_js_asset = {cvt_analysis_js_start, cvt_analysis_js_end, "application/javascript"};
+extern const uint8_t cvt_worker_js_start[], cvt_worker_js_end[];
+static const web_asset_t cvt_worker_js_asset = {cvt_worker_js_start, cvt_worker_js_end, "application/javascript"};
+extern const uint8_t cvt_ui_js_start[], cvt_ui_js_end[];
+static const web_asset_t cvt_ui_js_asset = {cvt_ui_js_start, cvt_ui_js_end, "application/javascript"};
+extern const uint8_t chart_js_start[], chart_js_end[];
+static const web_asset_t chart_js_asset = {chart_js_start, chart_js_end, "application/javascript"};
+extern const uint8_t chart_license_start[], chart_license_end[];
+static const web_asset_t chart_license_asset = {chart_license_start, chart_license_end, "text/plain; charset=utf-8"};
+
+static esp_err_t analysis_asset_handler(httpd_req_t *request)
+{
+    const web_asset_t *asset = request->user_ctx;
+    httpd_resp_set_type(request, asset->type);
+    httpd_resp_set_hdr(request, "Cache-Control", "no-cache");
+    return httpd_resp_send(request, (const char *)asset->start, asset->end - asset->start);
+}
 
 static const char *base_name(const char *path)
 {
@@ -139,12 +163,16 @@ static esp_err_t status_handler(httpd_req_t *request)
     snprintf(body, sizeof(body),
              "{\"logger_state\":\"%s\",\"current_file\":\"%s\","
              "\"can_drops\":%" PRIu32 ",\"log_drops\":%" PRIu32 ","
+             "\"can_rx_errors\":%" PRIu32 ",\"can_tx_errors\":%" PRIu32 ","
+             "\"can_errors_available\":%s,"
              "\"live_enabled\":%s,"
-             "\"nodes\":{\"1\":\"%s\",\"4\":\"%s\",\"5\":\"%s\","
+             "\"nodes\":{\"1\":\"%s\",\"3\":\"%s\",\"4\":\"%s\",\"5\":\"%s\","
              "\"6\":\"%s\"}}",
              data_logger_state_name(), base_name(status.current_file),
              status.can_drops, status.log_drops,
-             status.live_enabled ? "true" : "false", status.node_1, status.node_4,
+             status.can_rx_errors, status.can_tx_errors,
+             status.can_errors_available ? "true" : "false",
+             status.live_enabled ? "true" : "false", status.node_1, status.node_3, status.node_4,
              status.node_5, status.node_6);
     httpd_resp_set_type(request, "application/json");
     httpd_resp_set_hdr(request, "Cache-Control", "no-store");
@@ -219,17 +247,93 @@ static esp_err_t stream_binary(httpd_req_t *request, FILE *file)
     return result;
 }
 
-static esp_err_t stream_csv(httpd_req_t *request, FILE *file)
+/* Match recorded engine/derived-wheel samples by the same master timestamp.
+ * Other CAN channels may interleave. Consume each pair once; never carry a
+ * missing value forward or substitute zero for a missing sensor record. */
+static esp_err_t stream_paired_csv(httpd_req_t *request, FILE *file)
+{
+    static const char header[] = "Timestamp,Engine RPM,Wheel RPM,Car Speed (km/h)\r\n";
+    if (httpd_resp_send_chunk(request, header, sizeof(header) - 1) != ESP_OK) {
+        return ESP_FAIL;
+    }
+    bool have_speed = false;
+    int32_t speed_x100 = 0;
+    uint32_t speed_timestamp = 0;
+    uint64_t record[2];
+    uint32_t pending_timestamp = 0;
+    int32_t engine_rpm = 0, wheel_rpm = 0;
+    bool have_engine = false, have_wheel = false;
+    while (fread(record, sizeof(record), 1, file) == 1) {
+        uint32_t can_id = (uint32_t)record[0] & 0x7ffU;
+        if (can_id == CAN_ID_GPS_SPEED) {
+            speed_x100 = (int32_t)(uint32_t)record[1];
+            speed_timestamp = (uint32_t)(record[1] >> 32);
+            have_speed = true;
+            continue;
+        }
+        if (can_id != CAN_ID_ENGINE_RPM && can_id != CAN_ID_ENGINE_WHEEL_RPM) {
+            continue;
+        }
+        uint32_t timestamp = (uint32_t)(record[1] >> 32);
+        if (timestamp != pending_timestamp) {
+            have_engine = have_wheel = false;
+            pending_timestamp = timestamp;
+        }
+        int32_t value = (int32_t)(uint32_t)record[1];
+        if (can_id == CAN_ID_ENGINE_RPM) {
+            engine_rpm = value;
+            have_engine = true;
+        } else {
+            wheel_rpm = value;
+            have_wheel = true;
+        }
+        if (!have_engine || !have_wheel) continue;
+        /* Hold the last encountered GPS reading; leave unavailable/future
+         * readings blank. Unsigned subtraction handles clock rollover. */
+        char speed_text[32] = "";
+        if (have_speed && (uint32_t)(timestamp - speed_timestamp) < 0x80000000U) {
+            snprintf(speed_text, sizeof(speed_text), "%.2f", speed_x100 / 100.0);
+        }
+        char row[128];
+        int length = snprintf(row, sizeof(row), "%" PRIu32 ",%" PRId32
+                              ",%" PRId32 ",%s\r\n", timestamp, engine_rpm, wheel_rpm, speed_text);
+        if (length < 0 || length >= (int)sizeof(row) ||
+            httpd_resp_send_chunk(request, row, length) != ESP_OK) {
+            return ESP_FAIL;
+        }
+        have_engine = have_wheel = false;
+    }
+    return ferror(file) ? ESP_FAIL : httpd_resp_send_chunk(request, NULL, 0);
+}
+
+static esp_err_t stream_csv(httpd_req_t *request, FILE *file, bool cvt_only, FILE *utc_file)
 {
     static const char header[] =
-        "sample_index,can_id,can_id_hex,signal,node,timestamp_ms,value,units,raw_data\r\n";
+        "sample_index,can_id,can_id_hex,signal,node,timestamp_ms,absolute_time_utc,value,units,raw_data\r\n";
     if (httpd_resp_send_chunk(request, header, sizeof(header) - 1) != ESP_OK) {
         return ESP_FAIL;
     }
     uint64_t record[2];
     uint64_t sample_index = 0;
     while (fread(record, sizeof(record), 1, file) == 1) {
+        /* Consume one companion entry per binary record, even when filtered. */
+        char absolute_time[32] = "";
+        int64_t utc_ms = 0;
+        if (utc_file && fread(&utc_ms, sizeof(utc_ms), 1, utc_file) == 1 && utc_ms > 0) {
+            time_t seconds = (time_t)(utc_ms / 1000);
+            struct tm utc;
+            char date[24];
+            if (gmtime_r(&seconds, &utc) &&
+                strftime(date, sizeof(date), "%Y-%m-%dT%H:%M:%S", &utc)) {
+                snprintf(absolute_time, sizeof(absolute_time), "%s.%03uZ",
+                         date, (unsigned)(utc_ms % 1000));
+            }
+        }
         uint32_t can_id = (uint32_t)record[0] & 0x7ffU;
+        /* Raw inputs expected by cvt_plot.py; do not export derived/event
+         * channels or apply the analysis filters to this input download. */
+        if (cvt_only && can_id != CAN_ID_ENGINE_RPM &&
+            can_id != CAN_ID_BEARING_ENCODER) continue;
         uint64_t packed = record[1];
         int32_t value = (int32_t)(packed & UINT32_MAX);
         uint32_t timestamp = (uint32_t)(packed >> 32);
@@ -237,12 +341,19 @@ static esp_err_t stream_csv(httpd_req_t *request, FILE *file)
         const char *signal = metadata ? metadata->signal : "";
         const char *node = metadata ? metadata->node : "";
         const char *units = metadata ? metadata->units : "raw";
+        char value_text[32];
+        if (can_id == CAN_ID_GPS_SPEED) {
+            snprintf(value_text, sizeof(value_text), "%.2f", value / 100.0);
+            units = "km/h";
+        } else {
+            snprintf(value_text, sizeof(value_text), "%" PRId32, value);
+        }
         char row[256];
         int length = snprintf(row, sizeof(row),
                               "%" PRIu64 ",%" PRIu32 ",0x%03" PRIX32
-                              ",%s,%s,%" PRIu32 ",%" PRId32 ",%s,%" PRIu64 "\r\n",
+                              ",%s,%s,%" PRIu32 ",%s,%s,%s,%" PRIu64 "\r\n",
                               sample_index++, can_id, can_id, signal, node,
-                              timestamp, value, units, packed);
+                              timestamp, absolute_time, value_text, units, packed);
         if (length < 0 || length >= (int)sizeof(row) ||
             httpd_resp_send_chunk(request, row, length) != ESP_OK) {
             return ESP_FAIL;
@@ -258,9 +369,10 @@ static esp_err_t download_handler(httpd_req_t *request)
         httpd_query_key_value(query, "name", name, sizeof(name)) != ESP_OK ||
         httpd_query_key_value(query, "format", format, sizeof(format)) != ESP_OK ||
         !parse_log_name(name, NULL) ||
-        (strcmp(format, "bin") != 0 && strcmp(format, "csv") != 0)) {
+        (strcmp(format, "bin") != 0 && strcmp(format, "csv") != 0 &&
+         strcmp(format, "cvt") != 0 && strcmp(format, "paired") != 0)) {
         return send_json_error(request, "400 Bad Request",
-                               "Expected a valid log filename and bin or csv format");
+                               "Expected a valid log filename and bin, csv, cvt or paired format");
     }
     if (data_logger_state() != LOGGER_IDLE &&
         strcmp(name, base_name(data_logger_path())) == 0) {
@@ -279,10 +391,14 @@ static esp_err_t download_handler(httpd_req_t *request)
         return send_json_error(request, "404 Not Found", "Log file not found");
     }
     char attachment[80];
-    if (strcmp(format, "csv") == 0) {
-        char csv_name[32];
-        snprintf(csv_name, sizeof(csv_name), "%.*s.csv",
-                 (int)(strlen(name) - 4), name);
+    bool cvt_only = strcmp(format, "cvt") == 0;
+    bool paired = strcmp(format, "paired") == 0;
+    bool csv_format = paired || cvt_only || strcmp(format, "csv") == 0;
+    if (csv_format) {
+        char csv_name[48];
+        snprintf(csv_name, sizeof(csv_name), "%.*s%s.csv",
+                 (int)(strlen(name) - 4), name,
+                 paired ? "_rpm_paired" : cvt_only ? "_cvt_input" : "");
         snprintf(attachment, sizeof(attachment), "attachment; filename=\"%s\"", csv_name);
         httpd_resp_set_type(request, "text/csv; charset=utf-8");
     } else {
@@ -290,8 +406,16 @@ static esp_err_t download_handler(httpd_req_t *request)
         httpd_resp_set_type(request, "application/octet-stream");
     }
     httpd_resp_set_hdr(request, "Content-Disposition", attachment);
-    esp_err_t result = strcmp(format, "csv") == 0
-                     ? stream_csv(request, file) : stream_binary(request, file);
+    FILE *utc_file = NULL;
+    if (csv_format && !paired) {
+        char utc_path[104];
+        snprintf(utc_path, sizeof(utc_path), "%s.utc", path);
+        utc_file = fopen(utc_path, "rb");
+    }
+    esp_err_t result = paired ? stream_paired_csv(request, file)
+                     : csv_format ? stream_csv(request, file, cvt_only, utc_file)
+                     : stream_binary(request, file);
+    if (utc_file) fclose(utc_file);
     fclose(file);
     xSemaphoreGive(download_mutex);
     return result;
@@ -416,11 +540,18 @@ static esp_err_t start_http_server(void)
 {
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.stack_size = 8192;
-    config.max_uri_handlers = 12;
+    config.max_uri_handlers = 20;
     esp_err_t error = httpd_start(&server, &config);
     if (error != ESP_OK) return error;
     const httpd_uri_t handlers[] = {
         {.uri = "/", .method = HTTP_GET, .handler = root_handler},
+        {.uri = "/analysis", .method = HTTP_GET, .handler = analysis_asset_handler, .user_ctx = (void *)&analysis_html_asset},
+        {.uri = "/cvt_analysis.js", .method = HTTP_GET, .handler = analysis_asset_handler, .user_ctx = (void *)&cvt_analysis_js_asset},
+        {.uri = "/cvt_worker.js", .method = HTTP_GET, .handler = analysis_asset_handler, .user_ctx = (void *)&cvt_worker_js_asset},
+        {.uri = "/cvt_ui.js", .method = HTTP_GET, .handler = analysis_asset_handler, .user_ctx = (void *)&cvt_ui_js_asset},
+        {.uri = "/chart.umd.min.js", .method = HTTP_GET, .handler = analysis_asset_handler, .user_ctx = (void *)&chart_js_asset},
+        {.uri = "/Chart.LICENSE.md", .method = HTTP_GET, .handler = analysis_asset_handler, .user_ctx = (void *)&chart_license_asset},
+
         {.uri = "/api/status", .method = HTTP_GET, .handler = status_handler},
         {.uri = "/api/logging/start", .method = HTTP_POST, .handler = command_handler},
         {.uri = "/api/logging/stop", .method = HTTP_POST, .handler = command_handler},

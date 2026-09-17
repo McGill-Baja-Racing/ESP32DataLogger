@@ -4,6 +4,10 @@
 
 #include "esp_err.h"
 
+#ifndef MASTER_CAN_ENABLED
+#define MASTER_CAN_ENABLED 1
+#endif
+
 typedef struct {
     uint32_t id;
     uint8_t dlc;
@@ -18,3 +22,4 @@ esp_err_t can_master_send(uint32_t id, const uint8_t *payload, uint8_t length);
 esp_err_t can_master_start_nodes(void);
 esp_err_t can_master_stop_nodes(void);
 uint32_t can_master_rx_drop_count(void);
+esp_err_t can_master_error_counts(uint32_t *rx_errors, uint32_t *tx_errors);
