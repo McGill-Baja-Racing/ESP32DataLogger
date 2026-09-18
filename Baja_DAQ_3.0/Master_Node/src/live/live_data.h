@@ -7,7 +7,7 @@
 #include "can/can_master.h"
 #include "esp_err.h"
 
-#define LIVE_DATA_SIGNAL_COUNT 5
+#define LIVE_DATA_SIGNAL_COUNT 7
 #define LIVE_DATA_LEASE_SECONDS 10
 
 typedef struct {
@@ -35,6 +35,7 @@ typedef enum {
 
 esp_err_t live_data_init(void);
 const live_signal_metadata_t *live_data_signals(size_t *count);
+void live_data_invalidate(uint32_t can_id);
 void live_data_record(const can_message_t *message);
 live_data_result_t live_data_start(uint32_t *token);
 live_data_result_t live_data_snapshot(uint32_t token, live_sample_t *samples,

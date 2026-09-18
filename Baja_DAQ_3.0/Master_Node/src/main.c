@@ -3,6 +3,8 @@
 #include "console/serial_console.h"
 #include "esp_err.h"
 #include "esp_log.h"
+#include "esp_timer.h"
+#include "protocol/rpm_pairing.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "logger/data_logger.h"
@@ -34,12 +36,24 @@ static void print_status(void)
 
 static void handle_can_message(const can_message_t *message)
 {
+    static rpm_pairing_t pairing;
     if (node_registry_is_state_frame(message)) {
+        if (message->id == CAN_ID_NODE_STATE_BASE + 4 ||
+            message->id == CAN_ID_NODE_STATE_BASE + 5) pairing.valid = false;
         node_registry_update(message);
-    } else if (protocol_is_sensor_id(message->id)) {
+    } else if (protocol_is_sensor_id(message->id) && message->dlc == 8) {
+        /* 0x0BD is now master-derived; ignore legacy node 5 copies. */
+        if (message->id == CAN_ID_ENGINE_WHEEL_RPM) return;
         node_registry_record_sensor_frame(message);
         data_logger_enqueue(message);
         live_data_record(message);
+        can_message_t paired;
+        if (rpm_pairing_update(&pairing, message, esp_timer_get_time(), &paired)) {
+            data_logger_enqueue(&paired);
+            live_data_record(&paired);
+        } else if (message->id == CAN_ID_ENGINE_RPM) {
+            live_data_invalidate(CAN_ID_ENGINE_WHEEL_RPM);
+        }
     }
 }
 

@@ -13,7 +13,9 @@ static const live_signal_metadata_t signals[LIVE_DATA_SIGNAL_COUNT] = {
     {0x0B2, "rear_brake_pressure", "brake_node_1", "psi", 100},
     {0x0B9, "bearing_rpm", "encoder_node_4", "rpm", 50},
     {0x0BA, "generic_adc_voltage", "adc_node_6", "mV", 100},
-    {0x0BB, "engine_rpm", "engine_node_5", "rpm", 50},
+    {0x0BB, "engine_rpm", "engine_node_5", "rpm", 100},
+    {0x0BC, "engine_spark", "engine_node_5", "event", 100},
+    {0x0BD, "engine_wheel_rpm", "master_pair_node_4_5", "rpm", 100},
 };
 
 static live_sample_t latest[LIVE_DATA_SIGNAL_COUNT];
@@ -150,4 +152,13 @@ bool live_data_is_enabled(void)
     bool result = enabled;
     portEXIT_CRITICAL(&lock);
     return result;
+}
+
+void live_data_invalidate(uint32_t can_id)
+{
+    int index = signal_index(can_id);
+    if (index < 0) return;
+    portENTER_CRITICAL(&lock);
+    latest[index].valid = false;
+    portEXIT_CRITICAL(&lock);
 }
