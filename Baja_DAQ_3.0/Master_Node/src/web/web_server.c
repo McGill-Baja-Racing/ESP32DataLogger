@@ -247,12 +247,32 @@ static esp_err_t stream_binary(httpd_req_t *request, FILE *file)
     return result;
 }
 
+static void read_gps_local_time(char *absolute_time, size_t buflen, FILE *utc_file)
+{
+    int64_t utc_ms = 0;
+    if (utc_file && fread(&utc_ms, sizeof(utc_ms), 1, utc_file) == 1 && utc_ms > 0) {
+        time_t seconds = (time_t)(utc_ms / 1000);
+        struct tm utc;
+        char date[24];
+        /* America/Montreal, see tzset(3) */
+        setenv("TZ", "EST5EDT,M3.2.0,M11.1.0", 1);
+        tzset(); // tzset() must be called before localtime_r(...)
+        if (localtime_r(&seconds, &utc) &&
+            strftime(date, sizeof(date), "%Y-%m-%dT%H:%M:%S", &utc)) {
+            snprintf(absolute_time, buflen, "%s.%03u%s",
+                        date, (unsigned)(utc_ms % 1000),
+                        /* EST/EDT, display the offset from UTC in effect */
+                        utc.tm_isdst == 0 ? "-05:00" : "-04:00");
+        }
+    }
+}
+
 /* Match recorded engine/derived-wheel samples by the same master timestamp.
  * Other CAN channels may interleave. Consume each pair once; never carry a
  * missing value forward or substitute zero for a missing sensor record. */
-static esp_err_t stream_paired_csv(httpd_req_t *request, FILE *file)
+static esp_err_t stream_paired_csv(httpd_req_t *request, FILE *file, FILE *utc_file)
 {
-    static const char header[] = "Timestamp,Engine RPM,Wheel RPM,Car Speed (km/h)\r\n";
+    static const char header[] = "Timestamp,Engine RPM,Wheel RPM,Car Speed (km/h),GPS Absolute Time\r\n";
     if (httpd_resp_send_chunk(request, header, sizeof(header) - 1) != ESP_OK) {
         return ESP_FAIL;
     }
@@ -294,9 +314,12 @@ static esp_err_t stream_paired_csv(httpd_req_t *request, FILE *file)
         if (have_speed && (uint32_t)(timestamp - speed_timestamp) < 0x80000000U) {
             snprintf(speed_text, sizeof(speed_text), "%.2f", speed_x100 / 100.0);
         }
+        char absolute_time[32] = "";
+        read_gps_local_time(absolute_time, sizeof(absolute_time), utc_file);
         char row[128];
         int length = snprintf(row, sizeof(row), "%" PRIu32 ",%" PRId32
-                              ",%" PRId32 ",%s\r\n", timestamp, engine_rpm, wheel_rpm, speed_text);
+                              ",%" PRId32 ",%s,%s\r\n", timestamp, engine_rpm, wheel_rpm, speed_text,
+                              absolute_time);
         if (length < 0 || length >= (int)sizeof(row) ||
             httpd_resp_send_chunk(request, row, length) != ESP_OK) {
             return ESP_FAIL;
@@ -318,22 +341,7 @@ static esp_err_t stream_csv(httpd_req_t *request, FILE *file, bool cvt_only, FIL
     while (fread(record, sizeof(record), 1, file) == 1) {
         /* Consume one companion entry per binary record, even when filtered. */
         char absolute_time[32] = "";
-        int64_t utc_ms = 0;
-        if (utc_file && fread(&utc_ms, sizeof(utc_ms), 1, utc_file) == 1 && utc_ms > 0) {
-            time_t seconds = (time_t)(utc_ms / 1000);
-            struct tm utc;
-            char date[24];
-            /* America/Montreal, see tzset(3) */ 
-            setenv("TZ", "EST5EDT,M3.2.0,M11.1.0", 1);
-            tzset(); // tzset() must be called before localtime_r(...)
-            if (localtime_r(&seconds, &utc) &&
-                strftime(date, sizeof(date), "%Y-%m-%dT%H:%M:%S", &utc)) {
-                snprintf(absolute_time, sizeof(absolute_time), "%s.%03u%s",
-                         date, (unsigned)(utc_ms % 1000),
-                         /* EST/EDT, display the offset from UTC in effect */
-                         utc.tm_isdst == 0 ? "-05:00" : "-04:00");
-            }
-        }
+        read_gps_local_time(absolute_time, sizeof(absolute_time), utc_file);
         uint32_t can_id = (uint32_t)record[0] & 0x7ffU;
         /* Raw inputs expected by cvt_plot.py; do not export derived/event
          * channels or apply the analysis filters to this input download. */
@@ -412,12 +420,12 @@ static esp_err_t download_handler(httpd_req_t *request)
     }
     httpd_resp_set_hdr(request, "Content-Disposition", attachment);
     FILE *utc_file = NULL;
-    if (csv_format && !paired) {
+    if (csv_format) {
         char utc_path[104];
         snprintf(utc_path, sizeof(utc_path), "%s.utc", path);
         utc_file = fopen(utc_path, "rb");
     }
-    esp_err_t result = paired ? stream_paired_csv(request, file)
+    esp_err_t result = paired ? stream_paired_csv(request, file, utc_file)
                      : csv_format ? stream_csv(request, file, cvt_only, utc_file)
                      : stream_binary(request, file);
     if (utc_file) fclose(utc_file);
