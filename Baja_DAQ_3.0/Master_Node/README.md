@@ -81,7 +81,41 @@ header because they are separate firmware projects. Changes to CAN command IDs,
 node-state encoding, or sensor IDs must be made in both protocol headers and
 validated by building all firmware profiles.
 
-The accepted first-version signals are front/rear brake pressure, signed
-bearing RPM, generic ADC voltage from node 6 (`0x0BA`), and the engine RPM
-placeholder from node 5 (`0x0BB`). The placeholder is logged but currently
-contains zero.
+The master accepts the following sensor channels for SD logging, live graphs,
+and CSV export:
+
+| Sensor | Source | IDs | Units |
+| --- | --- | --- | --- |
+| Front/rear brake pressure | CAN node 1 | `0x0B1–0x0B2` | psi |
+| Acceleration X/Y/Z | CAN node 3 (MPU6500) | `0x0B3–0x0B5` | mg |
+| Gyroscope X/Y/Z | CAN node 3 (MPU6500) | `0x0B6–0x0B8` | mdps |
+| Wheel/bearing speed | CAN node 4 | `0x0B9` | signed rpm |
+| Generic ADC | CAN node 6 (optional) | `0x0BA` | mV |
+| Engine speed | CAN node 5 | `0x0BB` | rpm |
+| GPS speed, latitude, longitude | Master UART | `0x700–0x702` (log IDs) | km/h × 100, degrees × 10⁷ |
+
+CAN sensor messages must contain exactly 8 bytes: a little-endian signed
+32-bit value followed by a little-endian unsigned 32-bit timestamp in ms.
+Nodes 1, 3, 4, and 5 are monitored for missing data during recording.
+GPS uses UART1 at 9600 baud, RX GPIO33 and TX GPIO32, and accepts
+checksum-valid NMEA RMC sentences with an active position fix.
+
+Build `Master` or `MasterStable` for the full sensor setup (`MasterNoCAN`
+only collects local GPS). CAN uses TX GPIO20, RX GPIO21, at 1 Mbit/s.
+Build the corresponding sensor profiles with `SENSOR_SERIAL_TEST=0`;
+`NodeMPU` is configured for CAN operation by default. Recording starts automatically
+five seconds after initialization and can also be controlled through the web
+interface or serial console.
+
+### Engine and wheel RPM pairing
+
+Node 4 sends bearing RPM every 20 ms (averaged over 100 ms). For each node 5
+engine RPM frame, the master records a derived `engine_wheel_rpm` (0x0BD)
+with the same timestamp, using the latest received node 4 measurement only
+when it is at most 100 ms old in both sample time and receive time. A newer
+wheel timestamp is not paired with an older engine sample. Missing/stale
+wheel data produces no derived record; it is not replaced with zero.
+The original bearing and engine records remain available. This is a recent
+wheel-speed estimate, not wheel rotation measured between spark edges.
+Node 5 reports zero engine RPM every 100 ms without sparks; wheel RPM remains
+independent. Flash the updated master and NodeEngine; node 4 is unchanged.

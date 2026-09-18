@@ -7,7 +7,7 @@
 #include "can/can_master.h"
 #include "esp_err.h"
 
-#define LIVE_DATA_SIGNAL_COUNT 10
+#define LIVE_DATA_SIGNAL_COUNT 16
 #define LIVE_DATA_LEASE_SECONDS 10
 
 typedef struct {

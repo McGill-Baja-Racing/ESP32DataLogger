@@ -12,6 +12,7 @@ src/
 ├── protocol/app_protocol.h   CAN commands, state base ID, and sensor IDs
 ├── can/can_master.*          TWAI transport, RX dispatch, TX, and recovery
 ├── console/serial_console.*  Parsing of start/stop/status commands
+├── gps/gps_receiver.*       UART ownership and NMEA RMC parsing
 ├── logger/data_logger.*      Log lifecycle, queue, blocks, and file writes
 ├── node_state/node_registry.* Latest state reported by each sensor node
 ├── storage/sd_card.*         ESP32-P4 SDMMC mount and pin configuration
@@ -27,6 +28,7 @@ src/
 - `sd_card` owns only physical SD initialization and mounting.
 - `time_beacon` owns the periodic beacon task and uses the CAN public API.
 - `serial_console` parses text but delegates actions through callbacks.
+- `gps_receiver` owns UART1 and reports fixed-format local samples to `main.c`.
 - `main.c` decides that starting means opening a log before starting nodes, and
   stopping means closing the session and stopping nodes.
 
@@ -35,6 +37,7 @@ main -> sd_card
      -> data_logger
      -> can_master -> main RX callback -> logger or node_registry
      -> serial_console -> main lifecycle callbacks
+     -> gps_receiver -> main sample callback -> logger and live data
      -> time_beacon -> can_master_send
 ```
 
@@ -50,9 +53,11 @@ The following values in `protocol/app_protocol.h` must match the Sensor Node:
 | Node state | `0x0C0 + node ID` |
 | Front brake | `0x0B1` |
 | Rear brake | `0x0B2` |
+| Acceleration X/Y/Z (mg) | `0x0B3–0x0B5` |
+| Gyroscope X/Y/Z (mdps) | `0x0B6–0x0B8` |
 | Signed bearing RPM | `0x0B9` |
 | Generic ADC voltage | `0x0BA` |
-| Engine RPM placeholder | `0x0BB` |
+| Engine RPM | `0x0BB` |
 
 After changing the protocol, build `MasterStable`, `NodeBrake`, `NodeEncoder`,
 `NodeEngine`, and `NodeADC`. A successful build checks interfaces and types; a bench CAN test

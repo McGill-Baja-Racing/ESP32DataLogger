@@ -11,6 +11,12 @@
 
 #define CAN_ID_FRONT_BRAKE          0x0B1
 #define CAN_ID_REAR_BRAKE           0x0B2
+#define CAN_ID_MPU_ACCEL_X           0x0B3
+#define CAN_ID_MPU_ACCEL_Y           0x0B4
+#define CAN_ID_MPU_ACCEL_Z           0x0B5
+#define CAN_ID_MPU_GYRO_X            0x0B6
+#define CAN_ID_MPU_GYRO_Y            0x0B7
+#define CAN_ID_MPU_GYRO_Z            0x0B8
 #define CAN_ID_BEARING_ENCODER      0x0B9
 #define CAN_ID_GENERIC_ADC          0x0BA
 #define CAN_ID_ENGINE_RPM           0x0BB
@@ -32,6 +38,12 @@ static inline bool protocol_is_sensor_id(uint32_t id)
 {
     return id == CAN_ID_FRONT_BRAKE ||
            id == CAN_ID_REAR_BRAKE ||
+           id == CAN_ID_MPU_ACCEL_X ||
+           id == CAN_ID_MPU_ACCEL_Y ||
+           id == CAN_ID_MPU_ACCEL_Z ||
+           id == CAN_ID_MPU_GYRO_X ||
+           id == CAN_ID_MPU_GYRO_Y ||
+           id == CAN_ID_MPU_GYRO_Z ||
            id == CAN_ID_BEARING_ENCODER ||
            id == CAN_ID_GENERIC_ADC ||
            id == CAN_ID_ENGINE_RPM ||
@@ -44,6 +56,13 @@ static inline uint8_t protocol_sensor_node_id(uint32_t id)
     switch (id) {
         case CAN_ID_FRONT_BRAKE:
         case CAN_ID_REAR_BRAKE:     return 1;
+        case CAN_ID_MPU_ACCEL_X:
+        case CAN_ID_MPU_ACCEL_Y:
+        case CAN_ID_MPU_ACCEL_Z:
+        case CAN_ID_MPU_GYRO_X:
+        case CAN_ID_MPU_GYRO_Y:
+        case CAN_ID_MPU_GYRO_Z:
+                                    return 3;
         case CAN_ID_BEARING_ENCODER:return 4;
         case CAN_ID_ENGINE_SPARK:
         case CAN_ID_ENGINE_WHEEL_RPM:

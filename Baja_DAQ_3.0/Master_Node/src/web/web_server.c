@@ -140,11 +140,11 @@ static esp_err_t status_handler(httpd_req_t *request)
              "{\"logger_state\":\"%s\",\"current_file\":\"%s\","
              "\"can_drops\":%" PRIu32 ",\"log_drops\":%" PRIu32 ","
              "\"live_enabled\":%s,"
-             "\"nodes\":{\"1\":\"%s\",\"4\":\"%s\",\"5\":\"%s\","
+             "\"nodes\":{\"1\":\"%s\",\"3\":\"%s\",\"4\":\"%s\",\"5\":\"%s\","
              "\"6\":\"%s\"}}",
              data_logger_state_name(), base_name(status.current_file),
              status.can_drops, status.log_drops,
-             status.live_enabled ? "true" : "false", status.node_1, status.node_4,
+             status.live_enabled ? "true" : "false", status.node_1, status.node_3, status.node_4,
              status.node_5, status.node_6);
     httpd_resp_set_type(request, "application/json");
     httpd_resp_set_hdr(request, "Cache-Control", "no-store");
