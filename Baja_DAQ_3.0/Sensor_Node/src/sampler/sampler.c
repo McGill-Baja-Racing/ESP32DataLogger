@@ -12,6 +12,7 @@
 #include "can/can_node.h"
 #include "sensors/adc_input.h"
 #include "sensors/sensor.h"
+#include "sensors/engine_rpm.h"
 #include "time/time_sync.h"
 
 #ifndef SENSOR_SERIAL_TEST
@@ -34,6 +35,8 @@ typedef struct {
     uint32_t can_id;
     int32_t timestamp_ms;
     int32_t value;
+    int32_t engine_rpm;
+    int64_t local_us;
 } sample_t;
 
 static const char *TAG = "Sampler";
@@ -76,6 +79,9 @@ void sampler_stop(void)
 
 void sampler_discard_pending(void)
 {
+#if NODE_FIXED_ENGINE_CONFIG
+    engine_rpm_discard_pending();
+#endif
     xQueueReset(sample_queue);
 }
 
@@ -104,6 +110,28 @@ static void sample_task(void *argument)
             continue;
         }
 
+#if NODE_FIXED_ENGINE_CONFIG
+        engine_event_t event;
+        if (engine_rpm_next_event(&event) && active) {
+            sample_t sample = {
+                .sensor_name = event.spark ? "engine_spark" : "engine_rpm",
+                .can_id = event.spark ? CAN_ID_ENGINE_SPARK : CAN_ID_ENGINE_RPM,
+                .timestamp_ms = time_sync_timestamp_ms_at(event.timestamp_us),
+                .value = event.spark ? 1 : 0,
+                .engine_rpm = event.engine_rpm,
+                .local_us = event.timestamp_us,
+            };
+            /* Keep the spark and engine RPM together in one queue entry. */
+            if (xQueueSend(sample_queue, &sample, 0) != pdTRUE) {
+                ESP_LOGW(TAG, "Spark/pair output queue full; event lost");
+            }
+        }
+        uint32_t dropped = engine_rpm_dropped_events();
+        if (dropped) {
+            ESP_LOGW(TAG, "Spark capture overflow: %" PRIu32 " events lost", dropped);
+        }
+        continue;
+#endif
         int64_t now = esp_timer_get_time();
         int64_t next_due = now + 1000000;
         for (size_t i = 0; i < sensor_count; i++) {
@@ -127,18 +155,11 @@ static void sample_task(void *argument)
         }
 
         int64_t sleep_us = next_due - esp_timer_get_time();
-        if (sleep_us >= 2000) {
-            vTaskDelay(pdMS_TO_TICKS((uint32_t)(sleep_us / 1000)));
-        } else {
-            /*
-             * taskYIELD() only gives CPU time to tasks at the same or a
-             * higher priority. If sampling is continuously close to or
-             * behind schedule, that starves the lower-priority idle task and
-             * triggers the task watchdog. Blocking for one tick guarantees
-             * idle time while adding at most one scheduler tick of jitter.
-             */
-            vTaskDelay(1);
-        }
+        /* Sub-tick sleeps must still block. At the configured 100 Hz tick
+         * rate, pdMS_TO_TICKS(2..9) is zero and would starve the idle task. */
+        TickType_t sleep_ticks = sleep_us > 0
+            ? pdMS_TO_TICKS((uint32_t)(sleep_us / 1000)) : 0;
+        vTaskDelay(sleep_ticks > 0 ? sleep_ticks : 1);
     }
 }
 
@@ -159,6 +180,21 @@ static void send_task(void *argument)
             continue;
         }
 #if SENSOR_SERIAL_TEST
+        if (sample.can_id == CAN_ID_ENGINE_RPM) {
+            ESP_LOGI("SensorTest", "engine_rpm: time=%" PRId32 "ms engine=0",
+                     sample.timestamp_ms);
+            continue;
+        }
+        if (sample.can_id == CAN_ID_ENGINE_SPARK) {
+            ESP_LOGI("SensorTest", "engine_spark: local_us=%" PRId64
+                     " time=%" PRId32 "ms value=1", sample.local_us, sample.timestamp_ms);
+            if (sample.engine_rpm > 0) {
+                ESP_LOGI("SensorTest", "engine_rpm: time=%" PRId32
+                         "ms engine=%" PRId32 ,
+                         sample.timestamp_ms, sample.engine_rpm);
+            }
+            continue;
+        }
         /* Throttle each sensor independently so multi-sensor bench
          * configurations remain readable without hiding any sensor. */
         size_t slot = 0;
@@ -185,14 +221,19 @@ static void send_task(void *argument)
             log_slots[slot].next_log_us = now_us + 500000;
         }
 #else
-        uint8_t payload[8];
-        uint64_t packed = ((uint64_t)(uint32_t)sample.timestamp_ms << 32) |
-                          (uint32_t)sample.value;
-        memcpy(payload, &packed, sizeof(payload));
-        esp_err_t error = can_node_send(sample.can_id, payload, sizeof(payload));
-        if (error != ESP_OK) {
-            ESP_LOGW(TAG, "Sensor 0x%03" PRIX32 " TX failed: %s",
-                     sample.can_id, esp_err_to_name(error));
+        uint32_t ids[2] = {sample.can_id, CAN_ID_ENGINE_RPM};
+        int32_t values[2] = {sample.value, sample.engine_rpm};
+        size_t count = sample.can_id == CAN_ID_ENGINE_SPARK && sample.engine_rpm > 0 ? 2 : 1;
+        for (size_t i = 0; i < count; i++) {
+            uint8_t payload[8];
+            uint64_t packed = ((uint64_t)(uint32_t)sample.timestamp_ms << 32) |
+                              (uint32_t)values[i];
+            memcpy(payload, &packed, sizeof(payload));
+            esp_err_t error = can_node_send(ids[i], payload, sizeof(payload));
+            if (error != ESP_OK) {
+                ESP_LOGW(TAG, "Sensor 0x%03" PRIX32 " TX failed: %s",
+                         ids[i], esp_err_to_name(error));
+            }
         }
 #endif
     }
