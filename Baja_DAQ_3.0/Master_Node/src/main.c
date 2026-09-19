@@ -1,3 +1,5 @@
+#include <inttypes.h>
+
 #include "app/app_control.h"
 #include "can/can_master.h"
 #include "console/serial_console.h"
@@ -44,6 +46,15 @@ static void handle_can_message(const can_message_t *message)
             message->id == CAN_ID_NODE_STATE_BASE + 5) pairing.valid = false;
         node_registry_update(message);
     } else if (protocol_is_sensor_id(message->id) && message->dlc == 8) {
+        uint32_t timestamp_ms = (uint32_t)(message->data >> 32);
+        if ((message->id == CAN_ID_ENGINE_SPARK ||
+             message->id == CAN_ID_ENGINE_RPM) &&
+            (int32_t)timestamp_ms < 0) {
+            ESP_LOGW(TAG, "Dropping engine frame 0x%03" PRIX32
+                     " with invalid timestamp %" PRIu32,
+                     message->id, timestamp_ms);
+            return;
+        }
         /* 0x0BD is now master-derived; ignore legacy node 5 copies. */
         if (message->id == CAN_ID_ENGINE_WHEEL_RPM) return;
         node_registry_record_sensor_frame(message);

@@ -70,7 +70,7 @@ dependencies:
   idf:
     source:
       type: idf
-    version: 5.5.5
+    version: 5.5.4
 direct_dependencies:
 - espressif/esp_hosted
 - espressif/esp_wifi_remote
