@@ -109,4 +109,4 @@ for(const id of ['ratio','maxRpm','segment'])byId(id).onchange=()=>{if(id==='rat
 byId('localFile').onchange=async()=>{const file=byId('localFile').files[0];if(!file)return;try{if(file.size>MAX_FILE_BYTES)throw Error('Choose a file no larger than 128 MiB.');setBusy(true,'Opening log…');loadBuffer(await file.arrayBuffer(),file.name);}catch(e){fail(e.message);}};
 window.addEventListener('pagehide',()=>{if(worker)worker.terminate();});
 const logName=new URLSearchParams(location.search).get('name');
-if(logName){if(/^log_\d{4,}\.bin$/.test(logName))fetchLog(logName);else fail('Invalid log filename. Open analysis from the completed logs list.');}
+if(logName){if(/^[A-Za-z0-9_-]{1,40}\.bin$/.test(logName))fetchLog(logName);else fail('Invalid log filename. Open analysis from the completed logs list.');}

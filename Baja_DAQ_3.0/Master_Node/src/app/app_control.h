@@ -10,6 +10,8 @@ typedef enum {
     APP_CONTROL_OK,
     APP_CONTROL_CONFLICT,
     APP_CONTROL_BUSY,
+    APP_CONTROL_INVALID_FILENAME,
+    APP_CONTROL_FILENAME_EXISTS,
     APP_CONTROL_FAILED,
 } app_control_result_t;
 
@@ -30,7 +32,7 @@ typedef struct {
 } app_status_t;
 
 esp_err_t app_control_init(void);
-app_control_result_t app_control_start_logging(void);
+app_control_result_t app_control_start_logging(const char *filename);
 app_control_result_t app_control_stop_logging(void);
 app_control_result_t app_control_start_live_data(uint32_t *token);
 void app_control_get_status(app_status_t *status);

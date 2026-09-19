@@ -17,14 +17,22 @@
     .signals label{padding:7px;border:1px solid #e7e9ec;border-radius:7px}.warning{background:#fff8e6;padding:10px;border-radius:8px}
     .chart header{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center}.chart h3{margin:0}
     .chart canvas{width:100%;height:260px;display:block;touch-action:none}.axis input{width:85px}.value{font-size:1.1rem;font-weight:700}
-    @media(max-width:560px){body{padding:10px}.chart canvas{height:220px}.axis{display:block}}
+    .filename-label{display:flex;align-items:center;gap:8px;flex:1 1 480px;white-space:nowrap}#logName{flex:1;min-width:320px;box-sizing:border-box}
+    .log-actions{display:flex;align-items:center;gap:4px;flex-wrap:wrap}.more{position:relative}.more summary{list-style:none;border:1px solid #ccd2d8;border-radius:8px;padding:7px 12px;cursor:pointer;background:#e8edf3;font-size:1.25rem;font-weight:700;line-height:1}.more summary::-webkit-details-marker{display:none}
+    .more-menu{position:absolute;right:0;top:calc(100% + 5px);z-index:4;min-width:160px;padding:5px;background:#fff;border:1px solid #ccd2d8;border-radius:8px;box-shadow:0 5px 18px #0002}.more-menu button{width:100%;margin:0;text-align:left;background:#fff;font-weight:600}
+    .logs-header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}.logs-header h2{margin:0}.logs-header label{display:flex;align-items:center;gap:6px}
+    @media(max-width:560px){body{padding:10px}.chart canvas{height:220px}.axis{display:block}.filename-label{flex-basis:100%;white-space:normal}#logName{min-width:0;width:100%}}
   </style>
 </head>
 <body>
   <h1>Baja DAQ</h1>
   <section class="card">
     <div id="state" class="state">Connecting...</div><div id="file" class="muted"></div>
-    <p><button id="start">Start</button><button id="stop">Stop</button></p>
+    <div class="controls">
+      <label class="filename-label">Log filename <input id="logName" maxlength="44" autocomplete="off" spellcheck="false"></label>
+      <button id="start">Start</button><button id="stop">Stop</button>
+    </div>
+    <div class="muted">Leave blank for a GPS date/time name. Start waits up to 3 seconds for GPS, then falls back to log_XXXX.bin.</div>
     <div id="stats" class="muted"></div><div id="nodes" class="muted"></div><div id="error" class="error"></div>
   </section>
 
@@ -42,13 +50,13 @@
   </section>
   <div id="charts"></div>
 
-  <section class="card"><h2>Completed logs</h2><div id="logs">Loading...</div></section>
+  <section class="card"><div class="logs-header"><h2>Completed logs</h2><label class="muted">Show <select id="logFilter"><option value="all" selected>All files</option><option value="date">Date names</option><option value="custom">Custom names</option><option value="number">Number names</option></select></label></div><div id="logs">Loading...</div></section>
 
 <script>
 'use strict';
 const $=id=>document.getElementById(id);
 const SECONDARY_RPM_RATIO=3.389286, WHEEL_RPM_DIVISOR=3.589;
-let loggerState='idle', token=null, timer=null, noticeTimer=null, polling=false, metadata=[], charts=new Map();
+let loggerState='idle', previousLoggerState=null, token=null, timer=null, noticeTimer=null, polling=false, metadata=[], completedLogs=[], charts=new Map();
 
 async function json(url,opt){
   const response=await fetch(url,opt), body=await response.json().catch(()=>({error:'Request failed'}));
@@ -59,6 +67,12 @@ function showLiveNotice(message){
   clearTimeout(noticeTimer);$('liveNotice').textContent=message;
   noticeTimer=setTimeout(()=>$('liveNotice').textContent='',8000);
 }
+function normalizeLogName(value){
+  let name=value.trim();if(name.toLowerCase().endsWith('.bin'))name=name.slice(0,-4)+'.bin';else name+='.bin';
+  if(!/^[A-Za-z0-9_-]{1,40}\.bin$/.test(name))throw Error('Use 1-40 letters, numbers, underscores, or hyphens for the filename.');
+  return name;
+}
+function selectedLogName(){return normalizeLogName($('logName').value)}
 
 async function refreshStatus(){
   try{
@@ -66,14 +80,17 @@ async function refreshStatus(){
     $('state').textContent=pretty(s.logger_state); $('file').textContent=s.current_file==='none'?'No session yet':s.current_file;
     $('stats').textContent=`CAN RX errors: ${s.can_errors_available?s.can_rx_errors:'N/A'} | CAN TX errors: ${s.can_errors_available?s.can_tx_errors:'N/A'} | CAN drops: ${s.can_drops} | Log drops: ${s.log_drops}`;
     $('nodes').textContent=`Nodes — 1: ${s.nodes['1']}, 3: ${s.nodes['3']}, 4: ${s.nodes['4']}, 5: ${s.nodes['5']}, 6: ${s.nodes['6']}`;
-    $('start').disabled=s.logger_state!=='idle'; $('stop').disabled=s.logger_state!=='running';
+    const becameIdle=previousLoggerState!==null&&previousLoggerState!=='idle'&&s.logger_state==='idle';
+    if(becameIdle)$('logName').value='';
+    previousLoggerState=s.logger_state;$('start').disabled=s.logger_state!=='idle'; $('stop').disabled=s.logger_state!=='running';$('logName').disabled=s.logger_state!=='idle';
     $('liveEnable').disabled=s.logger_state!=='running'||token!==null||s.live_enabled;
-    if(!token)$('liveState').textContent=s.live_enabled?'Another viewer active':'Disabled'; $('error').textContent='';
+    if(!token)$('liveState').textContent=s.live_enabled?'Another viewer active':'Disabled';
     if(token&&(!s.live_enabled||s.logger_state!=='running')) endLive(false,'Live data stopped with the recording.');
+    if(becameIdle)refreshLogs();
   }catch(e){$('error').textContent=e.message}
 }
 async function logging(action){
-  try{await json('/api/logging/'+action,{method:'POST'});await refreshStatus();await refreshLogs()}
+  try{$('error').textContent='';let suffix='';if(action==='start'&&$('logName').value.trim()){const name=selectedLogName();$('logName').value=name;suffix=`?name=${encodeURIComponent(name)}`;}await json('/api/logging/'+action+suffix,{method:'POST'});await refreshStatus();await refreshLogs()}
   catch(e){$('error').textContent=e.message}
 }
 
@@ -168,10 +185,31 @@ function draw(chart){
   if(visible.length){c.strokeStyle='#0875d1';c.lineWidth=2;c.beginPath();visible.forEach((p,i)=>{const x=left+(p.t-start)*pw/span,y=top+(ymax-p.v)*ph/(ymax-ymin);i?c.lineTo(x,y):c.moveTo(x,y)});c.stroke()}
 }
 
-async function refreshLogs(){
-  try{const logs=await json('/api/logs');$('logs').innerHTML=logs.length?'':'No completed sessions';for(const l of logs){const row=document.createElement('div');row.className='row';const label=document.createElement('span');label.textContent=`${l.name} (${(l.size_bytes/1024).toFixed(1)} KiB)`;row.append(label);const actions=document.createElement('span');for(const f of ['bin','csv','paired']){const a=document.createElement('a');a.className='download';a.textContent=f==='paired'?'Powertrain CSV':f.toUpperCase();if(f==='paired')a.title='Timestamp (ms), Engine RPM, Wheel RPM, Car Speed (km/h) — complete RPM pairs with latest GPS speed';a.href=`/api/logs/download?name=${encodeURIComponent(l.name)}&format=${f}`;actions.append(a)}row.append(actions);$('logs').append(row)}}catch(e){$('error').textContent=e.message}
+function logNameType(name){
+  if(/^log_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}(?:_\d+)?\.bin$/.test(name))return 'date';
+  if(/^log_\d{4,}\.bin$/.test(name))return 'number';
+  return 'custom';
 }
-$('start').onclick=()=>logging('start');$('stop').onclick=()=>logging('stop');$('liveEnable').onclick=enableLive;$('liveDisable').onclick=disableLive;$('rate').onchange=schedulePoll;$('window').onchange=()=>{for(const chart of charts.values()){trim(chart);draw(chart)}};
+function renderLogs(){
+  const selected=$('logFilter').value,logs=selected==='all'?completedLogs:completedLogs.filter(log=>logNameType(log.name)===selected);
+  $('logs').replaceChildren();
+  if(!logs.length){$('logs').textContent=completedLogs.length?'No files match this filter.':'No completed sessions';return}
+  for(const l of logs){
+    const row=document.createElement('div');row.className='row';const label=document.createElement('span');label.textContent=`${l.name} (${(l.size_bytes/1024).toFixed(1)} KiB)`;row.append(label);
+    const actions=document.createElement('span');actions.className='log-actions';
+    for(const f of ['bin','csv','paired']){const a=document.createElement('a');a.className='download';a.textContent=f==='paired'?'Powertrain CSV':f.toUpperCase();if(f==='paired')a.title='Timestamp (ms), Engine RPM, Wheel RPM, Car Speed (km/h) — complete RPM pairs with latest GPS speed';a.href=`/api/logs/download?name=${encodeURIComponent(l.name)}&format=${f}`;actions.append(a)}
+    const more=document.createElement('details');more.className='more';const summary=document.createElement('summary');summary.textContent='⋯';summary.setAttribute('aria-label',`More actions for ${l.name}`);const menu=document.createElement('div');menu.className='more-menu';const rename=document.createElement('button');rename.type='button';rename.textContent='Rename file';rename.onclick=()=>renameLog(l.name);menu.append(rename);more.append(summary,menu);actions.append(more);row.append(actions);$('logs').append(row);
+  }
+}
+async function refreshLogs(){
+  try{completedLogs=await json('/api/logs');renderLogs()}catch(e){$('error').textContent=e.message}
+}
+async function renameLog(oldName){
+  const requested=prompt('Rename log file',oldName.slice(0,-4));if(requested===null)return;
+  try{$('error').textContent='';const newName=normalizeLogName(requested);if(newName===oldName)return;await json(`/api/logs/rename?name=${encodeURIComponent(oldName)}&new_name=${encodeURIComponent(newName)}`,{method:'POST'});await refreshLogs();await refreshStatus()}
+  catch(e){$('error').textContent=e.message}
+}
+$('logName').value='';$('logFilter').onchange=renderLogs;$('start').onclick=()=>logging('start');$('stop').onclick=()=>logging('stop');$('liveEnable').onclick=enableLive;$('liveDisable').onclick=disableLive;$('rate').onchange=schedulePoll;$('window').onchange=()=>{for(const chart of charts.values()){trim(chart);draw(chart)}};
 window.addEventListener('resize',()=>{for(const chart of charts.values())draw(chart)});window.addEventListener('pagehide',()=>{if(token)fetch('/api/live/stop?token='+encodeURIComponent(token),{method:'POST',keepalive:true})});
 loadSignals();refreshStatus();refreshLogs();setInterval(refreshStatus,1000);
 </script>

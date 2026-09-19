@@ -14,12 +14,14 @@ and store them safely on an SD card.
 - 64-bit master microsecond time beacon every 100 ms
 - queued, buffered binary SD logging
 - automatic CAN bus-off detection and controller recovery
-- automatic logging 500 ms after boot
+- automatic logging five seconds after boot, plus web and serial controls
 - graceful stop, queue drain, flush, and file close
 - serial `start`, `stop`, and `status` commands at 115200 baud
 - registration of node boot, start, stop, and recovery states
 - open `BajaDAQ` SoftAP and HTTP controls at `http://192.168.4.1`
 - binary and streamed CSV downloads for completed log sessions
+- customizable log filenames with duplicate-name rejection
+- descending alphabetical log listing with all/date/custom/number filters
 - recording-only, explicitly enabled latest-value live graphs at 1-20 Hz
 - 9600-baud NMEA GPS input on UART1 (RX GPIO 33, TX GPIO 32)
 - `tools/decode_log.py` to convert a log to CSV

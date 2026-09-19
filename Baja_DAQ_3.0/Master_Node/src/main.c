@@ -22,7 +22,7 @@ static const char *TAG = "Master";
 
 static bool start_logging(void)
 {
-    return app_control_start_logging() == APP_CONTROL_OK;
+    return app_control_start_logging(NULL) == APP_CONTROL_OK;
 }
 
 static bool stop_logging(void)
