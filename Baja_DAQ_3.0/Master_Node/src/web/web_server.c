@@ -273,12 +273,19 @@ static esp_err_t stream_csv(httpd_req_t *request, FILE *file)
         const char *signal = metadata ? metadata->signal : "";
         const char *node = metadata ? metadata->node : "";
         const char *units = metadata ? metadata->units : "raw";
+        char value_text[32];
+        if (can_id == CAN_ID_GPS_SPEED) {
+            snprintf(value_text, sizeof(value_text), "%.2f", value / 100.0);
+            units = "km/h";
+        } else {
+            snprintf(value_text, sizeof(value_text), "%" PRId32, value);
+        }
         char row[256];
         int length = snprintf(row, sizeof(row),
                               "%" PRIu64 ",%" PRIu32 ",0x%03" PRIX32
-                              ",%s,%s,%" PRIu32 ",%" PRId32 ",%s,%" PRIu64 "\r\n",
+                              ",%s,%s,%" PRIu32 ",%s,%s,%" PRIu64 "\r\n",
                               sample_index++, can_id, can_id, signal, node,
-                              timestamp, value, units, packed);
+                              timestamp, value_text, units, packed);
         if (length < 0 || length >= (int)sizeof(row) ||
             httpd_resp_send_chunk(request, row, length) != ESP_OK) {
             return ESP_FAIL;
