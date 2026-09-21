@@ -15,6 +15,9 @@
 #define CAN_ID_GENERIC_ADC          0x0BA
 #define CAN_ID_ENGINE_RPM           0x0BB
 #define CAN_ID_ENGINE_SPARK         0x0BC
+#define CAN_ID_GPS_SPEED            0x700
+#define CAN_ID_GPS_LATITUDE         0x701
+#define CAN_ID_GPS_LONGITUDE        0x702
 
 #define CAN_MASTER_TIME_RECORDING_FLAG (UINT64_C(1) << 63)
 #define CAN_MASTER_TIME_VALUE_MASK     (CAN_MASTER_TIME_RECORDING_FLAG - 1)

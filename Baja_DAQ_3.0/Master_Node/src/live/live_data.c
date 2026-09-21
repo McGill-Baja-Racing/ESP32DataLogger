@@ -15,6 +15,9 @@ static const live_signal_metadata_t signals[LIVE_DATA_SIGNAL_COUNT] = {
     {0x0BA, "generic_adc_voltage", "adc_node_6", "mV", 100},
     {0x0BB, "engine_rpm", "engine_node_5", "rpm", 100},
     {0x0BC, "engine_spark", "engine_node_5", "event", 100},
+    {0x700, "gps_speed", "master_gps", "km/h_x100", 1},
+    {0x701, "gps_latitude", "master_gps", "deg_e7", 1},
+    {0x702, "gps_longitude", "master_gps", "deg_e7", 1},
 };
 
 static live_sample_t latest[LIVE_DATA_SIGNAL_COUNT];

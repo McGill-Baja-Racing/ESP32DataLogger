@@ -35,14 +35,18 @@ app_control_result_t app_control_start_logging(void)
         xSemaphoreGive(lifecycle_mutex);
         return APP_CONTROL_FAILED;
     }
+#if MASTER_CAN_ENABLED
     node_registry_set_monitoring(true);
     time_beacon_set_recording(true);
     esp_err_t error = can_master_start_nodes();
+#endif
     xSemaphoreGive(lifecycle_mutex);
+#if MASTER_CAN_ENABLED
     if (error != ESP_OK) {
         ESP_LOGE(TAG, "Logger started, but START broadcast failed: %s",
                  esp_err_to_name(error));
     }
+#endif
     return APP_CONTROL_OK;
 }
 
@@ -63,14 +67,18 @@ app_control_result_t app_control_stop_logging(void)
         xSemaphoreGive(lifecycle_mutex);
         return APP_CONTROL_FAILED;
     }
+#if MASTER_CAN_ENABLED
     time_beacon_set_recording(false);
     node_registry_set_monitoring(false);
     esp_err_t error = can_master_stop_nodes();
+#endif
     xSemaphoreGive(lifecycle_mutex);
+#if MASTER_CAN_ENABLED
     if (error != ESP_OK) {
         ESP_LOGE(TAG, "Logger stopping, but STOP broadcast failed: %s",
                  esp_err_to_name(error));
     }
+#endif
     return APP_CONTROL_OK;
 }
 

@@ -28,7 +28,12 @@ Node TX GPIO21/RX GPIO20.
 
 ```bash
 pio run -e MasterStable
+pio run -e MasterNoCAN  # GPS/SD/web master without CAN hardware
 ```
+
+`MasterNoCAN` does not initialize TWAI, transmit node commands or time beacons,
+or monitor CAN nodes. GPS logging, SD sessions, serial commands, Wi-Fi controls,
+downloads, and live GPS graphs remain available.
 
 The master waits five seconds after boot before automatically opening a log and
 broadcasting START, giving sensor nodes and serial monitors time to initialize.
