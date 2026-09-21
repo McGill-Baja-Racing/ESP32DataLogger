@@ -30,7 +30,7 @@ SIGNAL_METADATA = {
     0x0BA: ("generic_adc_voltage", "adc_node_6", "mV"),
     0x0BB: ("engine_rpm", "engine_node_5", "rpm"),
     0x0BC: ("engine_spark", "engine_node_5", "event"),
-    0x700: ("gps_speed", "master_gps", "km/h_x100"),
+    0x700: ("gps_speed", "master_gps", "km/h"),
     0x701: ("gps_latitude", "master_gps", "deg_e7"),
     0x702: ("gps_longitude", "master_gps", "deg_e7"),
 }
@@ -99,7 +99,7 @@ def decode_log(input_path: Path, output_path: Path) -> list[str]:
                     signal,
                     node,
                     timestamp_ms,
-                    value,
+                    f"{value / 100:.2f}" if can_id == 0x700 else value,
                     units,
                     packed,
                 ]
