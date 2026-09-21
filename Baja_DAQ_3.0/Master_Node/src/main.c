@@ -36,7 +36,7 @@ static void handle_can_message(const can_message_t *message)
 {
     if (node_registry_is_state_frame(message)) {
         node_registry_update(message);
-    } else if (protocol_is_sensor_id(message->id)) {
+    } else if (protocol_is_sensor_id(message->id) && message->dlc == 8) {
         node_registry_record_sensor_frame(message);
         data_logger_enqueue(message);
         live_data_record(message);
