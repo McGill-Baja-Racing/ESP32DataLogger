@@ -15,7 +15,6 @@
 #define CAN_ID_GENERIC_ADC          0x0BA
 #define CAN_ID_ENGINE_RPM           0x0BB
 #define CAN_ID_ENGINE_SPARK         0x0BC
-#define CAN_ID_ENGINE_WHEEL_RPM     0x0BD
 #define CAN_ID_GPS_SPEED            0x700
 #define CAN_ID_GPS_LATITUDE         0x701
 #define CAN_ID_GPS_LONGITUDE        0x702
@@ -35,8 +34,7 @@ static inline bool protocol_is_sensor_id(uint32_t id)
            id == CAN_ID_BEARING_ENCODER ||
            id == CAN_ID_GENERIC_ADC ||
            id == CAN_ID_ENGINE_RPM ||
-           id == CAN_ID_ENGINE_SPARK ||
-           id == CAN_ID_ENGINE_WHEEL_RPM;
+           id == CAN_ID_ENGINE_SPARK;
 }
 
 static inline uint8_t protocol_sensor_node_id(uint32_t id)
@@ -46,7 +44,6 @@ static inline uint8_t protocol_sensor_node_id(uint32_t id)
         case CAN_ID_REAR_BRAKE:     return 1;
         case CAN_ID_BEARING_ENCODER:return 4;
         case CAN_ID_ENGINE_SPARK:
-        case CAN_ID_ENGINE_WHEEL_RPM:
         case CAN_ID_ENGINE_RPM:     return 5;
         case CAN_ID_GENERIC_ADC:    return 6;
         default:                    return 0;
