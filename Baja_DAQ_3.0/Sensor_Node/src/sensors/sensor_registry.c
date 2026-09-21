@@ -22,6 +22,15 @@ static sensor_t sensors[1];
 extern sensor_t generic_adc_sensor;
 
 static sensor_t sensors[1];
+#elif NODE_FIXED_MPU_CONFIG
+extern sensor_t mpu_accel_x_sensor;
+extern sensor_t mpu_accel_y_sensor;
+extern sensor_t mpu_accel_z_sensor;
+extern sensor_t mpu_gyro_x_sensor;
+extern sensor_t mpu_gyro_y_sensor;
+extern sensor_t mpu_gyro_z_sensor;
+
+static sensor_t sensors[6];
 #else
 #error "Select a fixed sensor-node configuration"
 #endif
@@ -35,6 +44,13 @@ sensor_t *sensor_registry(size_t *count)
     sensors[0] = bearing_encoder_sensor;
 #elif NODE_FIXED_ENGINE_CONFIG
     sensors[0] = engine_rpm_sensor;
+#elif NODE_FIXED_MPU_CONFIG
+    sensors[0] = mpu_accel_x_sensor;
+    sensors[1] = mpu_accel_y_sensor;
+    sensors[2] = mpu_accel_z_sensor;
+    sensors[3] = mpu_gyro_x_sensor;
+    sensors[4] = mpu_gyro_y_sensor;
+    sensors[5] = mpu_gyro_z_sensor;
 #else
     sensors[0] = generic_adc_sensor;
 #endif

@@ -81,7 +81,37 @@ header because they are separate firmware projects. Changes to CAN command IDs,
 node-state encoding, or sensor IDs must be made in both protocol headers and
 validated by building all firmware profiles.
 
-The accepted first-version signals are front/rear brake pressure, signed
-bearing RPM, generic ADC voltage from node 6 (`0x0BA`), and the engine RPM
-placeholder from node 5 (`0x0BB`). The placeholder is logged but currently
-contains zero.
+The master accepts the following sensor channels for SD logging, live graphs,
+and CSV export:
+
+| Sensor | Source | IDs | Units |
+| --- | --- | --- | --- |
+| Front/rear brake pressure | CAN node 1 | `0x0B1–0x0B2` | psi |
+| Acceleration X/Y/Z | CAN node 3 (MPU6500) | `0x0B3–0x0B5` | mg |
+| Gyroscope X/Y/Z | CAN node 3 (MPU6500) | `0x0B6–0x0B8` | mdps |
+| Wheel/bearing speed | CAN node 4 | `0x0B9` | signed rpm |
+| Generic ADC | CAN node 6 (optional) | `0x0BA` | mV |
+| Engine speed | CAN node 5 | `0x0BB` | rpm |
+| GPS speed, latitude, longitude | Master UART | `0x700–0x702` (log IDs) | km/h × 100, degrees × 10⁷ |
+
+CAN sensor messages must contain exactly 8 bytes: a little-endian signed
+32-bit value followed by a little-endian unsigned 32-bit timestamp in ms.
+Nodes 1, 3, 4, and 5 are monitored for missing data during recording.
+GPS uses UART1 at 9600 baud, RX GPIO33 and TX GPIO32, and accepts
+checksum-valid NMEA RMC sentences with an active position fix.
+
+Build `Master` or `MasterStable` for the full sensor setup (`MasterNoCAN`
+only collects local GPS). CAN uses TX GPIO20, RX GPIO21, at 1 Mbit/s.
+Build the corresponding sensor profiles with `SENSOR_SERIAL_TEST=0`;
+`NodeMPU` is configured for CAN operation by default. Recording starts automatically
+five seconds after initialization and can also be controlled through the web
+interface or serial console.
+
+### Engine and wheel RPM across nodes
+
+NodeEngine measures engine RPM from spark input GPIO3 and sends `engine_rpm`
+(0x0BB) and spark events (0x0BC). NodeEncoder independently measures bearing
+RPM on GPIO6/GPIO7 and sends `bearing_rpm` (0x0B9) every 20 ms, averaged over
+100 ms. The sensors run on separate boards. The master logs and displays
+these original channels without generating another wheel RPM signal.
+NodeEngineBench uses the shared throttled serial format for engine RPM only.

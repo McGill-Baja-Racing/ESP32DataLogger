@@ -79,7 +79,9 @@ Before choosing it, check both Sensor Node and Master protocol headers for
 collisions. Decide and document the returned value's unit and scale, for
 example degrees, millivolts, RPM, or milli-degrees.
 
-Every `read` callback returns an `int32_t`. The sampler transmits that value in
+Every `read` callback returns `esp_err_t` and writes an `int32_t` through its
+output pointer on `ESP_OK`. Failed reads are skipped and retried at the next
+scheduled period. The sampler transmits successful values in
 CAN payload bytes 0-3 and puts the synchronized millisecond timestamp in bytes
 4-7. Both fields are little-endian.
 
@@ -113,12 +115,13 @@ static void start_steering(sensor_t *sensor)
     (void)context;
 }
 
-static int32_t read_steering(sensor_t *sensor)
+static esp_err_t read_steering(sensor_t *sensor, int32_t *value)
 {
     steering_context_t *context = sensor->context;
-    /* Take one measurement and return its documented integer value. */
+    /* Return a hardware error on failure; write the measurement on success. */
     (void)context;
-    return 0;
+    *value = 0;
+    return ESP_OK;
 }
 
 sensor_t steering_angle_sensor = {

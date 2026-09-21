@@ -29,7 +29,8 @@ src/
     ├── rear_brake.c        Rear pressure sensor
     ├── bearing_encoder.c   Quadrature bearing RPM
     ├── generic_adc.c       General GPIO1 voltage in millivolts
-    └── engine_rpm.c        Digital spark-edge timing and RPM conversion
+    ├── engine_rpm.c        Digital spark-edge timing and RPM conversion
+    └── mpu6500.c           MPU-6500/9250 I2C accelerometer and gyroscope
 ```
 
 ## Module relationships
@@ -55,23 +56,28 @@ main -> sampler -> sensors
 
 ## Adding a sensor
 
-1. Create a driver in `src/sensors/` that defines one `sensor_t` descriptor.
-2. Put hardware initialization in its `init` callback when initialization is
-   required.
-3. Put one non-blocking measurement in its `read` callback.
-4. Set its CAN ID and sampling period in the descriptor.
-5. Add the descriptor to the appropriate branch of `sensor_registry.c`.
-6. Add the source file to `src/CMakeLists.txt`.
-7. Add or update the PlatformIO build environment in `platformio.ini`.
-8. Add the CAN ID to the master's accepted sensor list.
-9. Document the value's unit and scaling, then build every affected profile.
+The complete procedures for adding a driver, adding a sensor to an existing
+node, creating a new build configuration, updating the Master, and verifying
+the result are in
+[Adding sensors and node configurations](../docs/ADDING_SENSORS_AND_NODES.md).
+
+The short checklist is:
+
+1. Define a `sensor_t` descriptor in a driver under `src/sensors/`.
+2. Add its CAN ID to the Sensor Node and Master protocol headers.
+3. Add the source file to `src/CMakeLists.txt`.
+4. Add the descriptor to the correct branch in `sensor_registry.c`.
+5. Add a `platformio.ini` environment only when creating a new configuration.
+6. Add the ID to the Master's accepted-sensor and sensor-to-node mappings.
+7. Document its integer unit/scale, wiring, and sampling rate.
+8. Build and bench-test every affected Sensor Node profile and the Master.
 
 Example descriptor:
 
 ```c
 sensor_t example_sensor = {
     .name = "example",
-    .can_id = 0x0BA,
+    .can_id = CAN_ID_EXAMPLE,
     .period_us = 20000,  // 50 Hz
     .init = init_example,
     .read = read_example,
@@ -79,8 +85,11 @@ sensor_t example_sensor = {
 };
 ```
 
-The `read` callback returns the signed 32-bit value placed in bytes 0-3 of the
-CAN payload. The sampler supplies the synchronized timestamp in bytes 4-7.
+The `read` callback returns `esp_err_t` and writes the signed 32-bit measurement
+to its `int32_t *value` output only on `ESP_OK`. The sampler skips failed reads
+and retries at the next scheduled period. Successful values occupy bytes 0-3
+of the CAN payload; the synchronized timestamp occupies bytes 4-7.
+For the MPU, a failed burst skips all six axes until the next successful burst.
 
 ## Where changes belong
 
@@ -118,3 +127,8 @@ on hardware. Do not replace those TODOs with guessed constants.
 
 Keep `main.c` limited to startup and high-level wiring. Add a new module only
 when it owns a distinct hardware interface, state, or substantial behavior.
+
+`mpu6500.c` uses one 14-byte burst read for each six-channel snapshot. The
+first registry descriptor refreshes the shared snapshot and the remaining five
+descriptors publish it, keeping all axes coherent. Change its pin, address,
+range, bandwidth, and scale constants together when changing the hardware.

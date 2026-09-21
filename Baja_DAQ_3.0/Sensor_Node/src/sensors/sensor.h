@@ -18,7 +18,8 @@ struct sensor {
     int64_t next_sample_us;
     esp_err_t (*init)(sensor_t *sensor);
     void (*start)(sensor_t *sensor);
-    int32_t (*read)(sensor_t *sensor);
+    /* Write value only on ESP_OK; failed reads are not transmitted. */
+    esp_err_t (*read)(sensor_t *sensor, int32_t *value);
     void *context;
 };
 

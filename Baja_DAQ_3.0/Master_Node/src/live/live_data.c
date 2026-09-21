@@ -11,6 +11,12 @@
 static const live_signal_metadata_t signals[LIVE_DATA_SIGNAL_COUNT] = {
     {0x0B1, "front_brake_pressure", "brake_node_1", "psi", 100},
     {0x0B2, "rear_brake_pressure", "brake_node_1", "psi", 100},
+    {0x0B3, "mpu_accel_x", "mpu_node_3", "mg", 100},
+    {0x0B4, "mpu_accel_y", "mpu_node_3", "mg", 100},
+    {0x0B5, "mpu_accel_z", "mpu_node_3", "mg", 100},
+    {0x0B6, "mpu_gyro_x", "mpu_node_3", "mdps", 100},
+    {0x0B7, "mpu_gyro_y", "mpu_node_3", "mdps", 100},
+    {0x0B8, "mpu_gyro_z", "mpu_node_3", "mdps", 100},
     {0x0B9, "bearing_rpm", "encoder_node_4", "rpm", 50},
     {0x0BA, "generic_adc_voltage", "adc_node_6", "mV", 100},
     {0x0BB, "engine_rpm", "engine_node_5", "rpm", 100},
