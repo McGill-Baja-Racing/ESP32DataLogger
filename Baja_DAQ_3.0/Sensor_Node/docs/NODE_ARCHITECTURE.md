@@ -81,16 +81,6 @@ pio run -e NodeEngine
 pio run -e NodeADC
 ```
 
-PlatformIO generates `sdkconfig.<environment>` when it is missing and reuses
-it on subsequent builds. Generated `sdkconfig` files are ignored by Git.
-Keep any intentional shared configuration overrides in `sdkconfig.defaults`
-instead of committing a full generated configuration.
-
 The RPM driver measures rising edges on GPIO3 and assumes one spark per
 revolution. Its input conditioning, pulse rejection window, expected RPM range,
 and stopped-engine timeout require validation on the vehicle.
-
-`NodeEngineBench` prints engine RPM using the shared serial sensor format
-(`engine_rpm: CAN=0x0BB time=...ms value=...`), at most once every 500 ms.
-Stopped-engine readings use a value of zero. Spark events are sent only in
-CAN mode; they are not included in serial sensor output.

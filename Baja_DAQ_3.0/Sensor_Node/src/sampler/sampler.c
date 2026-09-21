@@ -35,6 +35,8 @@ typedef struct {
     uint32_t can_id;
     int32_t timestamp_ms;
     int32_t value;
+    int32_t engine_rpm;
+    int64_t local_us;
 } sample_t;
 
 static const char *TAG = "Sampler";
@@ -99,45 +101,6 @@ static void enqueue_latest(sample_t *sample)
     (void)xQueueSend(sample_queue, sample, 0);
 }
 
-#if NODE_FIXED_ENGINE_CONFIG
-static void enqueue_engine_event(const engine_event_t *event)
-{
-    sample_t sample = {
-        .sensor_name = "engine_rpm",
-        .can_id = CAN_ID_ENGINE_RPM,
-        .timestamp_ms = time_sync_timestamp_ms_at(event->timestamp_us),
-        .value = event->engine_rpm,
-    };
-    bool has_rpm = !event->spark || event->engine_rpm > 0;
-#if SENSOR_SERIAL_TEST
-    /* Bench output uses the same value and throttling as every sensor. */
-    if (has_rpm) {
-        enqueue_latest(&sample);
-    }
-#else
-    UBaseType_t count = (event->spark ? 1 : 0) + (has_rpm ? 1 : 0);
-    /* This task is the only producer. Reserve room for the whole event so
-     * queue pressure cannot split a spark from its RPM measurement. */
-    if (uxQueueSpacesAvailable(sample_queue) < count) {
-        ESP_LOGW(TAG, "Spark/RPM output queue full; event lost");
-        return;
-    }
-    if (event->spark) {
-        sample_t spark = {
-            .sensor_name = "engine_spark",
-            .can_id = CAN_ID_ENGINE_SPARK,
-            .timestamp_ms = sample.timestamp_ms,
-            .value = 1,
-        };
-        (void)xQueueSend(sample_queue, &spark, 0);
-    }
-    if (has_rpm) {
-        (void)xQueueSend(sample_queue, &sample, 0);
-    }
-#endif
-}
-#endif
-
 static void sample_task(void *argument)
 {
     (void)argument;
@@ -150,7 +113,18 @@ static void sample_task(void *argument)
 #if NODE_FIXED_ENGINE_CONFIG
         engine_event_t event;
         if (engine_rpm_next_event(&event) && active) {
-            enqueue_engine_event(&event);
+            sample_t sample = {
+                .sensor_name = event.spark ? "engine_spark" : "engine_rpm",
+                .can_id = event.spark ? CAN_ID_ENGINE_SPARK : CAN_ID_ENGINE_RPM,
+                .timestamp_ms = time_sync_timestamp_ms_at(event.timestamp_us),
+                .value = event.spark ? 1 : 0,
+                .engine_rpm = event.engine_rpm,
+                .local_us = event.timestamp_us,
+            };
+            /* Keep the spark and engine RPM together in one queue entry. */
+            if (xQueueSend(sample_queue, &sample, 0) != pdTRUE) {
+                ESP_LOGW(TAG, "Spark/pair output queue full; event lost");
+            }
         }
         uint32_t dropped = engine_rpm_dropped_events();
         if (dropped) {
@@ -206,6 +180,21 @@ static void send_task(void *argument)
             continue;
         }
 #if SENSOR_SERIAL_TEST
+        if (sample.can_id == CAN_ID_ENGINE_RPM) {
+            ESP_LOGI("SensorTest", "engine_rpm: time=%" PRId32 "ms engine=0",
+                     sample.timestamp_ms);
+            continue;
+        }
+        if (sample.can_id == CAN_ID_ENGINE_SPARK) {
+            ESP_LOGI("SensorTest", "engine_spark: local_us=%" PRId64
+                     " time=%" PRId32 "ms value=1", sample.local_us, sample.timestamp_ms);
+            if (sample.engine_rpm > 0) {
+                ESP_LOGI("SensorTest", "engine_rpm: time=%" PRId32
+                         "ms engine=%" PRId32 ,
+                         sample.timestamp_ms, sample.engine_rpm);
+            }
+            continue;
+        }
         /* Throttle each sensor independently so multi-sensor bench
          * configurations remain readable without hiding any sensor. */
         size_t slot = 0;
@@ -232,14 +221,19 @@ static void send_task(void *argument)
             log_slots[slot].next_log_us = now_us + 500000;
         }
 #else
-        uint8_t payload[8];
-        uint64_t packed = ((uint64_t)(uint32_t)sample.timestamp_ms << 32) |
-                          (uint32_t)sample.value;
-        memcpy(payload, &packed, sizeof(payload));
-        esp_err_t error = can_node_send(sample.can_id, payload, sizeof(payload));
-        if (error != ESP_OK) {
-            ESP_LOGW(TAG, "Sensor 0x%03" PRIX32 " TX failed: %s",
-                     sample.can_id, esp_err_to_name(error));
+        uint32_t ids[2] = {sample.can_id, CAN_ID_ENGINE_RPM};
+        int32_t values[2] = {sample.value, sample.engine_rpm};
+        size_t count = sample.can_id == CAN_ID_ENGINE_SPARK && sample.engine_rpm > 0 ? 2 : 1;
+        for (size_t i = 0; i < count; i++) {
+            uint8_t payload[8];
+            uint64_t packed = ((uint64_t)(uint32_t)sample.timestamp_ms << 32) |
+                              (uint32_t)values[i];
+            memcpy(payload, &packed, sizeof(payload));
+            esp_err_t error = can_node_send(ids[i], payload, sizeof(payload));
+            if (error != ESP_OK) {
+                ESP_LOGW(TAG, "Sensor 0x%03" PRIX32 " TX failed: %s",
+                         ids[i], esp_err_to_name(error));
+            }
         }
 #endif
     }
