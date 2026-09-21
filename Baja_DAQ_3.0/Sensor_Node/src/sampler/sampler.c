@@ -12,6 +12,7 @@
 #include "can/can_node.h"
 #include "sensors/adc_input.h"
 #include "sensors/sensor.h"
+#include "sensors/engine_rpm.h"
 #include "time/time_sync.h"
 
 #ifndef SENSOR_SERIAL_TEST
@@ -76,6 +77,9 @@ void sampler_stop(void)
 
 void sampler_discard_pending(void)
 {
+#if NODE_FIXED_ENGINE_CONFIG
+    engine_rpm_discard_pending();
+#endif
     xQueueReset(sample_queue);
 }
 
@@ -95,6 +99,45 @@ static void enqueue_latest(sample_t *sample)
     (void)xQueueSend(sample_queue, sample, 0);
 }
 
+#if NODE_FIXED_ENGINE_CONFIG
+static void enqueue_engine_event(const engine_event_t *event)
+{
+    sample_t sample = {
+        .sensor_name = "engine_rpm",
+        .can_id = CAN_ID_ENGINE_RPM,
+        .timestamp_ms = time_sync_timestamp_ms_at(event->timestamp_us),
+        .value = event->engine_rpm,
+    };
+    bool has_rpm = !event->spark || event->engine_rpm > 0;
+#if SENSOR_SERIAL_TEST
+    /* Bench output uses the same value and throttling as every sensor. */
+    if (has_rpm) {
+        enqueue_latest(&sample);
+    }
+#else
+    UBaseType_t count = (event->spark ? 1 : 0) + (has_rpm ? 1 : 0);
+    /* This task is the only producer. Reserve room for the whole event so
+     * queue pressure cannot split a spark from its RPM measurement. */
+    if (uxQueueSpacesAvailable(sample_queue) < count) {
+        ESP_LOGW(TAG, "Spark/RPM output queue full; event lost");
+        return;
+    }
+    if (event->spark) {
+        sample_t spark = {
+            .sensor_name = "engine_spark",
+            .can_id = CAN_ID_ENGINE_SPARK,
+            .timestamp_ms = sample.timestamp_ms,
+            .value = 1,
+        };
+        (void)xQueueSend(sample_queue, &spark, 0);
+    }
+    if (has_rpm) {
+        (void)xQueueSend(sample_queue, &sample, 0);
+    }
+#endif
+}
+#endif
+
 static void sample_task(void *argument)
 {
     (void)argument;
@@ -104,6 +147,17 @@ static void sample_task(void *argument)
             continue;
         }
 
+#if NODE_FIXED_ENGINE_CONFIG
+        engine_event_t event;
+        if (engine_rpm_next_event(&event) && active) {
+            enqueue_engine_event(&event);
+        }
+        uint32_t dropped = engine_rpm_dropped_events();
+        if (dropped) {
+            ESP_LOGW(TAG, "Spark capture overflow: %" PRIu32 " events lost", dropped);
+        }
+        continue;
+#endif
         int64_t now = esp_timer_get_time();
         int64_t next_due = now + 1000000;
         for (size_t i = 0; i < sensor_count; i++) {
@@ -127,18 +181,11 @@ static void sample_task(void *argument)
         }
 
         int64_t sleep_us = next_due - esp_timer_get_time();
-        if (sleep_us >= 2000) {
-            vTaskDelay(pdMS_TO_TICKS((uint32_t)(sleep_us / 1000)));
-        } else {
-            /*
-             * taskYIELD() only gives CPU time to tasks at the same or a
-             * higher priority. If sampling is continuously close to or
-             * behind schedule, that starves the lower-priority idle task and
-             * triggers the task watchdog. Blocking for one tick guarantees
-             * idle time while adding at most one scheduler tick of jitter.
-             */
-            vTaskDelay(1);
-        }
+        /* Sub-tick sleeps must still block. At the configured 100 Hz tick
+         * rate, pdMS_TO_TICKS(2..9) is zero and would starve the idle task. */
+        TickType_t sleep_ticks = sleep_us > 0
+            ? pdMS_TO_TICKS((uint32_t)(sleep_us / 1000)) : 0;
+        vTaskDelay(sleep_ticks > 0 ? sleep_ticks : 1);
     }
 }
 
