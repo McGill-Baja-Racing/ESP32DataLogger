@@ -8,12 +8,15 @@
 /* First-pass general analog channel: ESP32-C3 ADC1 GPIO1, reported in mV. */
 #define GENERIC_ADC_GPIO 1
 
-static int32_t read_voltage_mv(sensor_t *sensor)
+static esp_err_t read_voltage_mv(sensor_t *sensor, int32_t *value)
 {
     (void)sensor;
     int voltage_mv = 0;
-    return adc_input_read_mv(GENERIC_ADC_GPIO, &voltage_mv) == ESP_OK
-         ? voltage_mv : 0;
+    esp_err_t error = adc_input_read_mv(GENERIC_ADC_GPIO, &voltage_mv);
+    if (error == ESP_OK) {
+        *value = voltage_mv;
+    }
+    return error;
 }
 
 sensor_t generic_adc_sensor = {

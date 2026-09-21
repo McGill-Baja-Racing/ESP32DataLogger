@@ -165,13 +165,14 @@ static void start_encoder(sensor_t *sensor)
     context->last_read_us = now_us;
 }
 
-static int32_t read_rpm(sensor_t *sensor)
+static esp_err_t read_rpm(sensor_t *sensor, int32_t *value)
 {
     encoder_context_t *context = sensor->context;
     int64_t now_us = esp_timer_get_time();
     int64_t elapsed_us = now_us - context->last_read_us;
     if (elapsed_us <= 0) {
-        return 0;
+        *value = 0;
+        return ESP_OK;
     }
     context->last_read_us = now_us;
 
@@ -190,7 +191,8 @@ static int32_t read_rpm(sensor_t *sensor)
     }
 
     if (encoder_is_stopped(last_valid_edge_us, now_us)) {
-        return 0;
+        *value = 0;
+        return ESP_OK;
     }
 
     int64_t window_count = 0;
@@ -199,7 +201,8 @@ static int32_t read_rpm(sensor_t *sensor)
         window_count += context->count_window[i];
         window_elapsed_us += context->time_window_us[i];
     }
-    return calculate_rpm(window_count, window_elapsed_us);
+    *value = calculate_rpm(window_count, window_elapsed_us);
+    return ESP_OK;
 }
 
 sensor_t bearing_encoder_sensor = {

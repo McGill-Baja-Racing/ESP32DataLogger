@@ -168,12 +168,14 @@ static void sample_task(void *argument)
                     .sensor_name = sensor->name,
                     .can_id = sensor->can_id,
                     .timestamp_ms = time_sync_timestamp_ms(),
-                    .value = sensor->read(sensor),
                 };
+                esp_err_t error = sensor->read(sensor, &sample.value);
                 while (sensor->next_sample_us <= now) {
                     sensor->next_sample_us += sensor->period_us;
                 }
-                enqueue_latest(&sample);
+                if (error == ESP_OK) {
+                    enqueue_latest(&sample);
+                }
             }
             if (sensor->next_sample_us < next_due) {
                 next_due = sensor->next_sample_us;

@@ -10,6 +10,7 @@ idf_component_register(
         "sensors/bearing_encoder.c"
         "sensors/generic_adc.c"
         "sensors/engine_rpm.c"
+        "sensors/mpu6500.c"
         "time/time_sync.c"
     INCLUDE_DIRS
         "."

@@ -20,6 +20,7 @@ typedef struct {
     uint32_t log_drops;
     bool live_enabled;
     const char *node_1;
+    const char *node_3;
     const char *node_4;
     const char *node_5;
     const char *node_6;
