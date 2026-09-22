@@ -119,11 +119,15 @@ NodeEngineBench uses the shared throttled serial format for engine RPM only.
 ### Powertrain CSV export
 
 **Powertrain CSV** downloads `log_XXXX_rpm_paired.csv` with the columns
-`Timestamp,Engine RPM,Wheel RPM`. Timestamp is the engine sample time in
+`Timestamp,Engine RPM,Wheel RPM,Car Speed (km/h)`. Timestamp is the engine sample time in
 milliseconds. Each engine sample uses the latest previously recorded bearing
 RPM sample, provided it is no more than 100 ms old. Missing, future, or stale
 wheel samples omit the row; zeros and signed RPM values are preserved.
 Wheel RPM is the raw bearing reading, without gear scaling.
+
+Car Speed (km/h) holds the latest GPS speed recorded before the engine record.
+It is blank if no GPS reading has a timestamp at or before that sample; there is
+no age cutoff.
 
 Endpoint: `/api/logs/download?name=log_0001.bin&format=paired`.
 Validate the exporter with `python3 tests/test_paired_csv.py`.

@@ -36,9 +36,10 @@ with tempfile.TemporaryDirectory() as directory:
     def export(records):
         p=temp/'input.bin';p.write_bytes(b''.join(struct.pack('<qQ',cid,(ts<<32)|(value&0xffffffff)) for cid,ts,value in records))
         text=subprocess.check_output([str(temp/'test'),str(p)],text=True)
-        assert text.splitlines()[0]=='Timestamp,Engine RPM,Wheel RPM'
+        assert text.splitlines()[0]=='Timestamp,Engine RPM,Wheel RPM,Car Speed (km/h)'
         rows=list(csv.DictReader(io.StringIO(text)))
-        assert all(len(row)==3 and all(v!='' for v in row.values()) for row in rows)
+        assert all(len(row)==4 for row in rows)
+        export.speeds=[row['Car Speed (km/h)'] for row in rows]
         return [[int(row[k]) for k in ('Timestamp','Engine RPM','Wheel RPM')] for row in rows]
     E,W,UNUSED,SPARK,GPS=187,185,189,188,0x700
     assert export([(W,0,0),(E,0,0)])==[[0,0,0]]
@@ -52,4 +53,10 @@ with tempfile.TemporaryDirectory() as directory:
     assert export([(W,1000,900),(E,10,3000)])==[]  # clock reset cannot reuse wheel
     assert export([])==[]
     assert export([(W,1000,1000)])==[]
+    assert export([(GPS,100,1234),(W,100,900),(E,100,3000),(GPS,120,0),(E,120,3100)])==[[100,3000,900],[120,3100,900]]
+    assert export.speeds==['12.34','0.00']
+    export([(GPS,101,1234),(W,100,900),(E,100,3000)])
+    assert export.speeds==['']
+    export([(GPS,0xfffffffe,1),(W,0xfffffffe,900),(E,4,3000)])
+    assert export.speeds==['0.01']
 print('Paired CSV tests passed: independent sensors, 100 ms cutoff, missing/future data, zero, sign, rollover')
