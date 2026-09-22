@@ -131,3 +131,6 @@ no age cutoff.
 
 Endpoint: `/api/logs/download?name=log_0001.bin&format=paired`.
 Validate the exporter with `python3 tests/test_paired_csv.py`.
+
+Full CSV exports retain `timestamp_ms` and add `absolute_time_utc` from GPS.
+See [GPS absolute time](docs/ABSOLUTE_TIME.md) for wiring, accuracy, and UTC companion files.
