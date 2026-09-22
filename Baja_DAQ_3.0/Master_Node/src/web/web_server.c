@@ -280,29 +280,67 @@ static esp_err_t stream_binary(httpd_req_t *request, FILE *file)
     return result;
 }
 
-/* Pair independent node samples only while exporting. Wheel values may be
- * reused for engine samples within 100 ms; stale/future values are omitted. */
-static esp_err_t stream_paired_csv(httpd_req_t *request, FILE *file)
+static int64_t read_utc_ms(FILE *utc_file)
 {
-    static const char header[] = "Timestamp,Engine RPM,Wheel RPM,Car Speed (km/h)\r\n";
+    int64_t utc_ms = 0;
+    if (!utc_file || fread(&utc_ms, sizeof(utc_ms), 1, utc_file) != 1) return 0;
+    return utc_ms > 0 ? utc_ms : 0;
+}
+
+static void format_absolute_time(int64_t utc_ms, char *absolute_time, size_t size)
+{
+    absolute_time[0] = '\0';
+    if (utc_ms <= 0) return;
+    time_t seconds = (time_t)(utc_ms / 1000);
+    struct tm utc;
+    char date[24];
+    if (gmtime_r(&seconds, &utc) &&
+        strftime(date, sizeof(date), "%Y-%m-%dT%H:%M:%S", &utc)) {
+        snprintf(absolute_time, size, "%s.%03uZ", date,
+                 (unsigned)(utc_ms % 1000));
+    }
+}
+
+static bool sample_at_or_before(uint32_t timestamp, uint32_t sample_timestamp)
+{
+    return (uint32_t)(timestamp - sample_timestamp) < 0x80000000U;
+}
+
+/* Emit one row per engine sample with a recent bearing sample. Lower-rate GPS
+ * values are held between fixes. Front-brake pressure must be recent to avoid
+ * presenting a stale pressure after its sensor goes offline. */
+static esp_err_t stream_paired_csv(httpd_req_t *request, FILE *file,
+                                   FILE *utc_file)
+{
+    static const char header[] =
+        "Relative time,Absolute time,Brake pressure,Bearing RPM,Engine RPM,"
+        "GPS latitude,GPS longitude,GPS Speed\r\n";
     if (httpd_resp_send_chunk(request, header, sizeof(header) - 1) != ESP_OK) {
         return ESP_FAIL;
     }
     uint64_t record[2];
-    uint32_t wheel_timestamp = 0;
-    int32_t wheel_rpm = 0;
-    bool have_wheel = false;
-    bool have_speed = false;
-    uint32_t speed_timestamp = 0;
-    int32_t speed_x100 = 0;
+    uint32_t bearing_timestamp = 0, brake_timestamp = 0;
+    uint32_t speed_timestamp = 0, latitude_timestamp = 0, longitude_timestamp = 0;
+    int32_t bearing_rpm = 0, brake_pressure = 0;
+    int32_t speed_x100 = 0, latitude_e7 = 0, longitude_e7 = 0;
+    bool have_bearing = false, have_brake = false;
+    bool have_speed = false, have_latitude = false, have_longitude = false;
     while (fread(record, sizeof(record), 1, file) == 1) {
+        /* Keep the companion file aligned with every binary record. */
+        int64_t utc_ms = read_utc_ms(utc_file);
         uint32_t can_id = (uint32_t)record[0] & 0x7ffU;
         uint32_t timestamp = (uint32_t)(record[1] >> 32);
         int32_t value = (int32_t)(uint32_t)record[1];
+        if (can_id == CAN_ID_FRONT_BRAKE) {
+            brake_timestamp = timestamp;
+            brake_pressure = value;
+            have_brake = true;
+            continue;
+        }
         if (can_id == CAN_ID_BEARING_ENCODER) {
-            wheel_timestamp = timestamp;
-            wheel_rpm = value;
-            have_wheel = true;
+            bearing_timestamp = timestamp;
+            bearing_rpm = value;
+            have_bearing = true;
             continue;
         }
         if (can_id == CAN_ID_GPS_SPEED) {
@@ -311,15 +349,45 @@ static esp_err_t stream_paired_csv(httpd_req_t *request, FILE *file)
             have_speed = true;
             continue;
         }
-        if (can_id != CAN_ID_ENGINE_RPM || !have_wheel ||
-            (uint32_t)(timestamp - wheel_timestamp) > 100) continue;
-        char speed_text[32] = "";
-        if (have_speed && (uint32_t)(timestamp - speed_timestamp) < 0x80000000U) {
+        if (can_id == CAN_ID_GPS_LATITUDE) {
+            latitude_timestamp = timestamp;
+            latitude_e7 = value;
+            have_latitude = true;
+            continue;
+        }
+        if (can_id == CAN_ID_GPS_LONGITUDE) {
+            longitude_timestamp = timestamp;
+            longitude_e7 = value;
+            have_longitude = true;
+            continue;
+        }
+        if (can_id != CAN_ID_ENGINE_RPM || !have_bearing ||
+            !sample_at_or_before(timestamp, bearing_timestamp) ||
+            (uint32_t)(timestamp - bearing_timestamp) > 100) continue;
+
+        char brake_text[16] = "", speed_text[16] = "";
+        char latitude_text[24] = "", longitude_text[24] = "";
+        if (have_brake && sample_at_or_before(timestamp, brake_timestamp) &&
+            (uint32_t)(timestamp - brake_timestamp) <= 100) {
+            snprintf(brake_text, sizeof(brake_text), "%" PRId32, brake_pressure);
+        }
+        if (have_speed && sample_at_or_before(timestamp, speed_timestamp)) {
             snprintf(speed_text, sizeof(speed_text), "%.2f", speed_x100 / 100.0);
         }
-        char row[128];
-        int length = snprintf(row, sizeof(row), "%" PRIu32 ",%" PRId32
-                              ",%" PRId32 ",%s\r\n", timestamp, value, wheel_rpm, speed_text);
+        if (have_latitude && sample_at_or_before(timestamp, latitude_timestamp)) {
+            snprintf(latitude_text, sizeof(latitude_text), "%.7f", latitude_e7 / 10000000.0);
+        }
+        if (have_longitude && sample_at_or_before(timestamp, longitude_timestamp)) {
+            snprintf(longitude_text, sizeof(longitude_text), "%.7f",
+                     longitude_e7 / 10000000.0);
+        }
+        char row[256];
+        char absolute_time[32];
+        format_absolute_time(utc_ms, absolute_time, sizeof(absolute_time));
+        int length = snprintf(row, sizeof(row), "%" PRIu32 ",%s,%s,%" PRId32
+                              ",%" PRId32 ",%s,%s,%s\r\n", timestamp,
+                              absolute_time, brake_text, bearing_rpm, value,
+                              latitude_text, longitude_text, speed_text);
         if (length < 0 || length >= (int)sizeof(row) ||
             httpd_resp_send_chunk(request, row, length) != ESP_OK) {
             return ESP_FAIL;
@@ -339,18 +407,9 @@ static esp_err_t stream_csv(httpd_req_t *request, FILE *file, FILE *utc_file)
     uint64_t sample_index = 0;
     while (fread(record, sizeof(record), 1, file) == 1) {
         /* Consume one companion entry per binary record. */
-        char absolute_time[32] = "";
-        int64_t utc_ms = 0;
-        if (utc_file && fread(&utc_ms, sizeof(utc_ms), 1, utc_file) == 1 && utc_ms > 0) {
-            time_t seconds = (time_t)(utc_ms / 1000);
-            struct tm utc;
-            char date[24];
-            if (gmtime_r(&seconds, &utc) &&
-                strftime(date, sizeof(date), "%Y-%m-%dT%H:%M:%S", &utc)) {
-                snprintf(absolute_time, sizeof(absolute_time), "%s.%03uZ",
-                         date, (unsigned)(utc_ms % 1000));
-            }
-        }
+        char absolute_time[32];
+        format_absolute_time(read_utc_ms(utc_file), absolute_time,
+                             sizeof(absolute_time));
         uint32_t can_id = (uint32_t)record[0] & 0x7ffU;
         uint64_t packed = record[1];
         int32_t value = (int32_t)(packed & UINT32_MAX);
@@ -415,7 +474,7 @@ static esp_err_t download_handler(httpd_req_t *request)
         char csv_name[48];
         snprintf(csv_name, sizeof(csv_name), "%.*s%s.csv",
                  (int)(strlen(name) - 4), name,
-                 paired ? "_rpm_paired" : "");
+                 paired ? "_powertrain" : "");
         snprintf(attachment, sizeof(attachment), "attachment; filename=\"%s\"", csv_name);
         httpd_resp_set_type(request, "text/csv; charset=utf-8");
     } else {
@@ -424,12 +483,12 @@ static esp_err_t download_handler(httpd_req_t *request)
     }
     httpd_resp_set_hdr(request, "Content-Disposition", attachment);
     FILE *utc_file = NULL;
-    if (csv_format && !paired) {
+    if (csv_format) {
         char utc_path[104];
         snprintf(utc_path, sizeof(utc_path), "%s.utc", path);
         utc_file = fopen(utc_path, "rb");
     }
-    esp_err_t result = paired ? stream_paired_csv(request, file)
+    esp_err_t result = paired ? stream_paired_csv(request, file, utc_file)
                      : csv_format ? stream_csv(request, file, utc_file)
                      : stream_binary(request, file);
     if (utc_file) fclose(utc_file);

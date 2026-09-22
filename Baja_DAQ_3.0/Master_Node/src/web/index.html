@@ -171,7 +171,7 @@ function renderLogs(){
   for(const l of logs){
     const row=document.createElement('div');row.className='row';const label=document.createElement('span');label.textContent=`${l.name} (${(l.size_bytes/1024).toFixed(1)} KiB)`;row.append(label);
     const actions=document.createElement('span');actions.className='log-actions';
-    for(const f of ['bin','csv','paired']){const a=document.createElement('a');a.className='download';a.textContent=f==='paired'?'Powertrain CSV':f.toUpperCase();if(f==='paired')a.title='Timestamp (ms), Engine RPM, Wheel RPM, Car Speed (km/h) — complete RPM pairs with latest GPS speed';a.href=`/api/logs/download?name=${encodeURIComponent(l.name)}&format=${f}`;actions.append(a)}
+    for(const f of ['bin','csv','paired']){const a=document.createElement('a');a.className='download';a.textContent=f==='paired'?'Powertrain CSV':f.toUpperCase();if(f==='paired')a.title='Relative/absolute time, front brake pressure, bearing/engine RPM, GPS position and speed';a.href=`/api/logs/download?name=${encodeURIComponent(l.name)}&format=${f}`;actions.append(a)}
     const more=document.createElement('details');more.className='more';const summary=document.createElement('summary');summary.textContent='⋯';summary.setAttribute('aria-label',`More actions for ${l.name}`);const menu=document.createElement('div');menu.className='more-menu';const rename=document.createElement('button');rename.type='button';rename.textContent='Rename file';rename.onclick=()=>renameLog(l.name);menu.append(rename);more.append(summary,menu);actions.append(more);row.append(actions);$('logs').append(row);
   }
 }
