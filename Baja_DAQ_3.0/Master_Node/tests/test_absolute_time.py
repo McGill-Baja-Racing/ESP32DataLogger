@@ -247,7 +247,10 @@ int main(void) {
 
     def test_csv_export_with_and_without_persisted_utc(self):
         source = (ROOT / "src/web/web_server.c").read_text()
-        function = source[source.index("static esp_err_t stream_csv("):source.index("static esp_err_t download_handler(")]
+        helper_start = source.index("static int64_t read_utc_ms(")
+        helper_end = source.index("static bool sample_at_or_before(", helper_start)
+        function = (source[helper_start:helper_end] +
+                    source[source.index("static esp_err_t stream_csv("):source.index("static esp_err_t download_handler(")])
         harness = r"""
 #define _POSIX_C_SOURCE 200809L
 #include <stdbool.h>

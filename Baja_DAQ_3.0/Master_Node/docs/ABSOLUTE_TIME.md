@@ -38,5 +38,6 @@ and malformed telemetry sentences do not synchronize the clock or emit samples.
 There is no second UART reader or second checksum/field parser.
 For a bench with only GPS attached, build/upload `MasterNoCAN`; select GPS speed
 in Live Data while recording. `MasterStable` retains normal CAN support.
-Full CSV includes the new column; Powertrain CSV retains its
-specialized RPM schema. GPS-only logs have no RPM pairs to export.
+Full CSV and Powertrain CSV include absolute UTC time. Powertrain rows use the
+UTC companion entry aligned with the engine sample. GPS-only logs have no
+engine/bearing pairs to export.

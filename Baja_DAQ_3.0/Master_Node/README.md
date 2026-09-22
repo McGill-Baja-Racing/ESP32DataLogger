@@ -118,19 +118,25 @@ NodeEngineBench uses the shared throttled serial format for engine RPM only.
 
 ### Powertrain CSV export
 
-**Powertrain CSV** downloads `log_XXXX_rpm_paired.csv` with the columns
-`Timestamp,Engine RPM,Wheel RPM,Car Speed (km/h)`. Timestamp is the engine sample time in
-milliseconds. Each engine sample uses the latest previously recorded bearing
-RPM sample, provided it is no more than 100 ms old. Missing, future, or stale
-wheel samples omit the row; zeros and signed RPM values are preserved.
-Wheel RPM is the raw bearing reading, without gear scaling.
+**Powertrain CSV** downloads `log_XXXX_powertrain.csv` with the columns
+`Relative time,Absolute time,Brake pressure,Bearing RPM,Engine RPM,GPS latitude,GPS longitude,GPS Speed`.
+Relative time is the engine sample's master-clock time in milliseconds. Absolute
+time is its GPS-synchronized UTC timestamp and is blank before synchronization
+or when the `.utc` companion is unavailable.
 
-Car Speed (km/h) holds the latest GPS speed recorded before the engine record.
-It is blank if no GPS reading has a timestamp at or before that sample; there is
-no age cutoff.
+Brake pressure uses the latest front-brake reading (`0x0B1`) in PSI when it is
+no more than 100 ms old. The rear-brake channel remains available in the full
+CSV. Each engine sample uses the latest bearing RPM at or before its timestamp,
+provided it is no more than 100 ms old. Missing, future, or stale bearing values
+omit the row; zeros and signed RPM values are preserved. Bearing RPM is the raw
+reading, without gear scaling.
+
+GPS latitude and longitude are decimal degrees, and GPS speed is km/h. Each
+field holds the latest corresponding GPS value recorded at or before the engine
+sample, with no age cutoff. A field is blank until its first eligible reading.
 
 Endpoint: `/api/logs/download?name=log_0001.bin&format=paired`.
 Validate the exporter with `python3 tests/test_paired_csv.py`.
 
-Full CSV exports retain `timestamp_ms` and add `absolute_time_utc` from GPS.
+Full CSV exports also retain `timestamp_ms` and `absolute_time_utc` from GPS.
 See [GPS absolute time](docs/ABSOLUTE_TIME.md) for wiring, accuracy, and UTC companion files.

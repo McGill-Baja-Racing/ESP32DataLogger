@@ -6,6 +6,8 @@ import subprocess
 import tempfile
 ROOT=Path(__file__).resolve().parents[1]
 source=(ROOT/'src/web/web_server.c').read_text()
+helper_start=source.index('static int64_t read_utc_ms(')
+helper_end=source.index('static bool sample_at_or_before(',helper_start)
 start=source.index('static esp_err_t stream_csv(')
 end=source.index('static esp_err_t download_handler',start)
 harness=r'''
@@ -30,7 +32,7 @@ static const live_signal_metadata_t *metadata_for(uint32_t id) {
 static int httpd_resp_send_chunk(httpd_req_t *request,const char *data,size_t size) {
     (void)request;return size&&fwrite(data,1,size,stdout)!=size?ESP_FAIL:ESP_OK;
 }
-'''+source[start:end]+r'''
+'''+source[helper_start:helper_end]+source[start:end]+r'''
 int main(void) {
     const uint32_t ids[]={187,185,188,190,189,187,185,187,0x700,0x700,0x700};
     const int32_t values[]={3000,-1000,1,4,1000,0,20000,3100,1234,0,1};
