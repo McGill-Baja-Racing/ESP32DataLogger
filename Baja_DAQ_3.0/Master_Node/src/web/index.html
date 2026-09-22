@@ -63,7 +63,7 @@ async function refreshStatus(){
   try{
     const s=await json('/api/status'); loggerState=s.logger_state;
     $('state').textContent=pretty(s.logger_state); $('file').textContent=s.current_file==='none'?'No session yet':s.current_file;
-    $('stats').textContent=`CAN drops: ${s.can_drops} | Log drops: ${s.log_drops}`;
+    $('stats').textContent=`CAN RX errors: ${s.can_errors_available?s.can_rx_errors:'N/A'} | CAN TX errors: ${s.can_errors_available?s.can_tx_errors:'N/A'} | CAN drops: ${s.can_drops} | Log drops: ${s.log_drops}`;
     $('nodes').textContent=`Nodes — 1: ${s.nodes['1']}, 3: ${s.nodes['3']}, 4: ${s.nodes['4']}, 5: ${s.nodes['5']}, 6: ${s.nodes['6']}`;
     $('start').disabled=s.logger_state!=='idle'; $('stop').disabled=s.logger_state!=='running';
     $('liveEnable').disabled=s.logger_state!=='running'||token!==null||s.live_enabled;
