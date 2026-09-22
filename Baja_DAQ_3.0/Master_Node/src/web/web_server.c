@@ -1,6 +1,5 @@
 #include "web/web_server.h"
 
-#include <ctype.h>
 #include <dirent.h>
 #include <errno.h>
 #include <inttypes.h>
@@ -30,9 +29,8 @@
 #define DOWNLOAD_CHUNK_SIZE 4096
 
 typedef struct {
-    char name[32];
+    char name[DATA_LOGGER_FILENAME_MAX + 1];
     off_t size;
-    unsigned index;
 } log_entry_t;
 
 static const char *TAG = "WebServer";
@@ -48,26 +46,11 @@ static const char *base_name(const char *path)
     return slash ? slash + 1 : path;
 }
 
-static bool parse_log_name(const char *name, unsigned *index)
-{
-    if (!name || strncmp(name, "log_", 4) != 0) return false;
-    const char *digits = name + 4;
-    const char *suffix = strstr(digits, ".bin");
-    if (!suffix || suffix[4] != '\0' || suffix - digits < 4) return false;
-    unsigned value = 0;
-    for (const char *p = digits; p < suffix; p++) {
-        if (!isdigit((unsigned char)*p)) return false;
-        value = value * 10U + (unsigned)(*p - '0');
-    }
-    if (index) *index = value;
-    return true;
-}
-
-static int newest_first(const void *left, const void *right)
+static int alphabetical_descending(const void *left, const void *right)
 {
     const log_entry_t *a = left;
     const log_entry_t *b = right;
-    return a->index < b->index ? 1 : a->index > b->index ? -1 : 0;
+    return strcmp(b->name, a->name);
 }
 
 static log_entry_t *load_completed_logs(size_t *count)
@@ -82,8 +65,7 @@ static log_entry_t *load_completed_logs(size_t *count)
                        ? NULL : base_name(data_logger_path());
     struct dirent *item;
     while ((item = readdir(directory)) != NULL) {
-        unsigned index;
-        if (!parse_log_name(item->d_name, &index) ||
+        if (!data_logger_valid_filename(item->d_name) ||
             (active && strcmp(item->d_name, active) == 0)) {
             continue;
         }
@@ -106,11 +88,10 @@ static log_entry_t *load_completed_logs(size_t *count)
         snprintf(entries[*count].name, sizeof(entries[*count].name), "%s",
                  item->d_name);
         entries[*count].size = info.st_size;
-        entries[*count].index = index;
         (*count)++;
     }
     closedir(directory);
-    qsort(entries, *count, sizeof(*entries), newest_first);
+    qsort(entries, *count, sizeof(*entries), alphabetical_descending);
     errno = 0;
     return entries;
 }
@@ -159,12 +140,41 @@ static esp_err_t status_handler(httpd_req_t *request)
 
 static esp_err_t command_handler(httpd_req_t *request)
 {
-    app_control_result_t result =
-        strcmp(request->uri, "/api/logging/start") == 0
-        ? app_control_start_logging() : app_control_stop_logging();
+    bool starting = strncmp(request->uri, "/api/logging/start", 18) == 0;
+    char filename[DATA_LOGGER_FILENAME_MAX + 1];
+    const char *selected_name = NULL;
+    if (starting) {
+        char query[96];
+        esp_err_t query_result = httpd_req_get_url_query_str(
+            request, query, sizeof(query));
+        if (query_result == ESP_OK) {
+            if (httpd_query_key_value(query, "name", filename,
+                                      sizeof(filename)) != ESP_OK ||
+                !data_logger_valid_filename(filename)) {
+                return send_json_error(
+                    request, "400 Bad Request",
+                    "Use 1-40 letters, numbers, underscores or hyphens, followed by .bin");
+            }
+            selected_name = filename;
+        } else if (query_result != ESP_ERR_NOT_FOUND) {
+            return send_json_error(request, "400 Bad Request",
+                                   "Log filename is too long");
+        }
+    }
+    app_control_result_t result = starting
+        ? app_control_start_logging(selected_name) : app_control_stop_logging();
     if (result == APP_CONTROL_CONFLICT) {
         return send_json_error(request, "409 Conflict",
                                "Command is not valid in the current logger state");
+    }
+    if (result == APP_CONTROL_INVALID_FILENAME) {
+        return send_json_error(
+            request, "400 Bad Request",
+            "Use 1-40 letters, numbers, underscores or hyphens, followed by .bin");
+    }
+    if (result == APP_CONTROL_FILENAME_EXISTS) {
+        return send_json_error(request, "409 Conflict",
+                               "A log with this filename already exists");
     }
     if (result != APP_CONTROL_OK) {
         return send_json_error(request, "500 Internal Server Error",
@@ -195,6 +205,51 @@ static esp_err_t logs_handler(httpd_req_t *request)
     free(entries);
     httpd_resp_send_chunk(request, "]", 1);
     return httpd_resp_send_chunk(request, NULL, 0);
+}
+
+static esp_err_t rename_log_handler(httpd_req_t *request)
+{
+    char query[128];
+    char old_name[DATA_LOGGER_FILENAME_MAX + 1];
+    char new_name[DATA_LOGGER_FILENAME_MAX + 1];
+    if (httpd_req_get_url_query_str(request, query, sizeof(query)) != ESP_OK ||
+        httpd_query_key_value(query, "name", old_name, sizeof(old_name)) != ESP_OK ||
+        httpd_query_key_value(query, "new_name", new_name, sizeof(new_name)) != ESP_OK ||
+        !data_logger_valid_filename(old_name) ||
+        !data_logger_valid_filename(new_name)) {
+        return send_json_error(
+            request, "400 Bad Request",
+            "Use 1-40 letters, numbers, underscores or hyphens, followed by .bin");
+    }
+    if (xSemaphoreTake(download_mutex, 0) != pdTRUE) {
+        return send_json_error(request, "503 Service Unavailable",
+                               "Another log operation is already active");
+    }
+    data_logger_rename_result_t result = data_logger_rename(old_name, new_name);
+    xSemaphoreGive(download_mutex);
+    if (result == DATA_LOGGER_RENAME_ACTIVE) {
+        return send_json_error(request, "409 Conflict",
+                               "The active log cannot be renamed");
+    }
+    if (result == DATA_LOGGER_RENAME_NOT_FOUND) {
+        return send_json_error(request, "404 Not Found", "Log file not found");
+    }
+    if (result == DATA_LOGGER_RENAME_EXISTS) {
+        return send_json_error(request, "409 Conflict",
+                               "A log with the new filename already exists");
+    }
+    if (result == DATA_LOGGER_RENAME_INVALID_NAME) {
+        return send_json_error(request, "400 Bad Request", "Invalid log filename");
+    }
+    if (result != DATA_LOGGER_RENAME_OK) {
+        return send_json_error(request, "500 Internal Server Error",
+                               "Unable to rename the log file");
+    }
+    char body[80];
+    snprintf(body, sizeof(body), "{\"name\":\"%s\"}", new_name);
+    httpd_resp_set_type(request, "application/json");
+    httpd_resp_set_hdr(request, "Cache-Control", "no-store");
+    return httpd_resp_sendstr(request, body);
 }
 
 static const live_signal_metadata_t *metadata_for(uint32_t can_id)
@@ -386,11 +441,11 @@ static esp_err_t stream_csv(httpd_req_t *request, FILE *file, FILE *utc_file)
 
 static esp_err_t download_handler(httpd_req_t *request)
 {
-    char query[128], name[32], format[8];
+    char query[128], name[DATA_LOGGER_FILENAME_MAX + 1], format[8];
     if (httpd_req_get_url_query_str(request, query, sizeof(query)) != ESP_OK ||
         httpd_query_key_value(query, "name", name, sizeof(name)) != ESP_OK ||
         httpd_query_key_value(query, "format", format, sizeof(format)) != ESP_OK ||
-        !parse_log_name(name, NULL) ||
+        !data_logger_valid_filename(name) ||
         (strcmp(format, "bin") != 0 && strcmp(format, "csv") != 0 &&
          strcmp(format, "paired") != 0)) {
         return send_json_error(request, "400 Bad Request",
@@ -570,6 +625,7 @@ static esp_err_t start_http_server(void)
         {.uri = "/api/logging/start", .method = HTTP_POST, .handler = command_handler},
         {.uri = "/api/logging/stop", .method = HTTP_POST, .handler = command_handler},
         {.uri = "/api/logs", .method = HTTP_GET, .handler = logs_handler},
+        {.uri = "/api/logs/rename", .method = HTTP_POST, .handler = rename_log_handler},
         {.uri = "/api/logs/download", .method = HTTP_GET, .handler = download_handler},
         {.uri = "/api/live/signals", .method = HTTP_GET, .handler = live_signals_handler},
         {.uri = "/api/live/start", .method = HTTP_POST, .handler = live_start_handler},

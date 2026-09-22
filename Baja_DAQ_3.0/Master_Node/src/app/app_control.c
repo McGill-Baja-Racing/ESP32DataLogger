@@ -19,7 +19,7 @@ esp_err_t app_control_init(void)
     return lifecycle_mutex ? ESP_OK : ESP_ERR_NO_MEM;
 }
 
-app_control_result_t app_control_start_logging(void)
+app_control_result_t app_control_start_logging(const char *filename)
 {
     if (!lifecycle_mutex ||
         xSemaphoreTake(lifecycle_mutex, pdMS_TO_TICKS(1000)) != pdTRUE) {
@@ -31,8 +31,18 @@ app_control_result_t app_control_start_logging(void)
         xSemaphoreGive(lifecycle_mutex);
         return APP_CONTROL_CONFLICT;
     }
-    if (!data_logger_start()) {
+    data_logger_start_result_t start_result = data_logger_start(filename);
+    if (start_result != DATA_LOGGER_START_OK) {
         xSemaphoreGive(lifecycle_mutex);
+        if (start_result == DATA_LOGGER_START_INVALID_NAME) {
+            return APP_CONTROL_INVALID_FILENAME;
+        }
+        if (start_result == DATA_LOGGER_START_EXISTS) {
+            return APP_CONTROL_FILENAME_EXISTS;
+        }
+        if (start_result == DATA_LOGGER_START_ACTIVE) {
+            return APP_CONTROL_CONFLICT;
+        }
         return APP_CONTROL_FAILED;
     }
 #if MASTER_CAN_ENABLED

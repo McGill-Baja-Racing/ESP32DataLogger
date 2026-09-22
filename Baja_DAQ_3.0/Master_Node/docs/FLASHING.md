@@ -27,8 +27,10 @@ quadrature decoding. Brake scaling assumes 0.5–4.5 V sensors, the existing
 2.33/4.33 divider, and spans of 3000 psi front / 1600 psi rear.
 These settings must match the fitted sensors and wiring.
 
-After all boards are powered, the master starts recording automatically.
-Check that nodes 1, 3, 4, and 5 become active, and that CAN/log drop counts
+After all boards are powered, the master starts its recording flow after five
+seconds, waiting at most three more seconds for GPS time before using a numbered filename.
+Connect to `BajaDAQ` and open `http://192.168.4.1` to confirm the active
+date/time filename. Check that nodes 1, 3, 4, and 5 become active, and that CAN/log drop counts
 stay at zero. Open live data and exercise each sensor; check both brake
 channels, all MPU axes, wheel direction, and engine RPM. GPS samples appear
 when checksum-valid active RMC position fixes arrive. Stop recording before
