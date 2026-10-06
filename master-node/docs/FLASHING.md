@@ -5,12 +5,12 @@ CAN at 1 Mbit/s and `SENSOR_SERIAL_TEST=0`.
 
 | Board | Project | Environment | Sensor inputs |
 | --- | --- | --- | --- |
-| Master ESP32-P4 | Master_Node | MasterStable | GPS UART1: RX33, TX32, 9600 baud |
-| Brake ESP32-C3, node 1 | Sensor_Node | NodeBrake | Front GPIO1, rear GPIO2 |
-| MPU ESP32-C3, node 3 | Sensor_Node | NodeMPU | I2C SDA4, SCL5; address 0x68 or 0x69 |
-| Wheel ESP32-C3, node 4 | Sensor_Node | NodeEncoder | Encoder A GPIO6, B GPIO7 |
-| Engine ESP32-C3, node 5 | Sensor_Node | NodeEngine | Rising-edge pulse input GPIO3 |
-| Optional ADC ESP32-C3, node 6 | Sensor_Node | NodeADC | ADC GPIO1 |
+| Master ESP32-P4 | master-node | MasterStable | GPS UART1: RX33, TX32, 9600 baud |
+| Brake ESP32-C3, node 1 | sensor-node | NodeBrake | Front GPIO1, rear GPIO2 |
+| MPU ESP32-C3, node 3 | sensor-node | NodeMPU | I2C SDA4, SCL5; address 0x68 or 0x69 |
+| Wheel ESP32-C3, node 4 | sensor-node | NodeEncoder | Encoder A GPIO6, B GPIO7 |
+| Engine ESP32-C3, node 5 | sensor-node | NodeEngine | Rising-edge pulse input GPIO3 |
+| Optional ADC ESP32-C3, node 6 | sensor-node | NodeADC | ADC GPIO1 |
 
 CAN transceiver pins: master TX20/RX21; all sensor nodes TX21/RX20.
 `NodeEngineBench` disables CAN. `MasterNoCAN` collects only local GPS.

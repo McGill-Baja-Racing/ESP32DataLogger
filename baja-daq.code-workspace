@@ -1,0 +1,59 @@
+{
+  "folders": [
+    { "name": "master-node", "path": "master-node" },
+    { "name": "sensor-node", "path": "sensor-node" },
+    { "name": "sim-engine-rpm", "path": "simulators/engine-rpm" },
+    { "name": "sim-wheel-rpm", "path": "simulators/wheel-rpm" },
+    { "name": "repo", "path": "." }
+  ],
+  "settings": {
+    // Build, upload and monitor the project that owns the open file.
+    "platformio-ide.activateProjectOnTextEditorChange": true,
+    "platformio-ide.toolbar": [
+      { "text": "$(home)", "tooltip": "PlatformIO: Home", "commands": "platformio-ide.showHome" },
+      { "text": "$(check)", "tooltip": "PlatformIO: Build", "commands": "platformio-ide.build" },
+      { "text": "$(arrow-right)", "tooltip": "PlatformIO: Upload and Monitor", "commands": "platformio-ide.uploadAndMonitor" },
+      { "text": "$(trashcan)", "tooltip": "PlatformIO: Clean", "commands": "platformio-ide.clean" },
+      { "text": "$(plug)", "tooltip": "PlatformIO: Serial Monitor", "commands": "platformio-ide.serialMonitor" },
+      { "text": "$(terminal)", "tooltip": "PlatformIO: New Terminal", "commands": "platformio-ide.newTerminal" }
+    ],
+    // The code has no formatter configuration: never reformat whole files.
+    "editor.formatOnSave": false,
+    "editor.formatOnPaste": false,
+    // The CMakeLists.txt files belong to ESP-IDF; PlatformIO runs the build.
+    "cmake.configureOnOpen": false,
+    // The projects already have their own folders above.
+    "files.exclude": {
+      "master-node": true,
+      "sensor-node": true,
+      "simulators": true,
+      "**/.pio": true,
+      "**/managed_components": true
+    }
+  },
+  "tasks": {
+    "version": "2.0.0",
+    "tasks": [
+      {
+        "label": "Decode the open log file to CSV",
+        "type": "shell",
+        "command": "python3",
+        "args": ["${workspaceFolder:master-node}/tools/decode_log.py", "${file}"],
+        "problemMatcher": []
+      }
+    ]
+  },
+  "extensions": {
+    "recommendations": [
+      "platformio.platformio-ide",
+      "Jason2866.esp-decoder"
+    ],
+    // These conflict with PlatformIO IDE or keep asking to configure CMake.
+    "unwantedRecommendations": [
+      "pioarduino.pioarduino-ide",
+      "espressif.esp-idf-extension",
+      "ms-vscode.cmake-tools",
+      "ms-vscode.cpptools-extension-pack"
+    ]
+  }
+}

@@ -1,0 +1,6 @@
+# VS Code settings for this repository live in baja-daq.code-workspace.
+# The editor extensions rewrite each project's .vscode/ folder on every machine.
+.vscode/
+
+.DS_Store
+__pycache__/

@@ -3,7 +3,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-/* Keep these values identical to Sensor_Node/src/protocol/app_protocol.h. */
+/* Keep these values identical to sensor-node/src/protocol/app_protocol.h. */
 #define CAN_ID_STOP                 0x0A0
 #define CAN_ID_START                0x0A1
 #define CAN_ID_MASTER_TIME          0x0A2

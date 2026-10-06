@@ -56,7 +56,7 @@ selected registry branch is never initialized, started, or read by the sampler.
 | `src/protocol/app_protocol.h` | Assigning a new sensor CAN ID |
 | `src/CMakeLists.txt` | Adding a new `.c` source file to the firmware build |
 | `platformio.ini` | Adding a build environment, node ID, configuration macro, or test mode |
-| `../Master_Node/src/protocol/app_protocol.h` | Allowing the Master to recognize the ID and map it to its node |
+| `../master-node/src/protocol/app_protocol.h` | Allowing the Master to recognize the ID and map it to its node |
 | Master logging/metadata files | Giving the new signal a name, unit, or output column when required |
 
 Do not add sensor-specific decisions to `main.c` or `sampler.c`. Those modules
@@ -194,7 +194,7 @@ physical node ID.
 
 ### 5. Update the Master
 
-Update `../Master_Node/src/protocol/app_protocol.h` with the matching ID. Add it
+Update `../master-node/src/protocol/app_protocol.h` with the matching ID. Add it
 to `protocol_is_sensor_id()` and map it to the correct `NODE_ID` in
 `protocol_sensor_node_id()`.
 
