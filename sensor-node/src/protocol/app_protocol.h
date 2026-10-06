@@ -2,7 +2,7 @@
 
 /*
  * Sensor-node side of the shared master/node CAN protocol. Keep matching
- * constants in the Master_Node firmware synchronized when this file changes.
+ * constants in the master-node firmware synchronized when this file changes.
  */
 
 #ifndef NODE_ID
