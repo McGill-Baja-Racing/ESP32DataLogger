@@ -1,149 +1,36 @@
-# DAQ 3.0 Sensor Node
+# Sensor nodes
 
-Firmware for the ESP32-C3 sensor nodes used by the Baja DAQ 3.0 system. Each
-node reads a fixed set of sensors, timestamps samples using the master node's
-clock, and sends the samples over a 1 Mbit/s CAN bus.
+ESP32-C3 sensor nodes turn electrical inputs into timestamped vehicle measurements and send them to the master over CAN. Read the [system overview](../docs/SYSTEM_OVERVIEW.md) if these concepts are new.
 
-The firmware is intentionally small and build-time configured. The master
-starts and stops sampling but does not configure sensor hardware at runtime.
+## One project, several board roles
 
-## Supported builds
+A PlatformIO environment selects a fixed set of sensor drivers when firmware is compiled. Flash the environment matching the physical board. The master controls when the whole node samples; it does not choose sensor hardware at runtime.
 
-| PlatformIO environment | Node | Sensors |
+| Environment | Node | Measurements |
 |---|---:|---|
-| `NodeBrake` | 1 | Front brake pressure on GPIO1 and rear brake pressure on GPIO2, both at 100 Hz |
-| `NodeEncoder` | 4 | Signed bearing RPM on GPIO6/GPIO7 at 50 Hz |
-| `NodeEngine` | 5 | Engine RPM on GPIO3 at 25 Hz |
-| `NodeADC` | 6 | Generic ADC voltage on GPIO1 at 100 Hz |
-| `NodeMPU` | 3 | MPU-6500/9250 acceleration and angular velocity on GPIO4/GPIO5 at 100 Hz |
+| `NodeBrake` | 1 | Front and rear brake pressure |
+| `NodeMPU` | 3 | Acceleration and angular velocity on three axes |
+| `NodeEncoder` | 4 | Signed bearing RPM |
+| `NodeEngine` | 5 | Engine RPM and spark events |
+| `NodeADC` | 6 | Optional generic voltage input |
+| `NodeEngineBench` | 5 | Engine RPM printed locally; CAN disabled |
 
-All builds use CAN TX GPIO21 and RX GPIO20.
+Most measurements are periodic: the scheduler reads them at a configured interval. Engine capture is event-driven: input edges are timestamped as they happen, and valid intervals produce RPM. It is not a fixed-rate polling sensor. The encoder is read periodically even though interrupts capture its rotation edges.
 
-The CAN bitrate is set with `NODE_CAN_BITRATE` and defaults to 1 Mbit/s. START
-and STOP commands are idempotent and acknowledgements are repeated so command
-retries do not restart or stop the sampler more than once.
+## Normal and bench operation
 
-## Build
+Vehicle profiles use `SENSOR_SERIAL_TEST=0`: initialize sensors, wait for master control, synchronize timestamps, then send samples over CAN. Repeated commands do not restart an already active sampler. A recording-state beacon lets a rebooted node rejoin.
 
-From this directory:
+With `SENSOR_SERIAL_TEST=1`, the node skips CAN, starts immediately after initialization, and prints each configured sensor at most twice per second. `NodeEngineBench` already selects this mode. Printed output is throttled; it does not represent the full acquisition rate. Serial bench timestamps use the local clock because no master beacon is received.
 
-```bash
-pio run -e NodeBrake
-pio run -e NodeEncoder
-pio run -e NodeEngine
-pio run -e NodeADC
-pio run -e NodeMPU
-```
+## First build
 
-Upload and monitor one build with:
+With PlatformIO installed, from the repository root, no hardware required:
 
 ```bash
-pio run -e NodeBrake -t upload
-pio device monitor -b 115200
+pio run -d sensor-node -e NodeBrake -t buildprog
 ```
 
-Replace `NodeBrake` with the profile for the node being programmed.
+Expect `SUCCESS`. Follow [Flashing](../docs/FLASHING.md) when a board is available and [Hardware](../docs/HARDWARE.md) before connecting inputs.
 
-## How the firmware fits together
-
-```text
-Master START/STOP/time beacon
-              |
-              v
-       can/can_node.c
-          |       |
-          |       `----> time/time_sync.c
-          v
-   sampler/sampler.c <---- sensors selected by sensor_registry.c
-          |
-          v
-      sample queue
-          |
-          v
-       CAN frames ------> Master logger
-```
-
-[src/main.c](src/main.c) is the composition root. It initializes the sampler
-and CAN modules and connects their callbacks; it does not contain sensor or CAN
-driver logic.
-
-The module responsibilities and instructions for adding a sensor are in the
-[source guide](src/README.md). The step-by-step procedures for adding sensors,
-build configurations, and physical nodes are in
-[Adding sensors and node configurations](docs/ADDING_SENSORS_AND_NODES.md).
-CAN payloads and system behavior are described in the
-[architecture document](docs/NODE_ARCHITECTURE.md).
-
-## Runtime sequence
-
-1. The node initializes the sensors selected by its build profile.
-2. It starts CAN in the idle state and reports its boot state.
-3. The master broadcasts clock beacons used to synchronize sample timestamps.
-4. A START command enables the sampler.
-5. Each due sensor is read and placed in the sample queue.
-6. The send task packs the value and timestamp into an eight-byte CAN frame.
-7. A STOP command disables sampling and clears pending samples.
-8. If CAN enters bus-off, pending samples are cleared and the CAN module starts
-   controller recovery while preserving the active/idle state.
-
-## Data format
-
-Sensor frames use eight little-endian bytes:
-
-| Bytes | Contents |
-|---|---|
-| 0-3 | Signed 32-bit sensor value |
-| 4-7 | Synchronized timestamp in milliseconds |
-
-Node-state reports use CAN ID `0x0C0 + NODE_ID` for boot, start, stop, and CAN
-recovery transitions. Normal sensor traffic provides node-liveness information
-to the master while recording, so no heartbeat frames are sent. CAN controller
-error-counter changes are printed locally even without reaching bus-off.
-
-The high bit of each master-time beacon carries the Master's recording state.
-After a node reboot, the next beacon restarts sampling automatically when the
-Master is still recording; the lower 63 bits retain the master timestamp.
-
-The engine RPM input measures rising-edge timing on GPIO3. Its one-spark-per-
-revolution assumption, pulse rejection window, and stopped-engine timeout must
-be validated against the conditioned ignition signal on the vehicle.
-
-## MPU-6500 / MPU-9250 wiring
-
-The `NodeMPU` profile uses the accelerometer and gyroscope over I2C. The
-MPU-9250 magnetometer is not currently read.
-
-| MPU breakout pin | ESP32-C3 sensor node | Purpose |
-|---|---|---|
-| `VCC` | `3V3` | 3.3 V power |
-| `GND` | `GND` | Common ground |
-| `SDA` | `GPIO4` | I2C data |
-| `SCL` | `GPIO5` | I2C clock |
-| `AD0` | `GND` or `3V3` | Select address `0x68` or `0x69`; both are detected |
-| `NCS` / `CS` | `3V3` | Keep SPI disabled; many breakouts already pull this high |
-| `INT`, `FSYNC` | Not connected | Not used by this driver |
-
-Use external 2.2 kOhm to 4.7 kOhm pull-ups from SDA and SCL to 3.3 V unless
-the breakout already provides them. Do not pull either I2C line to 5 V. The
-driver enables the ESP32's weak internal pull-ups, but those are not a robust
-substitute for external pull-ups on a vehicle harness.
-
-The six CAN channels are `0x0B3` through `0x0B8`: acceleration X/Y/Z is
-reported in milli-g and angular velocity X/Y/Z in milli-degrees per second.
-The configured ranges are +/-8 g and +/-2000 degrees/second. With
-`SENSOR_SERIAL_TEST=1` in the `NodeMPU` profile, the node starts without CAN
-and prints readings to serial for wiring and axis tests.
-
-For vehicle CAN operation, flash `NodeBrake`, `NodeMPU`, `NodeEncoder`,
-and `NodeEngine` (plus `NodeADC` if fitted). These profiles all set
-`SENSOR_SERIAL_TEST=0`. `NodeEngineBench` is serial-only and must not be
-used for the vehicle CAN setup.
-
-### Engine and wheel RPM across nodes
-
-NodeEngine measures engine RPM from spark input GPIO3 and sends `engine_rpm`
-(0x0BB) and spark events (0x0BC). NodeEncoder independently measures bearing
-RPM on GPIO6/GPIO7 and sends `bearing_rpm` (0x0B9) every 20 ms, averaged over
-100 ms. The sensors run on separate boards. The master logs and displays
-these original channels without generating another wheel RPM signal.
-NodeEngineBench uses the shared throttled serial format for engine RPM only.
+Next: [Source map](src/README.md) → [Sensor driver guide](src/sensors/README.md) → [Adding sensors and nodes](docs/ADDING_SENSORS_AND_NODES.md). For runtime detail use [Node architecture](docs/NODE_ARCHITECTURE.md); for contracts use [Protocol](../docs/PROTOCOL.md).

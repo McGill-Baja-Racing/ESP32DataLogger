@@ -1,55 +1,38 @@
 # Baja DAQ
 
-Firmware for the McGill Baja data acquisition system (DAQ 3.0). ESP32-C3
-**sensor nodes** read sensors and send timestamped samples over a 1 Mbit/s CAN
-bus. The ESP32-P4 **master node** keeps their clocks in sync, logs every sample
-to an SD card, and serves controls, live graphs and log downloads over its
-`BajaDAQ` Wi-Fi network.
+This repository contains the firmware for McGill Baja Racing's **DAQ 3.0** data acquisition system. Data acquisition means measuring what the vehicle is doing and saving those measurements so the team can investigate performance and diagnose problems.
 
-## What is in this repository
+Small computers called **sensor nodes** measure brake pressure, motion, and engine or bearing speed. A **master node** collects their readings, adds GPS data, and saves recording sessions to an SD card. A phone or laptop can connect to the master's Wi-Fi network to control recording, view live graphs, and download data.
 
-| Folder | Contents |
-|---|---|
-| [`master-node/`](master-node/) | ESP32-P4 master firmware |
-| [`sensor-node/`](sensor-node/) | ESP32-C3 sensor node firmware, one environment per node |
-| [`simulators/`](simulators/) | Bench tools that generate engine and wheel RPM signals |
-
-Each folder is a separate PlatformIO project. The V1 and V2 firmware is kept in
-the [`archive/v1-v2`](https://github.com/McGill-Baja-Racing/ESP32DataLogger/tree/archive/v1-v2)
-branch.
-
-## Set up your computer (once)
-
-1. Install [VS Code](https://code.visualstudio.com/) and its **PlatformIO IDE**
-   extension.
-2. Clone this repository.
-3. In VS Code, choose **File > Open Workspace from File...** and open
-   `baja-daq.code-workspace`. Every project appears in the same window.
-
-The first build downloads the ESP32 toolchain and takes several minutes.
-
-## Flash a board
-
-1. Connect the board over USB.
-2. In the status bar at the bottom of VS Code, click the PlatformIO environment
-   and pick the one for your board. The [flashing guide](master-node/docs/FLASHING.md)
-   lists the environment for each board.
-3. Click the **→** (Upload and Monitor) button in the status bar.
-
-The same thing from a terminal, at the repository root:
-
-```bash
-pio run -d sensor-node -e NodeBrake -t upload -t monitor
+```mermaid
+flowchart LR
+    Sensors[Vehicle sensors] --> Nodes[Sensor nodes]
+    Nodes -->|CAN: shared vehicle data connection| Master[Master node]
+    GPS[GPS receiver] --> Master
+    Master --> SD[SD card recordings]
+    Master <-->|Wi-Fi| Browser[Browser controls and graphs]
+    Simulators[Bench signal simulators] --> Nodes
 ```
 
-## Documentation
+## Start here
 
-- [Flashing guide](master-node/docs/FLASHING.md): environment for each board and
-  the checks to run on the vehicle
-- Master node: [overview](master-node/README.md),
-  [architecture](master-node/docs/MASTER_ARCHITECTURE.md),
-  [GPS absolute time](master-node/docs/ABSOLUTE_TIME.md)
-- Sensor node: [overview](sensor-node/README.md),
-  [architecture](sensor-node/docs/NODE_ARCHITECTURE.md),
-  [adding sensors and nodes](sensor-node/docs/ADDING_SENSORS_AND_NODES.md)
-- [RPM simulators](simulators/README.md)
+You do not need a board or embedded programming experience to begin.
+
+1. Follow [Getting started](docs/GETTING_STARTED.md) to learn the vocabulary, install tools, and build firmware without hardware.
+2. Read [Contributing](CONTRIBUTING.md) to choose a first task and prepare a pull request.
+3. Open the component README for your task, then its source guide for implementation details.
+
+Read the [system overview](docs/SYSTEM_OVERVIEW.md) if you want a guided explanation of how a recording works. The [documentation index and glossary](docs/README.md) help you find a specific topic.
+
+## Repository map
+
+| Folder | What it contains | Start reading |
+|---|---|---|
+| `master-node/` | ESP32-P4 firmware: recording, GPS, SD storage, browser interface | [Master introduction](master-node/README.md) |
+| `sensor-node/` | ESP32-C3 firmware: sensor measurements and communication | [Sensor introduction](sensor-node/README.md) |
+| `simulators/` | ESP32-C3 bench firmware generating test signals for RPM inputs | [Simulator introduction](simulators/README.md) |
+| `docs/` | Shared learning guides, procedures, and specifications | [Find a guide](docs/README.md) |
+
+Each firmware project has its own PlatformIO configuration. The workspace file [baja-daq.code-workspace](baja-daq.code-workspace) opens them together in VS Code. **Firmware** is the program that runs on a microcontroller, a small computer built into hardware.
+
+This documentation describes DAQ 3.0. Older V1/V2 firmware is kept on the `archive/v1-v2` branch.

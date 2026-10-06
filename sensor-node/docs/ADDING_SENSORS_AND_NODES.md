@@ -1,5 +1,7 @@
 # Adding sensors and node configurations
 
+Read the [sensor introduction](../README.md) and [driver guide](../src/sensors/README.md) first. This procedure assumes basic C and a successful initial build. Shared [protocol](../../docs/PROTOCOL.md), [hardware](../../docs/HARDWARE.md), and [testing](../../docs/TESTING.md) references own their respective specifications.
+
 This guide covers the common ways to extend a DAQ 3.0 Sensor Node:
 
 - add a new sensor to an existing node configuration;
@@ -40,7 +42,7 @@ sample_task()
         |
         | when each descriptor is due
         v
-descriptor.read(descriptor)
+descriptor.read(descriptor, &value)
 ```
 
 There is no runtime `sensor_enabled` flag. A driver that is not placed in the
@@ -72,7 +74,7 @@ measurement.
 Add a unique ID to `src/protocol/app_protocol.h`:
 
 ```c
-#define CAN_ID_STEERING_ANGLE 0x0BC
+#define CAN_ID_STEERING_ANGLE 0x0BD /* example: verify availability first */
 ```
 
 Before choosing it, check both Sensor Node and Master protocol headers for
@@ -135,8 +137,8 @@ sensor_t steering_angle_sensor = {
 };
 ```
 
-Only `.name`, `.can_id`, `.period_us`, and `.read` are required by the current
-sampler. Leave `.init`, `.start`, or `.context` unspecified when they are not
+For a periodic sensor, `.name`, `.can_id`, a strictly positive `.period_us`,
+and `.read` are required by the generic sampling loop. Leave `.init`, `.start`, or `.context` unspecified when they are not
 needed; static descriptor fields default to zero/`NULL`.
 
 Callback meanings:
@@ -294,7 +296,9 @@ This is Workflow A followed by Workflow B:
 
 ## Basic changes that do not require a new configuration
 
-### Change a sample rate
+### Change a periodic sample rate
+
+This applies to polling drivers. Engine RPM is event-driven and cannot be changed to a fixed rate by editing its descriptor period.
 
 Change the descriptor's `.period_us`:
 
@@ -342,22 +346,24 @@ Verify that its pins do not conflict with the other sensors in either build.
 
 ## Verification checklist
 
+Run the following commands from the repository root with PlatformIO installed. `NodeSteering` is the illustrative environment created above; it does not exist in the unchanged repository. Upload requires a connected board. Replace `PORT` with its device port. Successful builds report `SUCCESS`; successful bench checks show the selected sensor values.
+
 ### Build checks
 
 Build the changed environment:
 
 ```bash
-pio run -e NodeSteering
+pio run -d sensor-node -e NodeSteering -t buildprog
 ```
 
 Then build every environment whose registry or shared protocol code changed:
 
 ```bash
-pio run -e NodeBrake
-pio run -e NodeEncoder
-pio run -e NodeEngine
-pio run -e NodeADC
-pio run -e NodeMPU
+pio run -d sensor-node -e NodeBrake -t buildprog
+pio run -d sensor-node -e NodeEncoder -t buildprog
+pio run -d sensor-node -e NodeEngine -t buildprog
+pio run -d sensor-node -e NodeADC -t buildprog
+pio run -d sensor-node -e NodeMPU -t buildprog
 ```
 
 A protocol change should also be followed by a Master build.
@@ -373,8 +379,8 @@ Temporarily use a dedicated environment with:
 Build, upload, and monitor it:
 
 ```bash
-pio run -e NodeSteering -t upload
-pio device monitor -b 115200
+pio run -d sensor-node -e NodeSteering -t upload --upload-port PORT
+pio device monitor --port PORT -b 115200
 ```
 
 Verify the startup log lists every expected descriptor with its CAN ID and
@@ -409,6 +415,12 @@ With `SENSOR_SERIAL_TEST=0`, verify:
 - An interrupt modifies data that `read` accesses without synchronization.
 - Serial test mode is accidentally left enabled for vehicle firmware.
 
+## Event-driven sensors
+
+The engine configuration is an existing exception to the periodic descriptor workflow: its ISR queues captured edges, and the engine-specific sampler branch consumes `engine_rpm_next_event()`. Its descriptor uses zero period and no read callback. Do not copy that descriptor into an ordinary periodic registry: the generic loop requires a positive period and a read callback.
+
+For another event-driven sensor, first design its capture queue, timestamp ownership, overflow policy, session reset, bus-off discard, and sampler integration. A registry entry alone does not implement that path. Read the [driver guide](../src/sensors/README.md) and [node architecture](NODE_ARCHITECTURE.md) before changing the generic interface.
+
 ## When a larger architectural change is needed
 
 The descriptor pattern is appropriate for periodic scalar measurements that
@@ -416,3 +428,5 @@ fit in a signed 32-bit value. Revisit the protocol and sampler design before
 adding a sensor that needs variable-length data, several frames per sample,
 runtime discovery, per-sensor START/STOP control, or long blocking transactions.
 Those requirements cannot be added safely by changing only a driver descriptor.
+
+Next: return to the [sensor introduction](../README.md), or follow [Testing](../../docs/TESTING.md) for build, bench, and CAN acceptance checks.
