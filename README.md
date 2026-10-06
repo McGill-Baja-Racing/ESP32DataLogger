@@ -42,6 +42,15 @@ The same thing from a terminal, at the repository root:
 pio run -d sensor-node -e NodeBrake -t upload -t monitor
 ```
 
+## Before opening a pull request
+
+GitHub builds every firmware and runs the host tests on each pull request. To
+run the tests on your computer:
+
+```bash
+python3 -m unittest discover -s master-node/tests
+```
+
 ## Documentation
 
 - [Flashing guide](master-node/docs/FLASHING.md): environment for each board and
