@@ -157,6 +157,7 @@ class AbsoluteTimeTests(unittest.TestCase):
 #include <ctype.h>
 #include <inttypes.h>
 #include <setjmp.h>
+#include <sys/time.h>
 #include "protocol/app_protocol.h"
 #include "time/gps_time.h"
 #include "gps/rmc_parser.h"
@@ -168,6 +169,8 @@ typedef int portMUX_TYPE;
 #define portENTER_CRITICAL(p) ((void)(p))
 #define portEXIT_CRITICAL(p) ((void)(p))
 #define ESP_LOGI(...) ((void)0)
+#define ESP_LOGW(...) ((void)0)
+#define settimeofday(tv, tz) ((void)(tv), (void)(tz), 0)
 #define UART_NUM_1 1
 #define GPIO_NUM_33 33
 #define GPIO_NUM_32 32
