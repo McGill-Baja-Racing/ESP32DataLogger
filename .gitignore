@@ -2,5 +2,12 @@
 # The editor extensions rewrite each project's .vscode/ folder on every machine.
 .vscode/
 
+# Build output in any folder, including old project folders left after a move.
+.pio/
+managed_components/
+sdkconfig
+sdkconfig.*
+!sdkconfig.defaults
+
 .DS_Store
 __pycache__/
