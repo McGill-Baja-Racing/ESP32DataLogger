@@ -2,19 +2,29 @@
 
 This repository contains the firmware for McGill Baja Racing's **DAQ 3.0** data acquisition system. Data acquisition means measuring what the vehicle is doing and saving those measurements so the team can investigate performance and diagnose problems.
 
-Small computers called **sensor nodes** measure brake pressure, motion, and engine speed or the speed of a bearing inside the gearbox. A **master node** collects their readings, adds GPS data, and saves recording sessions to an SD card. A phone or laptop can connect to the master's Wi-Fi network to control recording, view live graphs, and download data.
+Small computers called **sensor nodes** measure brake pressure, car motion, engine speed, and the speed of a bearing inside the gearbox. A **master node** collects their readings, adds GPS data, and saves recording sessions to an SD card. A phone or laptop can connect to the master's Wi-Fi network to control recording, view live graphs, and download data.
 
 The gearbox bearing measurement is a raw rotation reading. It is converted later, using the drivetrain ratios, to calculate wheel RPM and secondary RPM; the recorded value itself is not either of those speeds.
 
-```mermaid
-flowchart LR
-    Sensors[Vehicle sensors] --> Nodes[Sensor nodes]
-    Nodes -->|CAN: shared vehicle data connection| Master[Master node]
-    GPS[GPS receiver] --> Master
-    Master --> SD[SD card recordings]
-    Master <-->|Wi-Fi| Browser[Browser controls and graphs]
-    Simulators[Bench signal simulators] --> Nodes
+## How the boards communicate
+
+A shared **CAN bus** cable runs around the car. Each sensor node and the master connect to that same cable to exchange messages. Physically, its data connection uses two wires, CAN-H and CAN-L, drawn as one shared line below.
+
+```text
+                 Shared CAN bus cable around the car
+     ========================================================
+          |               |               |             |
+      Brake node      Car motion      Engine node     Master
+                         node                         /    \
+          Other sensor nodes connect              GPS      SD card
+          to the same shared cable.                       recordings
 ```
+
+The master also communicates with a phone or laptop over Wi-Fi. On the bench, simulators generate test signals for sensor-node inputs.
+
+CAN stands for **Controller Area Network**. A message sent on the bus can be received by all connected nodes; each node handles the messages relevant to its role. For an introduction, see [Kvaser's CAN bus explanation](https://kvaser.com/lesson/introduction-can-bus/).
+
+The sensor nodes use **ESP32-C3** microcontrollers, and the master uses an **ESP32-P4** with an **ESP32-C6** providing Wi-Fi. A microcontroller is a small computer built into hardware. The [sensor introduction](sensor-node/README.md) and [master introduction](master-node/README.md) explain their roles in more detail.
 
 ## Start here
 
