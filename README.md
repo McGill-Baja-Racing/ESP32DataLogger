@@ -8,16 +8,26 @@ The gearbox bearing measurement is a raw rotation reading. It is converted later
 
 ## How the boards communicate
 
-A shared **CAN bus** cable runs around the car. Each sensor node and the master connect to that same cable to exchange messages. Physically, its data connection uses two wires, CAN-H and CAN-L, drawn as one shared line below.
+A shared **CAN bus** cable runs around the car. Each sensor node and the master connect to that same cable to exchange messages. Physically, its data connection uses two wires, CAN-H and CAN-L, shown as one shared connection below.
 
-```text
-                 Shared CAN bus cable around the car
-     ========================================================
-          |               |               |             |
-      Brake node      Car motion      Engine node     Master
-                         node                         /    \
-          Other sensor nodes connect              GPS      SD card
-          to the same shared cable.                       recordings
+```mermaid
+flowchart TB
+    Brake[Brake pressure node] <--> CAN
+    Motion[Car motion node] <--> CAN
+    Engine[Engine RPM node] <--> CAN
+    Gearbox[Gearbox bearing RPM node] <--> CAN
+
+    CAN["Shared CAN bus cable around the car<br/>CAN-H and CAN-L"] <--> Master[Master node]
+    GPS[GPS receiver] --> Master
+    Master --> SD[SD card recordings]
+    Master <-->|Wi-Fi| Browser[Phone or laptop]
+
+    classDef bus fill:#dbeafe,stroke:#2563eb,stroke-width:3px,color:#172554;
+    classDef sensor fill:#ecfdf5,stroke:#059669,color:#064e3b;
+    classDef master fill:#fff7ed,stroke:#ea580c,color:#7c2d12;
+    class CAN bus;
+    class Brake,Motion,Engine,Gearbox sensor;
+    class Master master;
 ```
 
 The master also communicates with a phone or laptop over Wi-Fi. On the bench, simulators generate test signals for sensor-node inputs.
