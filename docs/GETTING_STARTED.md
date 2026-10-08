@@ -22,7 +22,7 @@ The firmware uses C. You can learn it through small changes to the existing code
 
 Install Git, [VS Code](https://code.visualstudio.com/), and the **PlatformIO IDE** extension inside VS Code. Follow [PlatformIO's installation guide](https://docs.platformio.org/en/latest/integration/ide/vscode.html) if needed. PlatformIO downloads the firmware compiler and required packages; you do not need a separate ESP-IDF installation or C compiler for this build workflow.
 
-This workflow works on Windows, macOS, and Linux. **Windows users do not need WSL to build or upload firmware through PlatformIO.** On Linux, follow PlatformIO's installation prerequisites, including your distribution's `python3-venv` package.
+This workflow works on Windows, macOS, and Linux. On Linux, follow PlatformIO's installation prerequisites, including your distribution's `python3-venv` package.
 
 ## Clone and open in VS Code
 
