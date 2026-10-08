@@ -1,11 +1,12 @@
 # GPS absolute time
 
+Read the [system overview](../../docs/SYSTEM_OVERVIEW.md) and [master source map](../src/README.md) first. This reference owns UTC synchronization and accuracy limits; [Hardware](../../docs/HARDWARE.md) owns wiring and [Log format](../../docs/LOG_FORMAT.md) owns companion/export representation.
+
 Full CSV downloads retain `timestamp_ms` and add `absolute_time_utc`, for example
 `2026-09-10T18:42:03.125Z`. Z means UTC. The UTC field is blank before GPS
 synchronization, and for old logs without UTC metadata. No internet is required.
 
-The GY-GPS6MV2 connects to UART1 at 9600 baud: GPS TX to master GPIO33,
-GPS RX to master GPIO32, with common ground. The first checksum-valid active RMC
+The receiver connection is documented in [Hardware](../../docs/HARDWARE.md). The first checksum-valid active RMC
 sentence with a valid date (2020–2099) anchors UTC to the ESP32 monotonic clock.
 The receiver needs satellite reception. Verify its reported date against a known
 clock during commissioning; older receivers can report GPS week rollover dates.
@@ -18,12 +19,7 @@ PPS synchronization is not implemented. Leap-second sentences with second 60 are
 rejected. Existing CAN time synchronization and millisecond sample values are unchanged.
 Samples must be within half the 32-bit millisecond wrap period (~24.8 days) of receipt.
 
-Each new `log_NNNN.bin` has a `log_NNNN.bin.utc` companion on SD: one little-endian
-signed 64-bit Unix millisecond value per 16-byte binary sample, zero if unsynchronized
-when enqueued. This preserves UTC across reboots without changing the binary record
-format. Keep both files together when copying SD logs. Binary web downloads contain
-only the original records; use CSV downloads to export UTC. A missing/truncated
-companion produces blank UTC cells for unavailable values. UTC adds 8 bytes per sample.
+Samples retain the UTC value available when enqueued. Unsynchronized samples stay blank in absolute-time export, including after later synchronization. Storage alignment and missing-companion behavior are specified in [Log format](../../docs/LOG_FORMAT.md).
 
 The existing `gps_receiver` owns UART1 and parses each complete RMC sentence once
 with `gps/rmc_parser.c`. That parser validates the checksum, complete fields,
@@ -41,3 +37,5 @@ in Live Data while recording. `MasterStable` retains normal CAN support.
 Full CSV and Powertrain CSV include absolute UTC time. Powertrain rows use the
 UTC companion entry aligned with the engine sample. GPS-only logs have no
 engine/bearing pairs to export.
+
+Next: [Master architecture](MASTER_ARCHITECTURE.md), [Testing](../../docs/TESTING.md), or the [master introduction](../README.md).

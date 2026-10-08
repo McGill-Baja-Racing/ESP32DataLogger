@@ -1,134 +1,35 @@
-# DAQ 3.0 Minimal Master
+# Master runtime architecture
 
-The ESP32-P4 master has one purpose: collect synchronized CAN sensor samples
-and store them safely on an SD card.
+Read the [master introduction](../README.md) and [source map](../src/README.md) first. This guide owns runtime behavior; [Protocol](../../docs/PROTOCOL.md), [Hardware](../../docs/HARDWARE.md), and [Log format](../../docs/LOG_FORMAT.md) own exact external contracts.
 
-## Included features
+## Startup and composition
 
-- FAT SD card mount at `/sdcard`
-- optional FAT formatting when an inserted card cannot be mounted, controlled
-  by the `SD_FORMAT_IF_MOUNT_FAILED` build flag
-- 1 Mbit/s TWAI/CAN on TX GPIO 20 and RX GPIO 21
-- fixed master-side list of accepted sensor CAN IDs
-- global node start and stop commands
-- 64-bit master microsecond time beacon every 100 ms
-- queued, buffered binary SD logging
-- automatic CAN bus-off detection and controller recovery
-- automatic logging five seconds after boot, plus web and serial controls
-- graceful stop, queue drain, flush, and file close
-- serial `start`, `stop`, and `status` commands at 115200 baud
-- registration of node boot, start, stop, and recovery states
-- open `BajaDAQ` SoftAP and HTTP controls at `http://192.168.4.1`
-- binary and streamed CSV downloads for completed log sessions
-- customizable log filenames with duplicate-name rejection
-- descending alphabetical log listing with all/date/custom/number filters
-- recording-only, explicitly enabled latest-value live graphs at 1-20 Hz
-- 9600-baud NMEA GPS input on UART1 (RX GPIO 33, TX GPIO 32)
-- `tools/decode_log.py` to convert a log to CSV
+`main.c` mounts SD and initializes the logger, live cache, registry, CAN (when enabled), GPS receiver, and application-control mutex. Mount/init failures guarded by `ESP_ERROR_CHECK` abort normal startup. The master sends initial STOP copies before exposing manual controls or auto-start.
 
-## Source organization
+Serial control and time beacons start, and an auto-start task waits five seconds before requesting recording. Web startup is attempted separately: networking failure is reported without aborting the collection path. `MasterNoCAN` removes CAN initialization, commands, beacons, and node monitoring while retaining local GPS, logging, and web/serial operation.
 
-`main.c` initializes and connects cohesive modules:
+## Collection tasks and queues
 
-| Path | Responsibility |
-|---|---|
-| `protocol/app_protocol.h` | CAN IDs shared conceptually with sensor nodes |
-| `can/can_master.c` | TWAI transport, receive dispatch, and recovery |
-| `logger/data_logger.c` | Log state, queue, binary blocks, and file writes |
-| `storage/sd_card.c` | SDMMC hardware and FAT mount |
-| `node_state/node_registry.c` | Latest node state acknowledgements |
-| `time/time_beacon.c` | Periodic master-clock broadcast |
-| `gps/gps_receiver.c` | GPS UART ownership, NMEA validation, and RMC parsing |
-| `console/serial_console.c` | Serial command parsing |
-| `app/app_control.c` | Serialized logging lifecycle shared by serial and HTTP |
-| `live/live_data.c` | Fixed latest-value cache and exclusive viewer lease |
-| `web/web_server.c` | ESP-Hosted SoftAP, HTTP API, UI, and downloads |
+CAN receive callbacks copy frames into the CAN queue. A dispatch task invokes the application callback. State reports update the registry; recognized eight-byte sensor frames update traffic-based liveness and enter logger/live APIs. The main callback rejects engine/spark timestamps with the sign bit set. GPS owns UART and parser work and reports locally generated samples through a second application callback into the same logger/live pipeline.
 
-See `src/README.md` for dependencies and maintenance guidance.
+The logger has a separate writer task and bounded queue. Live data stores latest values rather than an independent full-rate history. Neither live viewing nor web download should become the owner of sensor acquisition.
 
-## Fixed sensors
+## Session policy
 
-| Node | Measurement | CAN ID | Rate |
-|---|---|---:|---:|
-| 1 | Front brake pressure | `0x0B1` | 100 Hz |
-| 1 | Rear brake pressure | `0x0B2` | 100 Hz |
-| 3 | Acceleration X/Y/Z (mg) | `0x0B3–0x0B5` | 100 Hz each |
-| 3 | Gyroscope X/Y/Z (mdps) | `0x0B6–0x0B8` | 100 Hz each |
-| 4 | Signed bearing RPM | `0x0B9` | 50 Hz |
-| 5 | Engine RPM | `0x0BB` | 25 Hz |
-| 6 | Generic ADC voltage | `0x0BA` | 100 Hz |
-| Master | GPS speed | `0x700` | GPS update rate |
-| Master | GPS latitude | `0x701` | GPS update rate |
-| Master | GPS longitude | `0x702` | GPS update rate |
+`app_control` serializes serial and HTTP lifecycle requests with a mutex. Start is accepted only while idle. The logger opens a unique session first; application policy then enables monitoring/recording beacons and broadcasts START. Failed command transmission is reported without rolling back the already-open logger.
 
-The accepted IDs are compiled into the master. The corresponding sensor type,
-rate, CAN ID, and GPIO configuration is compiled into each sensor node. There
-is no runtime configuration protocol.
+Stop is accepted only while running. It ends live viewing and requests logger stop, then clears recording/monitoring state and broadcasts STOP. The writer drains already accepted data asynchronously before becoming idle. Repeated API start/stop requests conflict with the current lifecycle state, even though node-level commands are idempotent.
 
-The GPS module accepts checksum-valid RMC sentences with an active fix. Speed
-is stored in hundredths of km/h and coordinates are stored as signed degrees
-times 10,000,000. GPS samples use the master's millisecond clock and enter the
-same logger and optional live-view pipelines as CAN sensor samples.
+Default naming can wait up to three seconds for GPS UTC. [Logger guide](../src/logger/README.md) explains buffering, checkpoints, and companion failure behavior.
 
-The generic ADC value is calibrated millivolts. Engine RPM is reserved in the
-protocol and log decoder but currently reports zero until the analog tach peak
-detection is implemented and validated on hardware.
+## Time and liveness
 
-Nodes report boot, start, stop, beacon synchronization, and recovery transitions
-on `0x0C0 + node ID`. The high bit of each 100 ms time beacon carries the
-Master's recording state; the remaining 63 bits carry master microseconds. A
-node that reboots during a recording therefore resumes sampling on its next
-beacon without requiring the Master to repeat the original START command.
-While recording, the master uses normal sensor frames as proof that configured
-nodes are active. The expected-node mask in `node_registry.h` currently enables
-nodes 1, 3, 4, and 5. The `status` output shows waiting until the first frame,
-active while frames arrive, and offline after three seconds without sensor data.
-Unconfigured nodes appear as disabled. When the logger is stopped, configured
-node status is off and no liveness traffic is sent. State reports are control
-information and are not written to the sensor log.
+Time beacons broadcast master elapsed time and recording state periodically. Node timestamps are translated to this clock before transmission. GPS calendar synchronization is a separate concern; see [Absolute time](ABSOLUTE_TIME.md).
 
-## Time synchronization
+The registry receives explicit state transitions, but active-recording liveness comes from sensor traffic. Its expected-node mask selects monitored nodes. Idle operation disables traffic monitoring. Missing data can indicate a sensor/read problem as well as a bus or power failure.
 
-The master broadcasts CAN ID `0x0A2` every 100 ms. Its eight-byte payload is
-the master's little-endian `esp_timer_get_time()` value in microseconds.
+## Recovery and limits
 
-Each sensor node calculates:
+CAN owns controller error reporting, bus-off detection, and recovery. Bounded receive/logger queues can drop data; check both counters. SD write errors are logged and require file-integrity checks. Network failure can leave serial control useful; SD mount failure does not produce a functioning logger. An active/closed file boundary protects downloads and renames.
 
-```text
-clock_offset = master_time_us - node_local_time_us
-sample_time  = node_local_sample_time_us + clock_offset
-```
-
-The node stores `sample_time / 1000` in its sensor frame. Samples from every
-node therefore use the master's millisecond timestamp base.
-
-## Logging pipeline
-
-```text
-CAN callback -> receive queue -> dispatch task -> log queue -> SD writer
-```
-
-Each log record is 16 bytes:
-
-```text
-int64 little-endian: CAN ID
-int64 little-endian: packed sensor payload
-    low 32 bits: value
-    high 32 bits: synchronized timestamp_ms
-```
-
-The SD writer flushes blocks of 100 records. A stop command prevents new
-records, stops the nodes, drains the log queue, writes the partial block, and
-closes the file.
-
-## Build and decode
-
-```bash
-pio run -e MasterStable
-pio run -e MasterNoCAN
-python3 tools/decode_log.py log_0001.bin
-```
-
-`MasterNoCAN` is the bench configuration for operating the master without a
-CAN transceiver or bus. It retains GPS, SD logging, serial, web, downloads, and
-live data while omitting TWAI initialization and all node/beacon traffic.
+Next: [Web guide](../src/web/README.md), [Testing](../../docs/TESTING.md), and [Troubleshooting](../../docs/TROUBLESHOOTING.md).

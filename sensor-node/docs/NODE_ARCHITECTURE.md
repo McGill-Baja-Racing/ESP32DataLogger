@@ -1,96 +1,31 @@
-# DAQ 3.0 Fixed Sensor Nodes
+# Sensor node runtime architecture
 
-Each node owns its sensor configuration at compile time. The master does not
-send runtime configuration.
+Read the [sensor introduction](../README.md) and [source map](../src/README.md) first. This guide owns initialization, scheduling, and recovery behavior; [Protocol](../../docs/PROTOCOL.md) and [Hardware](../../docs/HARDWARE.md) own external contracts.
 
-## Builds
+## Startup and modes
 
-| Build | Node | Sensors |
-|---|---:|---|
-| `NodeBrake` | 1 | Front brake `0x0B1` at 100 Hz on GPIO1; rear brake `0x0B2` at 100 Hz on GPIO2 |
-| `NodeEncoder` | 4 | Signed bearing RPM `0x0B9` at 50 Hz on GPIO6/GPIO7 |
-| `NodeEngine` | 5 | Engine RPM `0x0BB` at 50 Hz on GPIO3 |
-| `NodeADC` | 6 | Generic ADC `0x0BA` at 100 Hz on GPIO1 |
+`main.c` waits three seconds after reset so USB monitoring can reconnect. The sampler obtains the build-selected registry, initializes shared ADC support where needed, initializes selected drivers, and creates output/sampling tasks. Sensor initialization happens before CAN can issue START.
 
-All builds use 1 Mbit/s CAN with TX GPIO21 and RX GPIO20.
-Each node waits three seconds after reset before sensor and CAN initialization
-so its serial monitor can reconnect. The master automatic START occurs after
-five seconds, leaving the node time to report its boot state.
-Each node monitors its CAN controller and automatically initiates recovery after
-a bus-off condition while preserving its current started/stopped state.
+Normal mode initializes CAN with callbacks for start, stop, time synchronization, and bus-off queue discard, then reports boot/idle state. Serial-test mode skips CAN and starts sampling locally. Build/profile selection, including MPU and engine bench roles, is documented in the [sensor introduction](../README.md).
 
-The SKF BMB-6202/032S2/UB108A bearing has two NPN open-collector quadrature
-outputs. Power it from regulated 5 V with a shared ground, and pull GPIO6 and
-GPIO7 up to 3.3 V through separate 4.7 kΩ resistors. Do not pull either ESP32
-input above 3.3 V. The firmware's weak internal pull-ups are only a bench-test
-fallback; vehicle wiring also requires suitable filtering and transient
-protection.
+## Commands and clock ownership
 
-## Source layout
+CAN's receive callback copies messages into a queue; a dispatch task interprets commands and beacons. START/STOP transitions call the application sampler callbacks, while repeated copies send acknowledgements without restarting sampling. A beacon updates the protected clock offset and reconciles active/idle state with the master.
 
-`main.c` only initializes the application and connects the module callbacks.
-The implementation is organized by responsibility:
+`time_sync` converts local capture times to master-clock milliseconds. Engine uses captured edge time rather than transmission time. Other periodic samples take a synchronized timestamp before the read callback. Serial mode has no master synchronization.
 
-| Path | Responsibility |
-|---|---|
-| `protocol/app_protocol.h` | Shared CAN identifiers, node states, and reason codes |
-| `can/can_node.c` | TWAI setup, command dispatch, state reports, transmission, and recovery |
-| `time/time_sync.c` | Master-clock offset and synchronized timestamps |
-| `sampler/sampler.c` | Sensor scheduling, sample queue, and transmission task |
-| `sensors/sensor_registry.c` | Sensors selected for each build profile |
-| `sensors/front_brake.c` | GPIO1 front pressure conversion |
-| `sensors/rear_brake.c` | GPIO2 rear pressure conversion |
-| `sensors/bearing_encoder.c` | GPIO6/GPIO7 quadrature decoding and signed RPM conversion |
-| `sensors/adc_input.c` | ADC one-shot and calibration shared by analog sensors |
-| `sensors/generic_adc.c` | Calibrated GPIO1 voltage reported in millivolts |
-| `sensors/engine_rpm.c` | Placeholder for future raw-voltage peak detection |
+## Sampling and output
 
-Nodes report state transitions for boot, start, stop, and CAN recovery. While
-recording, normal sensor frames provide liveness information to the master, so
-the nodes do not send separate heartbeat traffic.
+On start, the sampler clears its output queue, invokes optional driver start callbacks, arms schedules, and becomes active. Periodic drivers are visited when due. Failed reads are omitted; missed schedule periods are advanced rather than emitted as fabricated catch-up samples. The task always yields at least one FreeRTOS tick, so real cadence depends on task scheduling and read duration.
 
-The high bit of the 100 ms master-time beacon carries the Master's recording
-state. A node that reboots while the Master is recording restarts its sampler
-after receiving the next beacon; the lower 63 bits remain the synchronized
-microsecond timestamp.
+The engine build instead consumes the driver's interrupt event queue. It publishes detected sparks and valid RPM intervals, plus timeout zeros. This special path does not support arbitrary zero-period descriptors. See [Sensor driver guide](../src/sensors/README.md).
 
-## Protocol
+The 64-entry output queue separates acquisition from CAN sending. Periodic overflow discards an older queued sample in favor of a current one. Engine CAN output reserves room for each complete event; insufficient space loses the event. Capture overflow is also reported. The send task packs values/timestamps or prints throttled serial values.
 
-| CAN ID | Direction | Purpose |
-|---:|---|---|
-| `0x0A0` | Master to all nodes | Stop sampling |
-| `0x0A1` | Master to all nodes | Start sampling |
-| `0x0A2` | Master to all nodes | 64-bit microsecond time beacon |
-| `0x0C0 + node ID` | Node to master | State and transition reason |
+On stop, sampling becomes inactive and pending output is cleared. Drivers reset session-specific state on the next start; the engine clears its capture queue then. A frame already being transmitted can still be in flight.
 
-START and STOP have no payload and apply to every node.
+## CAN recovery
 
-Nodes calculate their clock offset from each time beacon and timestamp samples
-on the master's clock. A sensor payload contains the 32-bit value in bytes 0-3
-and the synchronized millisecond timestamp in bytes 4-7.
+CAN owns its transport mutex, queues, controller state, error counters, and recovery task. Bus-off preserves active/idle state but asks the sampler to discard pending output; the engine discard callback also clears captured events. Recovery reports a transition and subsequent beacons can reconcile recording state. Ordinary sensor traffic provides master liveness; no heartbeat task is used.
 
-The state payload contains state, transition reason, and boot reset reason in
-bytes 0-2.
-
-## Build commands
-
-```bash
-pio run -e NodeBrake
-pio run -e NodeEncoder
-pio run -e NodeEngine
-pio run -e NodeADC
-```
-
-PlatformIO generates `sdkconfig.<environment>` when it is missing and reuses
-it on subsequent builds. Generated `sdkconfig` files are ignored by Git.
-Keep any intentional shared configuration overrides in `sdkconfig.defaults`
-instead of committing a full generated configuration.
-
-The RPM driver measures rising edges on GPIO3 and assumes one spark per
-revolution. Its input conditioning, pulse rejection window, expected RPM range,
-and stopped-engine timeout require validation on the vehicle.
-
-`NodeEngineBench` prints engine RPM using the shared serial sensor format
-(`engine_rpm: CAN=0x0BB time=...ms value=...`), at most once every 500 ms.
-Stopped-engine readings use a value of zero. Spark events are sent only in
-CAN mode; they are not included in serial sensor output.
+Next: [Adding sensors/nodes](ADDING_SENSORS_AND_NODES.md), [Testing](../../docs/TESTING.md), and [Troubleshooting](../../docs/TROUBLESHOOTING.md).
