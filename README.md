@@ -22,7 +22,7 @@ A shared **CAN bus** cable runs around the car. Each sensor node and the master 
 
 The master also communicates with a phone or laptop over Wi-Fi. On the bench, simulators generate test signals for sensor-node inputs.
 
-CAN stands for **Controller Area Network**. A message sent on the bus can be received by all connected nodes; each node handles the messages relevant to its role. For an introduction, see [Kvaser's CAN bus explanation](https://kvaser.com/lesson/introduction-can-bus/).
+CAN stands for **Controller Area Network**. It lets the boards exchange short messages over the shared cable. All connected nodes can receive a message, and each handles the messages relevant to its role.
 
 The sensor nodes use **ESP32-C3** microcontrollers, and the master uses an **ESP32-P4** with an **ESP32-C6** providing Wi-Fi. A microcontroller is a small computer built into hardware. The [sensor introduction](sensor-node/README.md) and [master introduction](master-node/README.md) explain their roles in more detail.
 
