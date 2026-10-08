@@ -28,6 +28,8 @@ The rear driver currently uses GPIO0. Older documentation said GPIO2; inspect th
 
 ESP32 GPIO inputs must stay within 3.3 V logic limits. The pressure sensor's higher voltage needs the documented divider; do not attach its full output directly. The engine input needs appropriate ignition signal conditioning; never connect raw ignition voltage to GPIO3. Match conversion constants to the installed sensors.
 
+This bearing is installed inside the gearbox. Its raw rotation measurement is converted later to wheel and secondary RPM; the firmware does not apply drivetrain ratios.
+
 The bearing has NPN open-collector outputs: use its regulated 5 V supply, common ground, and separate external 4.7 kΩ pull-ups from A/B to **3.3 V**. Internal pull-ups are a bench fallback; vehicle wiring needs suitable filtering and transient protection. Direction depends on channel order and the configured sign. Its RPM average spans nominally 100 ms, with a 100 ms no-edge timeout.
 
 For MPU-6500/9250 breakouts, use 3.3 V power and ground, SDA4/SCL5, AD0 at ground or 3.3 V to choose the address, and CS/NCS high to disable SPI. INT/FSYNC are unused; the MPU-9250 magnetometer is not read. Use external 2.2–4.7 kΩ I2C pull-ups to 3.3 V unless already fitted.

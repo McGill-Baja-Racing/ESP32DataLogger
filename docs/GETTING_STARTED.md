@@ -16,60 +16,63 @@ This guide takes you from a new checkout to a firmware build. No electronics kno
 | PlatformIO | Tooling that downloads toolchains and builds/uploads a selected project profile |
 | Environment | A named build profile such as `NodeBrake`, not a connected board |
 
-For your first task, learn Git's clone, branch, diff, commit, and pull-request workflow from [GitHub's Hello World](https://docs.github.com/en/get-started/using-github/hello-world). Before editing firmware, become comfortable with C functions, structs, pointers, and integer types; [Beej's Guide to C](https://beej.us/guide/bgc/) is a free introduction. You can contribute documentation before mastering C.
+The firmware uses C. You can learn it through small changes to the existing code: pick a focused task, follow a similar example in the project, and ask the team when something is unfamiliar. You do not need to complete a programming course before getting involved. [Contributing](../CONTRIBUTING.md) explains the workflow from an issue to a reviewed change.
 
 ## Install tools
 
-Install Git, [VS Code](https://code.visualstudio.com/), and the **PlatformIO IDE** extension inside VS Code. Use [PlatformIO's installation guide](https://docs.platformio.org/en/latest/integration/ide/vscode.html). PlatformIO supplies the firmware toolchain; a separate ESP-IDF installation is not needed for this workflow.
+Install Git, [VS Code](https://code.visualstudio.com/), and the **PlatformIO IDE** extension inside VS Code. Follow [PlatformIO's installation guide](https://docs.platformio.org/en/latest/integration/ide/vscode.html) if needed. PlatformIO downloads the firmware compiler and required packages; you do not need a separate ESP-IDF installation or C compiler for this build workflow.
 
-Host checks also need Python 3.9 or newer and a C compiler available as `cc`. On macOS, Apple's Command Line Tools provide `cc`; on Linux, install your distribution's C development tools. On Windows, use a Linux environment such as WSL for the host checks; native Windows host-test compatibility is not established here. Building firmware through PlatformIO is a separate step.
+This workflow works on Windows, macOS, and Linux. **Windows users do not need WSL to build or upload firmware through PlatformIO.** On Linux, follow PlatformIO's installation prerequisites, including your distribution's `python3-venv` package.
 
-## Clone and open
+## Clone and open in VS Code
 
-From a terminal in the folder where you want to keep projects:
+1. Open VS Code's **Source Control** panel and select **Clone Repository**. You can also open the Command Palette and choose **Git: Clone**.
+2. Paste `https://github.com/McGill-Baja-Racing/ESP32DataLogger.git`, choose a local destination, and open the cloned repository.
+3. Choose **File → Open Workspace from File…** and select `baja-daq.code-workspace` from the repository.
+4. Allow PlatformIO to finish initializing. The workspace opens the master, sensor, and simulator projects together.
 
-```bash
-git clone https://github.com/McGill-Baja-Racing/ESP32DataLogger.git
-cd ESP32DataLogger
-```
+Already have a checkout? Open its workspace file instead of cloning again.
 
-Existing checkout? Open that folder instead of cloning again. In VS Code choose **File → Open Workspace from File…**, then select `baja-daq.code-workspace`.
+## Build with the bottom toolbar
 
-Open a **PlatformIO Core CLI** terminal through PlatformIO in VS Code. Ordinary terminals may not have `pio` on their command search path. Set the terminal's working directory to the repository root before using the commands below.
+A build compiles the firmware without putting it on a board. You can do this without hardware.
 
-```bash
-git --version
-pio --version
-python3 --version
-cc --version
-```
+1. Open `sensor-node/src/main.c`. The workspace activates the project owning the file you are editing.
+2. In the PlatformIO environment selector in the bottom status bar, select **NodeBrake** for the **sensor-node** project.
+3. Hover over the **✓** button to confirm its tooltip is **PlatformIO: Build**, then click it.
+4. Wait for the terminal output to report **SUCCESS**. Initial package downloads need internet and can take several minutes.
 
-Expect version information for each tool. Python and `cc` are needed only for host tests, not the initial firmware build. See [troubleshooting](TROUBLESHOOTING.md) if a command is missing.
+If you cannot find the selector or toolbar, open the PlatformIO panel (ant icon) and use **sensor-node → NodeBrake → General → Build** under Project Tasks. Confirm both project and environment before running an action: this workspace contains several projects.
 
-## Make a first build
+The firmware output is stored in the project's `.pio/` folder. Build configuration is in `platformio.ini`; intentional shared SDK settings belong in SDK defaults rather than generated configuration files.
 
-From the repository root, with PlatformIO installed and internet available for initial downloads:
+## What the other buttons do
+
+These are the buttons configured by this repository's workspace:
+
+| Button | Action | When to use it |
+|---|---|---|
+| ✓ | Build | Compile and check that the selected firmware builds; no board required |
+| → | Upload and Monitor | Build, flash the connected board, and open its serial output |
+| Plug | Serial Monitor | Read the connected board's serial output without uploading again |
+| Trash can | Clean | Remove generated build output when you need a clean rebuild |
+| Terminal | New Terminal | Open PlatformIO's terminal for command-line tasks |
+
+With hardware connected, select the matching environment before using **→**. Use [Flashing](FLASHING.md) for board selection, ports, and expected startup behavior. Building is not the same as running: firmware runs on the board after upload, not on your laptop.
+
+## Optional terminal alternative
+
+If you prefer commands, open the PlatformIO terminal and run this from the repository root:
 
 ```bash
 pio run -d sensor-node -e NodeBrake -t buildprog
 ```
 
-This selects the brake firmware and compiles it. It does **not** upload or need a board. The first build downloads packages and can take several minutes. Success ends with PlatformIO reporting `SUCCESS` and produces build artifacts under the project's `.pio/` folder.
+This performs the same build without uploading. The explicit target also avoids the simulators' default upload/monitor actions.
 
-In the PlatformIO project tasks panel, the equivalent action is **sensor-node → NodeBrake → Build**. Avoid Upload until you are working with hardware.
+## Optional tests on your computer
 
-Build configuration comes from `platformio.ini`; generated SDK configurations are not the place to make shared configuration changes. Read [Contributing](../CONTRIBUTING.md) before changing files.
-
-## Run a hardware-free check
-
-With Python and `cc` installed, from the repository root:
-
-```bash
-python3 master-node/tests/test_csv_export.py
-python3 master-node/tests/test_paired_csv.py
-```
-
-These compile selected firmware functions for your computer and check CSV output. Expect successful test results and exit status zero with a working host compiler. They do not start the full firmware or simulate a CAN bus. [Testing](TESTING.md) also describes the GPS/time suite and its currently known harness failure. If setup fails, check the [known local tool issues](TROUBLESHOOTING.md#known-validation-issues) before treating it as a firmware bug.
+Some parsing and CSV checks compile selected functions for your computer rather than the ESP32. They need additional tools, unlike the normal PlatformIO build. You can skip them during initial setup and use [Testing](TESTING.md) when your task needs them. That guide includes Windows setup and current known test limitations.
 
 ## Choose your next step
 

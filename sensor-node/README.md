@@ -10,12 +10,14 @@ A PlatformIO environment selects a fixed set of sensor drivers when firmware is 
 |---|---:|---|
 | `NodeBrake` | 1 | Front and rear brake pressure |
 | `NodeMPU` | 3 | Acceleration and angular velocity on three axes |
-| `NodeEncoder` | 4 | Signed bearing RPM |
+| `NodeEncoder` | 4 | Signed gearbox bearing RPM |
 | `NodeEngine` | 5 | Engine RPM and spark events |
 | `NodeADC` | 6 | Optional generic voltage input |
 | `NodeEngineBench` | 5 | Engine RPM printed locally; CAN disabled |
 
 Most measurements are periodic: the scheduler reads them at a configured interval. Engine capture is event-driven: input edges are timestamped as they happen, and valid intervals produce RPM. It is not a fixed-rate polling sensor. The encoder is read periodically even though interrupts capture its rotation edges.
+
+The bearing is inside the gearbox. Its raw RPM is recorded for later conversion to wheel and secondary RPM using the relevant drivetrain ratios; this firmware does not perform those conversions.
 
 ## Normal and bench operation
 

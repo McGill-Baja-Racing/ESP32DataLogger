@@ -4,7 +4,9 @@ This guide explains the system before the implementation. No prior electronics k
 
 ## Measurements become samples
 
-A sensor converts a physical quantity, such as pressure or rotation, into an electrical signal. A sensor node reads that signal and turns it into a **sample**: a measurement value and the time it was measured. Most sensors are read periodically; engine speed uses the time between spark-input edges instead.
+A sensor converts a physical quantity, such as pressure or rotation, into an electrical signal. A sensor node reads that signal and turns it into a **sample**: a measurement value and the time it was measured. The gearbox bearing provides a raw rotation measurement used later to calculate wheel and secondary RPM using drivetrain ratios. The firmware records that bearing RPM without doing those conversions.
+
+Most sensors are read periodically; engine speed uses the time between spark-input edges instead.
 
 Sensor nodes are ESP32-C3 microcontrollers. Different firmware build profiles select different sensors. Hardware selection happens when compiling, not through the browser at runtime.
 

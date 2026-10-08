@@ -48,12 +48,14 @@ Every accepted CAN sensor frame has exactly eight bytes:
 | Node 1 | `0x0B1`, `0x0B2` | Front/rear pressure, psi | 100 Hz each |
 | Node 3 | `0x0B3`–`0x0B5` | Acceleration X/Y/Z, milli-g | 100 Hz each |
 | Node 3 | `0x0B6`–`0x0B8` | Angular velocity X/Y/Z, milli-degrees/second | 100 Hz each |
-| Node 4 | `0x0B9` | Signed bearing RPM | 50 Hz, nominal 100 ms averaging window |
+| Node 4 | `0x0B9` | Signed gearbox bearing RPM | 50 Hz, nominal 100 ms averaging window |
 | Node 6 | `0x0BA` | Voltage, mV | 100 Hz |
 | Node 5 | `0x0BB` | Engine RPM | Valid consecutive spark intervals; zero on stopped timeout |
 | Node 5 | `0x0BC` | Spark event, value `1` | Detected rising edges |
 | Master GPS | `0x700` | Speed, km/h × 100 | Valid GPS telemetry updates |
 | Master GPS | `0x701`, `0x702` | Latitude/longitude, degrees × 10⁷ | Valid GPS telemetry updates |
+
+Bearing RPM is the raw gearbox bearing measurement, not wheel or secondary RPM; drivetrain conversion happens later.
 
 GPS IDs identify local log/live samples; the GPS receiver does not send them over CAN. Engine capture sends spark events even when an interval is unsuitable for RPM. Stopped-engine zeros are generated at approximately 100 ms intervals. Queue pressure can lose events. The master rejects engine/spark frames whose timestamp has the sign bit set; long-session behavior is therefore more restricted for these channels than the unsigned timestamp format alone suggests.
 

@@ -14,6 +14,19 @@ Use this guide after [Contributing](../CONTRIBUTING.md). All commands below run 
 | Shared sensor/sampler code | All sensor profiles, including bench; affected hardware |
 | Shared protocol | All firmware profiles below, then CAN and exported-data checks |
 
+## Optional host-test setup
+
+These tools are needed for the host test scripts, not for PlatformIO firmware builds. On macOS install Apple's Command Line Tools; on Debian/Ubuntu install Python and `build-essential`. The tests invoke a compiler named `cc` directly and use Unix-style compilation options; native Windows compatibility has not been validated.
+
+For Windows contributors who need these tests, WSL with Ubuntu provides that environment:
+
+1. Follow [Microsoft's WSL installation instructions](https://learn.microsoft.com/en-us/windows/wsl/install): on supported Windows versions, open PowerShell as administrator and run `wsl --install`, then restart if prompted and complete Ubuntu's user setup.
+2. In the Ubuntu terminal, run `sudo apt update` and `sudo apt install python3 build-essential git`.
+3. Clone this repository inside Ubuntu, or change to your existing checkout through its `/mnt/c/...` path. Work on the branch containing your change.
+4. From that checkout's root, run the host commands below. Check `python3 --version` (3.9+) and `cc --version` if a tool is missing.
+
+Keep normal board builds/uploads in your Windows VS Code/PlatformIO setup. WSL is an optional route for host checks; it is not a firmware onboarding prerequisite.
+
 ## Hardware-free checks
 
 ```bash

@@ -42,7 +42,7 @@ Use the browser's Powertrain CSV option or `format=paired` at the same endpoint.
 Relative time,Absolute time,Brake pressure,Bearing RPM,Engine RPM,GPS latitude,GPS longitude,GPS Speed
 ```
 
-Each row is driven by an engine RPM sample. Relative time is its master timestamp in milliseconds; absolute time is its aligned UTC entry. Bearing RPM must be at or before that timestamp and at most 100 ms old, otherwise the row is omitted. Zero and signed bearing RPM are retained without gear scaling.
+Each row is driven by an engine RPM sample. Relative time is its master timestamp in milliseconds; absolute time is its aligned UTC entry. Bearing RPM must be at or before that timestamp and at most 100 ms old, otherwise the row is omitted. Zero and signed bearing RPM are retained without gear scaling. This is the raw measurement from a bearing inside the gearbox; wheel and secondary RPM must be calculated later using the relevant drivetrain ratios.
 
 Front brake pressure is included in psi if at or before the engine sample and at most 100 ms old; otherwise the cell is blank. Rear brake remains in full CSV. GPS fields use the most recently encountered corresponding reading at or before the engine timestamp, without an age cutoff. Coordinates become decimal degrees and speed becomes km/h; unavailable fields are blank.
 
