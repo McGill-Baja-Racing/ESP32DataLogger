@@ -1,5 +1,7 @@
 #include "sensor.h"
 
+#include "protocol/app_protocol.h"
+
 /*
  * This is the only file that decides which sensors belong to a node build.
  * Drivers remain independent and export descriptors consumed here.
@@ -8,8 +10,9 @@
 #if NODE_FIXED_BRAKE_CONFIG
 extern sensor_t front_brake_sensor;
 extern sensor_t rear_brake_sensor;
+extern sensor_t brake_position_sensor;
 
-static sensor_t sensors[2];
+static sensor_t sensors[3];
 #elif NODE_FIXED_ENCODER_CONFIG
 extern sensor_t bearing_encoder_sensor;
 
@@ -40,6 +43,8 @@ sensor_t *sensor_registry(size_t *count)
 #if NODE_FIXED_BRAKE_CONFIG
     sensors[0] = front_brake_sensor;
     sensors[1] = rear_brake_sensor;
+    sensors[2] = brake_position_sensor;
+    sensors[2].can_id = CAN_ID_BRAKE_POSITION;
 #elif NODE_FIXED_ENCODER_CONFIG
     sensors[0] = bearing_encoder_sensor;
 #elif NODE_FIXED_ENGINE_CONFIG

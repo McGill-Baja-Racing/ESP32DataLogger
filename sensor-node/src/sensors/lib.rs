@@ -1,7 +1,6 @@
-//!
 //! Root of the Rust sensor drivers. Cargo builds this crate into a static
-//! library that the C firmware links; each sensor is a `mod` below and exposes
-//! `extern "C"` functions declared in a matching `.h` file.
+//! library that the C firmware links; each sensor is a `mod` below and exports
+//! one `sensor_t` descriptor that `sensor_registry.c` declares `extern`.
 //!
 //! The crate has no standard library (`no_std`), so it must supply its own
 //! panic handler. On a panic it hands the message to ESP-IDF, which prints it
@@ -11,6 +10,7 @@
 // Only `core`, the minimal part of Rust, is available.
 #![no_std]
 
+use core::ffi::{c_char, c_void}; // Import C types necessary for interoperability
 use core::fmt::Write; // lets `write!` send formatted text to our `Console`
 use core::panic::PanicInfo; // holds the location and message of a panic (a crash in Rust)
 
@@ -49,3 +49,31 @@ fn panic(info: &PanicInfo) -> ! {
     // SAFETY: `abort` takes no arguments and does not return.
     unsafe { abort() }
 }
+
+/// The sensor struct just like the C version
+#[repr(C)]
+struct Sensor {
+    /// C `const char *`: `c_char` is `char` on the target (signedness varies).
+    name: *const c_char,
+    /// C `uint32_t`: fixed-width, so exactly `u32`.
+    can_id: u32,
+    /// C `uint32_t`: fixed-width, so exactly `u32`.
+    period_us: u32,
+    /// C `int64_t`: fixed-width, so exactly `i64`.
+    next_sample_us: i64,
+    /// C `esp_err_t (*)(sensor_t *)`: `esp_err_t` is `int`, so `i32`. `Option`
+    /// because C allows NULL; `None` is NULL.
+    init: Option<unsafe extern "C" fn(sensor: &mut Sensor) -> i32>,
+    /// C `void (*)(sensor_t *)`: `void` return is no `->`. `Option` for NULL.
+    start: Option<unsafe extern "C" fn(sensor: &mut Sensor)>,
+    /// C `esp_err_t (*)(sensor_t *, int32_t *)`: returns `i32`; `int32_t *` is
+    /// `*mut i32`. `Option` for NULL.
+    read: Option<unsafe extern "C" fn(sensor: &mut Sensor, value: *mut i32) -> i32>,
+    /// C `void *`: Rust has no `void`, so `*mut c_void`. `mut` because the C
+    /// pointer is non-const.
+    context: *mut c_void,
+}
+
+// SAFETY: descriptors are read-only statics; the registry copies them before
+// the sampler task writes `next_sample_us`.
+unsafe impl Sync for Sensor {}
