@@ -18,7 +18,7 @@ mod brake_position; // pulls in brake_position.rs (each new Rust sensor adds ano
 
 // Functions that live in C (ESP-IDF), not in Rust. The compiler cannot check
 // C code, so it trusts these signatures and makes every call to them `unsafe`.
-extern "C" {
+unsafe extern "C" {
     // Sends one byte to the serial console
     fn esp_rom_output_tx_one_char(byte: u8) -> i32;
     // Prints the "abort() was called" message and reboots, so it never returns (`-> !`).
@@ -42,9 +42,10 @@ impl Write for Console {
 // Rust calls this on any panic, e.g. `.expect()` on `None` or an index out of
 // range. It must never return (`-> !`): here it reboots the chip.
 #[panic_handler]
-fn panic(info: &PanicInfo) -> ! {
+fn panic(info: &PanicInfo<'_>) -> ! {
     // Prints "panicked at <file>:<line>:<col>:\n<message>".
     // The result is ignored: a failed print must not cause a second panic.
+    #[expect(clippy::let_underscore_must_use, reason = "a failed print must not panic")]
     let _ = core::write!(Console, "{info}");
     // SAFETY: `abort` takes no arguments and does not return.
     unsafe { abort() }
