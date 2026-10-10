@@ -11,3 +11,4 @@ sdkconfig.*
 .vscode/settings.json
 
 /build/
+target/
