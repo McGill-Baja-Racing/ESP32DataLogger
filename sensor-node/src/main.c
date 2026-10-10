@@ -4,6 +4,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
+#include "brake_position.h"
 #include "can/can_node.h"
 #include "sampler/sampler.h"
 #include "time/time_sync.h"
@@ -40,6 +41,7 @@ void app_main(void)
      * this node to initialize CAN and report its boot state.
      */
     vTaskDelay(pdMS_TO_TICKS(SENSOR_STARTUP_DELAY_MS));
+    ESP_LOGI("Rust", "%s", brake_position_hello());
 
     /* Sensor hardware and sampling tasks exist before CAN can issue START. */
     ESP_ERROR_CHECK(sampler_init());

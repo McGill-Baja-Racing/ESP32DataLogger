@@ -1,0 +1,13 @@
+[package]
+name = "sensors"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["staticlib"]
+path = "src/sensors/lib.rs"
+
+[profile.release]
+panic = "abort"
+opt-level = "s"
+lto = true
