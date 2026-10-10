@@ -1,33 +1,51 @@
+//!
+//! Root of the Rust sensor drivers. Cargo builds this crate into a static
+//! library that the C firmware links; each sensor is a `mod` below and exposes
+//! `extern "C"` functions declared in a matching `.h` file.
+//!
+//! The crate has no standard library (`no_std`), so it must supply its own
+//! panic handler. On a panic it hands the message to ESP-IDF, which prints it
+//! and reboots the chip.
+
+// This declaration turns off the Rust standard (std) library since it needs an operating system and a heap.
+// Only `core`, the minimal part of Rust, is available.
 #![no_std]
 
-use core::ffi::c_char;
-use core::fmt::Write;
-use core::panic::PanicInfo;
+use core::fmt::Write; // lets `write!` send formatted text to our `Console`
+use core::panic::PanicInfo; // holds the location and message of a panic (a crash in Rust)
 
-mod brake_position;
+mod brake_position; // pulls in brake_position.rs (each new Rust sensor adds another `mod` line)
 
+// Functions that live in C (ESP-IDF), not in Rust. The compiler cannot check
+// C code, so it trusts these signatures and makes every call to them `unsafe`.
 extern "C" {
-    fn esp_system_abort(details: *const c_char) -> !;
+    // Sends one byte to the serial console
+    fn esp_rom_output_tx_one_char(byte: u8) -> i32;
+    // Prints the "abort() was called" message and reboots, so it never returns (`-> !`).
+    fn abort() -> !;
 }
 
-struct Buffer {
-    bytes: [u8; 96],
-    len: usize,
-}
+// Sends text straight to the serial console
+struct Console;
 
-impl Write for Buffer {
+// Teaches `write!` to print each piece of text it produces.
+impl Write for Console {
     fn write_str(&mut self, s: &str) -> core::fmt::Result {
-        // Truncate instead of failing; the last byte stays 0 for C.
-        let n = s.len().min(self.bytes.len() - 1 - self.len);
-        self.bytes[self.len..self.len + n].copy_from_slice(&s.as_bytes()[..n]);
-        self.len += n;
+        for byte in s.bytes() {
+            // SAFETY: takes a plain byte and has no other requirements.
+            unsafe { esp_rom_output_tx_one_char(byte) };
+        }
         Ok(())
     }
 }
 
+// Rust calls this on any panic, e.g. `.expect()` on `None` or an index out of
+// range. It must never return (`-> !`): here it reboots the chip.
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
-    let mut message = Buffer { bytes: [0; 96], len: 0 };
-    let _ = write!(message, "{info}");
-    unsafe { esp_system_abort(message.bytes.as_ptr() as *const c_char) }
+    // Prints "panicked at <file>:<line>:<col>:\n<message>".
+    // The result is ignored: a failed print must not cause a second panic.
+    let _ = core::write!(Console, "{info}");
+    // SAFETY: `abort` takes no arguments and does not return.
+    unsafe { abort() }
 }
