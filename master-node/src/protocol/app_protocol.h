@@ -24,6 +24,7 @@
 #define CAN_ID_GPS_SPEED            0x700
 #define CAN_ID_GPS_LATITUDE         0x701
 #define CAN_ID_GPS_LONGITUDE        0x702
+#define CAN_ID_BRAKE_POSITION       0x0BD
 
 #define CAN_MASTER_TIME_RECORDING_FLAG (UINT64_C(1) << 63)
 #define CAN_MASTER_TIME_VALUE_MASK     (CAN_MASTER_TIME_RECORDING_FLAG - 1)
@@ -46,14 +47,16 @@ static inline bool protocol_is_sensor_id(uint32_t id)
            id == CAN_ID_BEARING_ENCODER ||
            id == CAN_ID_GENERIC_ADC ||
            id == CAN_ID_ENGINE_RPM ||
-           id == CAN_ID_ENGINE_SPARK;
+           id == CAN_ID_ENGINE_SPARK ||
+           id == CAN_ID_BRAKE_POSITION;
 }
 
 static inline uint8_t protocol_sensor_node_id(uint32_t id)
 {
     switch (id) {
         case CAN_ID_FRONT_BRAKE:
-        case CAN_ID_REAR_BRAKE:     return 1;
+        case CAN_ID_REAR_BRAKE:
+        case CAN_ID_BRAKE_POSITION: return 1;
         case CAN_ID_MPU_ACCEL_X:
         case CAN_ID_MPU_ACCEL_Y:
         case CAN_ID_MPU_ACCEL_Z:

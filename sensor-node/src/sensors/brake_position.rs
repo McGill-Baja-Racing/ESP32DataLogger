@@ -1,15 +1,30 @@
+use core::ptr::null_mut;
+
+use crate::Sensor;
+
+const ESP_OK: i32 = 0;
+
 // Placeholder: will map the raw ADC voltage (mV) to pedal position, 0-100 %.
-// Declared for C in brake_position.h.
-#[no_mangle] // keep the exact name so the linker can match the call in C
-pub extern "C" fn brake_position_normalize(raw_mv: i32) -> i32 { // `extern "C"`: C calling convention
-    let _ = raw_mv; // unused for now
+fn brake_position_normalize(raw_mv: i32) -> i32 {
+    let _ = raw_mv;
     0
 }
 
-#[no_mangle]
-pub extern "C" fn brake_position_hello() -> *const u8 {
-    // A constant string stored in flash. The `\0` is how C knows where it stops.
-    // Creating a raw pointer is safe in Rust; only reading through it is not,
-    // and the C caller does that.
-    b"Hello from Rust\0".as_ptr()
+// SAFETY (caller): the sampler passes a valid pointer to an `int32_t`.
+unsafe extern "C" fn read_position(_sensor: &mut Sensor, value: *mut i32) -> i32 {
+    unsafe { *value = brake_position_normalize(0) };
+    ESP_OK
 }
+
+/// `can_id` is left 0 here: `sensor_registry.c` sets it from `CAN_ID_BRAKE_POSITION`.
+#[no_mangle]
+pub static brake_position_sensor: Sensor = Sensor {
+    name: c"brake_position".as_ptr(),
+    can_id: 0,
+    period_us: 40000, // 25 Hz
+    next_sample_us: 0,
+    init: None,
+    start: None,
+    read: Some(read_position),
+    context: null_mut(),
+};
