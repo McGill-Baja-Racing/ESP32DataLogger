@@ -32,7 +32,8 @@ int main(int argc,char **argv) {
     FILE *utc_file=argc==3?fopen(argv[2],"rb"):NULL;
     if(argc==3&&!utc_file){fclose(file);return 1;}
     httpd_req_t request=0;int result=stream_paired_csv(&request,file,utc_file);
-    if(utc_file)fclose(utc_file);fclose(file);return result;
+    if(utc_file)fclose(utc_file);
+    fclose(file);return result;
 }
 '''
 
