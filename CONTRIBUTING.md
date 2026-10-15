@@ -17,7 +17,7 @@ Hardware-free work is useful, but passing a build does not prove wiring, timing,
 
 ## Create or pick an issue
 
-An issue records the problem or proposed improvement before implementation. Check the repository's GitHub Issues for an existing report so discussion stays in one place. For a new issue, include a clear title, the current behavior, the desired result, reproduction steps or an example, and relevant logs/screenshots. For a feature, describe who needs it and how you will know it works.
+An issue records the problem or proposed improvement before implementation. Check the repository's [GitHub Issues](https://github.com/orgs/McGill-Baja-Racing/projects/4/views/1) for an existing report so discussion stays in one place. For a new issue, include a clear title, the current behavior, the desired result, reproduction steps or an example, and relevant logs/screenshots. For a feature, describe who needs it and how you will know it works.
 
 Discuss scope and expected validation with the team, especially for hardware or protocol changes. Link an existing issue if you are taking it on, and comment that you are working on it to avoid duplicated effort. Never include credentials in logs.
 
