@@ -6,7 +6,7 @@ Small computers called **sensor nodes** measure brake pressure, car motion, engi
 
 The gearbox bearing measurement is a raw rotation reading. It is converted later, using the drivetrain ratios, to calculate wheel RPM and secondary RPM; the recorded value itself is not either of those speeds.
 
-## How the boards communicate
+## How the boards communicate yoooo
 
 A shared **CAN bus** cable runs around the car. Each sensor node and the master connect to that same cable to exchange messages. Physically, its data connection uses two wires, CAN-H and CAN-L, shown as one shared connection below.
 
