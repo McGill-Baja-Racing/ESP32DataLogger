@@ -10,7 +10,7 @@
 #if NODE_FIXED_BRAKE_CONFIG
 extern sensor_t front_brake_sensor;
 extern sensor_t rear_brake_sensor;
-extern sensor_t brake_position_sensor;
+extern const sensor_t brake_position_sensor;
 
 static sensor_t sensors[3];
 #elif NODE_FIXED_ENCODER_CONFIG
