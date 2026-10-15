@@ -1,3 +1,5 @@
+//! Brake position sensor, same shape as `front_brake.c`.
+
 use core::ptr::null_mut;
 
 use crate::Sensor;
