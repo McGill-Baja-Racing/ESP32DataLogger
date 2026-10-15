@@ -1,0 +1,5 @@
+# rustup reads this file and installs this Rust version and the ESP32-C3
+# target automatically on the first `cargo build`.
+[toolchain]
+channel = "1.90.0"
+targets = ["riscv32imc-unknown-none-elf"]
