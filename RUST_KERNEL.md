@@ -1,6 +1,7 @@
 # Rust kernel
 
-Design draft (2026-10-16). Nothing is built yet.
+Design draft (2026-10-16). A skeleton in `kernel/` builds for both chips; nothing has run on
+hardware yet.
 
 ## 1. Overview
 
@@ -16,111 +17,68 @@ Layer 2         system: errors, logging, clock, C library
 Layer 1         core: boot, memory, interrupts, scheduler, FreeRTOS
 ```
 
-Decisions:
+Goals:
 
-- **The firmware stays C and links against the kernel.** `web_server.c` included, and
-  PlatformIO keeps working. The kernel itself is all Rust; only the bootloaders and the C6's
-  ESP-Hosted firmware are not.
-- **The C API doesn't change:** ESP-IDF v5.5.5's own headers are the source of truth. The
-  kernel matches their types, sizes and constants exactly.
-- **Scope is what our firmware links** (about 87 ESP-IDF/FreeRTOS functions and ~45 C library
-  functions), behaving as the official docs say. Many documented functions are header macros
-  over a few internal ones (`xQueueSend` and `xSemaphoreGive` both call `xQueueGenericSend`),
-  so the list comes from the linker (section 3), not the docs. Anything missing is a link
-  error, never a stub that returns `ESP_OK`.
-- **Config is frozen:** `sdkconfig.h` and `FreeRTOSConfig.h` only allow what the kernel
-  supports, so an unsupported option fails at compile time.
-- **Toolchain:** stable Rust ≥ 1.99, the first release that can define variadic C functions
-  (ones taking `...`, like `printf`). Every crate is pinned to an exact version or commit,
-  because several are unstable or git-only.
-- **Master boards:** buy P4 v3.x; `esp-hal` (Espressif's Rust hardware library) supports
-  revision v3.0 and later, not our v1.3. Keep the v1.3 boards for the C master meanwhile: it
-  doesn't boot on v3.x until its `sdkconfig.defaults` changes.
-- **Fallback:** if the kernel proves impractical, Rust code can still go inside the normal
-  ESP-IDF build, which Espressif supports.
+- The firmware stays C, built by PlatformIO.
+- The C API matches ESP-IDF v5.5.5's headers exactly.
+- Only what our firmware links is implemented (about 130 functions, listed by the linker).
+  Anything missing is a link error, never a stub.
+- `sdkconfig.h` and `FreeRTOSConfig.h` only allow what the kernel supports.
 
 ## 2. Layers
 
 ### Layer 1: core
 
-- **Reuse:** `esp-rtos` 0.4.0, through `esp-radio-rtos-driver` 0.4.2 (feature
-  `esp-radio`, no Wi-Fi) for the scheduler, tasks, queues, semaphores and delays. It has a
-  100 Hz tick, round-robin within a priority, and a task switch right after an interrupt wakes
-  a higher-priority task. `esp-radio-rtos-driver` adds mutexes with priority inheritance (a
-  low-priority task holding a mutex is boosted while a higher one waits).
-- **We write:** the FreeRTOS internals the headers call (`xQueueGenericSend`,
-  `xQueueCreateMutex`, `xTaskCreatePinnedToCore`, ...) and task deletion (esp-rtos can't
-  delete tasks). Handles (`TaskHandle_t`, `QueueHandle_t`) are pointers to the Rust objects.
-  `portENTER_CRITICAL*` (start a critical section: code that no interrupt or other core may
-  run during) maps onto esp-hal's `critical-section` lock, so no spinlocks of our own. The
-  firmware uses no event groups, task notifications, stream buffers, queue sets or software
-  timers, so the kernel has none.
-- **Glue:** boot (`app_main` runs as a task; the app descriptor comes from `esp_app_desc!`),
-  `esp-alloc` 0.11.0 behind `malloc`/`free`, and Rust interrupt handlers that call C
-  callbacks. ESP-IDF's 25 priorities map onto esp-rtos's 32. The C3 has no atomic
-  instructions, so `__atomic_*` (used by `stdatomic.h` in the CAN code) comes from
-  `esp-radio/src/compat/atomic.rs`.
+- **Reuse:** `esp-rtos` 0.4.0 (feature `esp-radio`): scheduler, tasks, queues, semaphores,
+  delays, mutexes.
+- **We write:** the FreeRTOS functions the headers call (`xQueueGenericSend`,
+  `xTaskCreatePinnedToCore`, ...) and task deletion. `portENTER_CRITICAL*` uses esp-hal's
+  `critical-section`. No event groups, task notifications, stream buffers, queue sets or
+  software timers.
+- **Glue:** boot sets the full CPU clock and runs `app_main` as a task. `esp-bootloader-esp-idf`
+  0.6.0 adds the app descriptor. `esp-alloc` 0.11.0 provides `malloc`, `free`, `calloc` and
+  `realloc`. The C3's `__atomic_*` come from `esp-radio/src/compat/atomic.rs`.
 
 ### Layer 2: system and C library
 
-- **Reuse:** `esp-hal` 1.2.2 (time, reset reason, random numbers), `printf-compat` 0.5.0 (the
-  `printf` engine), and Rust's `core`. The compiler's built-ins already export `memcpy`,
-  `memset`, `memcmp` and `strlen`.
-- **We write:** the rest of the C library functions, on top of `core` (`strtod` is
-  `f64::from_str`, `qsort` is `sort_unstable_by`); there is no `math.h` or `scanf`. Also
-  `esp_err`, `esp_log`, `esp_timer_get_time`, time (`settimeofday`, `gmtime_r`, `strftime`),
-  stdio and the POSIX file calls (`open`, `fopen`, `readdir`, `rename`, ...). Variadic ones:
-  `printf`, `snprintf`, `open`, `esp_log*`.
-- **Glue:** stdout writes whole lines per task, so tasks' output doesn't interleave. `fgets`
-  on stdin reads the serial console (the master's and simulators' commands).
+- **Reuse:** `esp-hal` 1.2.2, `esp-println` 0.18.0, `printf-compat` 0.5.0, Rust's `core`. The
+  compiler provides `memcpy`, `memset`, `memcmp` and `strlen`.
+- **We write:** the rest of the C library (no `math.h` or `scanf`), `esp_err`, `esp_log`,
+  `esp_timer_get_time`, time, stdio and the POSIX file calls.
+- **Glue:** stdout writes whole lines per task. `fgets` on stdin reads the serial console.
 
 ### Layer 3: drivers
 
-- **Reuse:** `esp-hal` directly for GPIO, I2C, UART, ADC, timers, C3 CAN, and the P4's SD
-  card and SDIO (its link to the C6). CAN, ADC, SD and timers are marked unstable in esp-hal.
+- **Reuse:** `esp-hal` for GPIO, I2C, UART, ADC, timers, C3 CAN, and the P4's SD and SDIO.
 - **We write:** the ESP-IDF driver APIs on top (`gpio`, `esp_twai`, `adc_oneshot`/`adc_cali`,
-  `i2c_master`, `uart`, `gptimer`, `sdmmc_host`/`sdmmc_cmd`), and the P4 CAN driver. esp-hal
-  has none for the P4, but its C6 driver covers the same hardware; we add the third
-  controller.
+  `i2c_master`, `uart`, `gptimer`, `sdmmc_host`/`sdmmc_cmd`), and the P4 CAN driver, adapted
+  from esp-hal's C6 one.
 
 ### Layer 4: master services
 
-- **Reuse:** `fatfs` (rust-fatfs 0.4, git commit `2aefc2a`: FAT32 with long filenames, blocking
-  API, no std), from Embassy (Rust's async embedded framework) `embassy-net-esp-hosted` (Wi-Fi
-  via the C6) and `embassy-net` (TCP/IP), then `edge-dhcp` (dropped if the new embassy TCP/IP
-  stack's own DHCP server is enough) and `edge-http`.
-- **We write:** the SD block driver under `fatfs`, file timestamps from the system clock,
-  access-point mode for the Wi-Fi driver (it only does station mode), and the ESP-IDF APIs on
-  top: `esp_vfs_fat`, `esp_hosted_init`, `esp_wifi`, `esp_netif`, `esp_event` (default loop
-  only), `nvs_flash` (see Risks) and `httpd_*`.
-- **Glue:** the network runs async (many jobs taking turns) on one task, like lwIP's core task.
-  A C call posts a request and waits on its own semaphore; the request, not the caller's stack,
-  owns the reply, so a timeout can't leave a dangling pointer. The network task's priority is
-  at or above every caller, and it never blocks. Interrupts never call it; debug builds assert
-  the caller's context. HTTP handlers run on their own task (as in ESP-IDF) and FAT on its own
-  task, so a handler streaming a log file doesn't deadlock the network.
+- **Reuse:** `fatfs` (rust-fatfs 0.4, commit `2aefc2a`), `embassy-net-esp-hosted` (Wi-Fi via the
+  C6), `embassy-net`, `edge-dhcp` and `edge-http`.
+- **We write:** the SD block driver, access-point mode, and the ESP-IDF APIs on top:
+  `esp_vfs_fat`, `esp_hosted_init`, `esp_wifi`, `esp_netif`, `esp_event`, `nvs_flash` and
+  `httpd_*`.
+- **Glue:** the network runs on one task that never blocks and isn't called from interrupts.
+  C calls post a request that owns its reply, so a timeout can't leave a dangling pointer.
+  HTTP handlers and FAT get their own tasks, so streaming a log doesn't stall the network.
 
 ### Rules at the C boundary
 
-- `panic = "abort"`: a panic (Rust's fatal error) prints to the serial console and resets.
-- Exports use plain `extern "C"` and `#[unsafe(no_mangle)]` (C calling convention and C
-  names) only. No newlib or ESP-IDF object that defines the same names goes on the link line.
-- C types and constants come from the headers through bindgen (a tool that turns C headers
-  into Rust declarations). A developer runs it and commits `src/bindings.rs`, so teammates need
-  no extra tools; its layout checks fail the build if Rust and C disagree.
-- Each C function is a safe Rust function returning `Result<T, EspError>` (Rust's
-  success-or-error type; `EspError` mirrors `esp_err.h`), exported by one macro that rejects
-  NULL with `ESP_ERR_INVALID_ARG`, writes outputs only on success and converts the error to
-  `esp_err_t`.
-- A driver owns its esp-hal peripheral and pins from create to delete, so two drivers can't
-  share hardware.
-- C callbacks (GPIO, CAN and timer events) run in interrupt context with no lock held. A task
-  switch they request happens after the callback returns. ESP-IDF's `.iram1` section names
-  stay, so `IRAM_ATTR` still works. The interrupt stack is sized for the C callbacks.
+- A panic prints a backtrace (`esp-backtrace` 0.20.0) and resets.
+- Exports are `extern "C"` with `#[unsafe(no_mangle)]`; no newlib or ESP-IDF objects are linked.
+- C types come from the headers through bindgen, committed in `kernel/sys/`.
+- Each C function is a safe Rust function returning `Result<T, EspError>`, exported by one
+  macro that rejects NULL and writes outputs only on success.
+- A driver owns its peripheral and pins until it is deleted.
+- C callbacks run in interrupt context with no lock held. `IRAM_ATTR` still works.
 
 ## 3. Plan and testing
 
-Each step ends with real firmware working on the bench.
+Each step ends with real firmware working on the bench. The master needs P4 v3.x boards:
+`esp-hal` doesn't support our v1.3.
 
 | Step | Work                                                        | Done when                                           |
 | ---- | ----------------------------------------------------------- | --------------------------------------------------- |
@@ -131,87 +89,72 @@ Each step ends with real firmware working on the bench.
 | 5    | Master storage (SD, `fatfs`, files)                         | `.bin` and `.bin.utc` files match the ESP-IDF build |
 | 6    | Master network, then master firmware                        | web page, graphs, CSV download work                 |
 
-Step 1 checks first the unknowns that could each stop the project:
+Step 1 checks:
 
-- `pio` builds and flashes a C program through the cargo hook (section 4).
-- C objects link into the esp-hal image.
-- `pio device monitor` shows C text and decoded defmt lines (section 4) together, reliably
-  (esp-hal's own tests turn defmt off on the C3 after random failures).
-- The symbol list: link every firmware against an empty kernel and record what is missing
-  (`nm -u` lists undefined symbols). This is the to-do list for steps 2–6.
-- The core test (below) passes.
-- Variadics on the board: `double` and `int64_t` arguments, more than seven arguments, and a
-  `va_list` handed on to a second function.
+- `pio` builds and flashes a C program through the cargo hook.
+- The linked C code runs on the board.
+- `pio device monitor` reliably shows C text and defmt lines together.
+- The symbol list: link every firmware against the empty kernel and record what is missing
+  (`nm -u`). This is the to-do list for steps 2–6.
+- The core test passes.
+- `printf` works with `double`, `int64_t`, more than seven arguments, and a passed-on `va_list`.
 
 Tests:
 
-- **Core test:** the FreeRTOS standard demo tasks (`Demo/Common/Minimal`, e.g. BlockQ,
-  GenQTest) and ESP-IDF FreeRTOS kernel tests, copied, for the APIs on the symbol list. They
-  must cover where other FreeRTOS imitations got it wrong: preemption on give,
-  `xHigherPriorityTaskWoken`, stack sizes in bytes, `vTaskDelete(NULL)`, and critical
+- **Core test:** the FreeRTOS demo tasks and ESP-IDF's FreeRTOS tests, covering preemption on
+  give, `xHigherPriorityTaskWoken`, stack sizes in bytes, `vTaskDelete(NULL)`, and critical
   sections on the P4's two cores.
-- **API tests:** one C program per component, on the board.
-- **Differential:** every C test is built against stock ESP-IDF v5.5.5 (the reference) and
-  against the kernel, and the serial outputs are compared (timings within a tolerance).
-- **Progress:** one number, the share of tests passing.
+- **API tests:** one C program per component, run on stock ESP-IDF and on the kernel; serial
+  outputs must match.
 - **Bench:** each node and the master match today's build.
-- **Host tests:** `master-node/tests`, unchanged, plus `cargo test` on a laptop for the
-  kernel's hardware-free parts (C library, `printf`, time, queues, `fatfs` on a disk image).
+- **Host tests:** `master-node/tests`, plus `cargo test` for the hardware-free code in
+  `kernel/portable/`, which exports nothing to C so it can't replace the laptop's C library.
 
 ## 4. Build, flash and logs
 
-- **Build:** `pio run` calls `cargo build` through one `extra_scripts` file, the cargo hook
-  (`kernel/pio/cargo.py`, based on embuild's `platformio.cargo.py`), which also installs
-  `espflash` and `defmt-print`. The C is compiled with PlatformIO's own RISC-V GCC.
-- **Upload:** `platformio.ini` only: `upload_protocol = custom` with an `upload_command` that
-  runs `espflash flash`.
-- **Logs:** `pio device monitor`, as today. C logs stay plain text. Rust logs use defmt (a
-  compact binary format: the strings stay in the ELF, only short IDs go over the wire), sent
-  on the same serial port by esp-println's `defmt-espflash` feature. A custom monitor filter
-  (`kernel/pio/filter_defmt.py`, built like PlatformIO's own `esp32_exception_decoder`, which
-  also reads the ELF) passes C text through and hands defmt frames to `defmt-print`.
-- **Teammates install:** `rustup`, on top of PlatformIO. `kernel/rust-toolchain.toml` picks
-  the Rust version.
+- **Toolchain:** latest stable Rust (1.99.1), pinned in `kernel/rust-toolchain.toml`; every
+  crate pinned exactly. Teammates install `rustup` on top of PlatformIO.
+- **Build:** `pio run` calls cargo through the hook `kernel/pio/cargo.py`. Cargo does the final
+  link; `kernel/build.rs` links the C archive and relinks when it changes.
+- **Handover:** PlatformIO picks the firmware and chip per environment; the hook passes them on:
+
+  | PlatformIO decides | Passed to cargo as                                                                |
+  | ------------------ | --------------------------------------------------------------------------------- |
+  | which firmware     | `BAJA_APP_ARCHIVE`, the C archive's path (`.pio/build/NodeBrake/libapp.a`)        |
+  | which chip: C3     | `--target riscv32imc-unknown-none-elf --features esp32c3`                         |
+  | which chip: P4     | `--target riscv32imafc-unknown-none-elf --no-default-features --features esp32p4` |
+
+- **By hand:** set `BAJA_APP_ARCHIVE`, then `cargo build` (C3 by default) or `cargo run` to
+  flash and monitor.
+- **Upload:** `upload_command` runs `espflash flash`.
+- **Logs:** `pio device monitor`. C logs are plain text, Rust logs are defmt; the filter
+  `kernel/pio/filter_defmt.py` decodes them.
 
 ```
 kernel/
-  Cargo.toml, rust-toolchain.toml, build.rs
-  include/             ESP-IDF, FreeRTOS, C library and lwIP address headers
-  src/bindings.rs      bindgen output from include/
-  src/core/            layer 1
-  src/system/          layer 2
-  src/drivers/         layer 3
-  src/services/        layer 4
-  pio/cargo.py         cargo hook
-  pio/filter_defmt.py  monitor filter (each project's `monitor/` links to it)
+  Cargo.toml           bin crate; esp32c3 (default) and esp32p4 features; lints;
+                       later the workspace root for sys/ and portable/
+  .cargo/config.toml   default target (C3), espflash runners
+  build.rs             links $BAJA_APP_ARCHIVE and -Tlinkall.x
+  include/             ESP-IDF, FreeRTOS, C library and lwIP headers
+  src/main.rs          boot and panic
+  src/export.rs        the C export macro
+  src/rtos.rs          layer 1 (submodules in src/rtos/, enforced by mod_module_files)
+  src/system.rs        layer 2
+  src/drivers.rs       layer 3
+  src/services.rs      layer 4
+  sys/                 bindgen output, chip-only, no lints
+  portable/            hardware-free code, tested on the laptop
+  pio/                 cargo hook and monitor filter
 ```
-
-## 5. Risks
-
-- Nobody has published a project like this, and similar ports took 2–3× longer than planned.
-  Steps that each end on the bench keep the cost visible.
-- `esp-rtos` is labelled "unstable" by Espressif. Its API changed in every release so far, and
-  0.3 and 0.4 also fixed multicore deadlocks, so the P4's two cores need their own tests.
-- Wi-Fi through ESP-Hosted hasn't been published running end to end in Rust, nor on a P4 with
-  a C6. Its driver and the new TCP/IP stack it needs (about three months old) are on embassy
-  `main` only. The C6 needs ESP-Hosted packet mode, and we still need to confirm which
-  ESP-Hosted version the driver supports. The SD card and the C6 link share one SD
-  controller.
-- `nvs_flash_init` is called only because ESP-IDF's Wi-Fi needs NVS (key-value flash
-  storage). The kernel's Wi-Fi doesn't; decide in step 6 whether to implement real NVS or
-  document an exception to the no-stub rule.
-- ADC readings must match ESP-IDF's calibration; compare them on the bench.
-- Log files written by `fatfs` must read the same on a PC and in `decode_log.py` as today's,
-  including after power is pulled mid-write.
 
 ## Resources
 
 - [ESP-IDF v5.5.5 API, C3](https://docs.espressif.com/projects/esp-idf/en/v5.5.5/esp32c3/api-reference/index.html) · [P4](https://docs.espressif.com/projects/esp-idf/en/v5.5.5/esp32p4/api-reference/index.html) · [FreeRTOS](https://docs.espressif.com/projects/esp-idf/en/v5.5.5/esp32c3/api-reference/system/freertos.html)
 - [FreeRTOS kernel API](https://www.freertos.org/Documentation/02-Kernel/04-API-references/01-Task-creation/00-TaskHandle) · [FreeRTOS standard demo tasks](https://github.com/FreeRTOS/FreeRTOS/tree/main/FreeRTOS/Demo/Common/Minimal) · [ESP-IDF FreeRTOS tests](https://github.com/espressif/esp-idf/tree/v5.5.5/components/freertos/test_apps/freertos)
 - [C standard library](https://en.cppreference.com/w/c/header) · [POSIX](https://pubs.opengroup.org/onlinepubs/9799919799/)
-- [Rust on ESP Book](https://docs.espressif.com/projects/rust/book/) · [esp-hal](https://docs.espressif.com/projects/rust/esp-hal/latest/) · [esp-rtos](https://docs.espressif.com/projects/rust/esp-rtos/latest/) · [esp-radio-rtos-driver](https://docs.espressif.com/projects/rust/esp-radio-rtos-driver/latest/) · [esp-alloc](https://docs.espressif.com/projects/rust/esp-alloc/latest/)
+- [Rust on ESP Book](https://docs.espressif.com/projects/rust/book/) · [esp-hal](https://docs.espressif.com/projects/rust/esp-hal/latest/) · [esp-rtos](https://docs.espressif.com/projects/rust/esp-rtos/latest/) · [esp-alloc](https://docs.espressif.com/projects/rust/esp-alloc/latest/) · [esp-backtrace](https://docs.rs/esp-backtrace) · [esp-bootloader-esp-idf](https://docs.rs/esp-bootloader-esp-idf)
 - [Embassy](https://embassy.dev/book/) · [embassy-net](https://docs.rs/embassy-net) · [embassy-net-esp-hosted](https://docs.embassy.dev/embassy-net-esp-hosted/git/default/index.html) · [edge-http](https://docs.rs/edge-http) · [edge-dhcp](https://docs.rs/edge-dhcp) · [rust-fatfs](https://github.com/rafalh/rust-fatfs)
-- [bindgen](https://rust-lang.github.io/rust-bindgen/) · [critical-section](https://docs.rs/critical-section) · [printf-compat](https://github.com/lights0123/printf-compat)
-- [Rust 1.99.0 (C variadics)](https://blog.rust-lang.org/2026/10/01/Rust-1.99.0/) · [lwIP threading](https://www.nongnu.org/lwip/2_1_x/multithreading.html)
+- [bindgen](https://rust-lang.github.io/rust-bindgen/) · [critical-section](https://docs.rs/critical-section) · [printf-compat](https://github.com/lights0123/printf-compat) · [lwIP threading](https://www.nongnu.org/lwip/2_1_x/multithreading.html)
 - [defmt](https://defmt.ferrous-systems.com/) · [defmt-print](https://crates.io/crates/defmt-print) · [esp-println](https://github.com/esp-rs/esp-hal/tree/main/esp-println) · [espflash](https://github.com/esp-rs/espflash) · [ESP-Hosted-MCU](https://github.com/espressif/esp-hosted-mcu)
-- [PlatformIO scripting](https://docs.platformio.org/en/latest/scripting/index.html) · [monitor filters](https://docs.platformio.org/en/latest/core/userguide/device/cmd_monitor.html#filters) · [embuild `platformio.cargo.py`](https://github.com/esp-rs/embuild/blob/master/src/pio/resources/platformio.cargo.py.resource) · [`upload_command`](https://docs.platformio.org/en/latest/projectconf/sections/env/options/upload/upload_command.html) · [rustup toolchain file](https://rust-lang.github.io/rustup/overrides.html)
+- [PlatformIO scripting](https://docs.platformio.org/en/latest/scripting/index.html) · [monitor filters](https://docs.platformio.org/en/latest/core/userguide/device/cmd_monitor.html#filters) · [embuild `platformio.cargo.py`](https://github.com/esp-rs/embuild/blob/master/src/pio/resources/platformio.cargo.py.resource) · [`upload_command`](https://docs.platformio.org/en/latest/projectconf/sections/env/options/upload/upload_command.html) · [Cargo build scripts](https://doc.rust-lang.org/cargo/reference/build-scripts.html)
