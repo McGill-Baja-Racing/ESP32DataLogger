@@ -27,6 +27,7 @@ fn main() -> ! {
     // ESP-IDF's default is the maximum clock; esp-hal's is lower.
     let config = esp_hal::Config::default().with_cpu_clock(esp_hal::clock::CpuClock::max());
     let _peripherals = esp_hal::init(config);
+    esp_println::logger::init_logger(log::LevelFilter::Info);
     // SAFETY: `app_main` is the firmware's entry point, takes no arguments and runs once.
     unsafe { app_main() };
     loop {
