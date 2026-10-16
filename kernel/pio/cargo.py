@@ -4,7 +4,7 @@ import os
 import shutil
 import subprocess
 
-Import("env")  # PlatformIO's build settings
+Import("env", "projenv")  # PlatformIO build settings: for everything, and for the project C files
 
 if "PIOMAINPROG" not in env:  # `-t nobuild`: nothing to link
     Return()
@@ -12,6 +12,8 @@ if "PIOMAINPROG" not in env:  # `-t nobuild`: nothing to link
 kernel_dir = Dir("..").abspath  # kernel/, the folder above this script
 target_dir = os.path.join(kernel_dir, "target")  # where cargo puts what it builds
 app = env.StaticLibrary("$BUILD_DIR/app", env["PIOBUILDFILES"])  # bundle the compiled C into one file, libapp.a
+projenv.Append(CPPPATH=[os.path.join(kernel_dir, "include", env.subst("$BOARD_MCU"))])  # this chip's sdkconfig.h
+projenv["IDF"] = os.path.join(env.PioPlatform().get_package_dir("framework-espidf"), "components")  # kernel.ini's $IDF
 
 
 def link_kernel(target, source, env):  # PlatformIO calls this instead of its usual last step
