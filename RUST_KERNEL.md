@@ -1,7 +1,7 @@
 # Rust kernel
 
-Design draft (2026-10-16). A skeleton in `kernel/` builds for both chips; nothing has run on
-hardware yet.
+Design draft (2026-10-16). The skeleton in `kernel/` builds for both chips and links a C program
+on the C3; nothing has run on hardware yet.
 
 ## 1. Overview
 
@@ -19,7 +19,7 @@ Layer 1         core: boot, memory, interrupts, scheduler, FreeRTOS
 
 Goals:
 
-- The firmware stays C, built by PlatformIO.
+- The firmware stays C, built by PlatformIO with the same `pio` commands.
 - The C API matches ESP-IDF v5.5.5's headers exactly.
 - Only what our firmware links is implemented (about 130 functions, listed by the linker).
   Anything missing is a link error, never a stub.
@@ -41,8 +41,8 @@ Goals:
 
 ### Layer 2: system and C library
 
-- **Reuse:** `esp-hal` 1.2.2, `esp-println` 0.18.0, `log` 0.4.34, `printf-compat` 0.5.0, Rust's `core`. The
-  compiler provides `memcpy`, `memset`, `memcmp` and `strlen`.
+- **Reuse:** `esp-hal` 1.2.2, `esp-println` 0.18.0, `log` 0.4.34, `printf-compat` 0.5.0, Rust's
+  `core`. The compiler provides `memcpy`, `memset`, `memcmp` and `strlen`.
 - **We write:** the rest of the C library (no `math.h` or `scanf`), `esp_err`, `esp_log`,
   `esp_timer_get_time`, time, stdio and the POSIX file calls.
 - **Glue:** stdout writes whole lines per task. `fgets` on stdin reads the serial console.
@@ -77,14 +77,15 @@ Goals:
 
 ## 3. Plan and testing
 
-Each step ends with real firmware working on the bench. The master needs P4 v3.x boards:
-`esp-hal` doesn't support our v1.3.
+This branch replaces the C core and stays off `main` until done. Each step converts its projects'
+`platformio.ini` in place and ends with real firmware working on the bench. The master needs P4
+v3.x boards: `esp-hal` doesn't support our v1.3.
 
 | Step | Work                                                        | Done when                                           |
 | ---- | ----------------------------------------------------------- | --------------------------------------------------- |
 | 1    | Proof of concept on the C3                                  | the checks below pass                               |
-| 2    | What `NodeBrake` needs from layers 1–3                      | `NodeBrake` works with today's master               |
-| 3    | `NodeEngine`, `NodeEncoder`, `NodeMPU`, then the simulators | each works with today's master                      |
+| 2    | What `NodeBrake` needs from layers 1–3                      | `NodeBrake` works with the ESP-IDF master           |
+| 3    | `NodeEngine`, `NodeEncoder`, `NodeMPU`, then the simulators | each works with the ESP-IDF master                  |
 | 4    | Layers 1–3 and the CAN driver on P4 v3.x                    | core and API tests pass on the P4                   |
 | 5    | Master storage (SD, `fatfs`, files)                         | `.bin` and `.bin.utc` files match the ESP-IDF build |
 | 6    | Master network, then master firmware                        | web page, graphs, CSV download work                 |
@@ -106,27 +107,20 @@ Tests:
   sections on the P4's two cores.
 - **API tests:** one C program per component, run on stock ESP-IDF and on the kernel; serial
   outputs must match.
-- **Bench:** each node and the master match today's build.
+- **Bench:** each node and the master match the ESP-IDF build.
 - **Host tests:** `master-node/tests`, plus `cargo test` for the hardware-free code in
   `kernel/portable/`, which exports nothing to C so it can't replace the laptop's C library.
 
 ## 4. Build, flash and logs
 
 - **Toolchain:** latest stable Rust (1.99.1), pinned in `kernel/rust-toolchain.toml`; every
-  crate pinned exactly. Teammates install `rustup` on top of PlatformIO.
-- **Build:** `pio run` calls cargo through the hook `kernel/pio/cargo.py`. Cargo does the final
-  link; `kernel/build.rs` links the C archive and relinks when it changes.
-- **Handover:** PlatformIO picks the firmware and chip per environment; the hook passes them on:
-
-  | PlatformIO decides | Passed to cargo as                                                                |
-  | ------------------ | --------------------------------------------------------------------------------- |
-  | which firmware     | `BAJA_APP_ARCHIVE`, the C archive's path (`.pio/build/NodeBrake/libapp.a`)        |
-  | which chip: C3     | `--target riscv32imc-unknown-none-elf --features esp32c3`                         |
-  | which chip: P4     | `--target riscv32imafc-unknown-none-elf --no-default-features --features esp32p4` |
-
+  crate pinned exactly. Teammates install `rustup` and `espflash` on top of PlatformIO.
+- **Build:** `pio run` works as before. PlatformIO compiles the C, then `kernel/pio/cargo.py`
+  has cargo build the kernel and link the C into it (`kernel/build.rs`). A project opts in by
+  extending its chip's section of `kernel/pio/kernel.ini`.
 - **By hand:** set `BAJA_APP_ARCHIVE`, then `cargo build` (C3 by default) or `cargo run` to
   flash and monitor.
-- **Upload:** `upload_command` runs `espflash flash`.
+- **Upload:** `pio run -t upload` runs `espflash flash`, set in `kernel.ini`.
 - **Logs:** `pio device monitor`. C and Rust logs are both plain text; Rust logs through the
   `log` crate and `esp-println`.
 
@@ -134,8 +128,8 @@ Tests:
 kernel/
   Cargo.toml           bin crate; esp32c3 (default) and esp32p4 features; lints;
                        later the workspace root for sys/ and portable/
-  .cargo/config.toml   default target (C3), espflash runners
-  build.rs             links $BAJA_APP_ARCHIVE and -Tlinkall.x
+  .cargo/config.toml   default target (C3), linker script, espflash runners
+  build.rs             links the firmware's C archive
   include/             ESP-IDF, FreeRTOS, C library and lwIP headers
   src/main.rs          boot and panic
   src/export.rs        the C export macro
@@ -145,7 +139,8 @@ kernel/
   src/services.rs      layer 4
   sys/                 bindgen output, chip-only, no lints
   portable/            hardware-free code, tested on the laptop
-  pio/                 cargo hook
+  pio/                 cargo hook and per-chip PlatformIO settings
+  tests/hello/         smallest C program on the kernel
 ```
 
 ## Resources
