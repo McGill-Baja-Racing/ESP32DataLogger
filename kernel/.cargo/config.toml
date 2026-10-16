@@ -8,3 +8,7 @@ runner = "espflash flash --monitor --chip esp32p4"
 target = "riscv32imc-unknown-none-elf"
 # esp-backtrace needs frame pointers to unwind on RISC-V.
 rustflags = ["-C", "force-frame-pointers"]
+
+[alias]
+# Regenerates sys/src/<chip>.rs from the ESP-IDF headers; needs libclang.
+bindings = "run --package bindings --target host-tuple"

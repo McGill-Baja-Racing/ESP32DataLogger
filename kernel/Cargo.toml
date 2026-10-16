@@ -1,3 +1,6 @@
+[workspace]
+members = ["sys", "bindings", "macros"]
+
 [package]
 name = "baja-kernel"
 version = "0.1.0"
@@ -20,6 +23,7 @@ esp32c3 = [
     "esp-println/esp32c3",
     "esp-bootloader-esp-idf/esp32c3",
     "esp-backtrace/esp32c3",
+    "sys/esp32c3",
 ]
 esp32p4 = [
     "esp-hal/esp32p4",
@@ -28,16 +32,22 @@ esp32p4 = [
     "esp-println/esp32p4",
     "esp-bootloader-esp-idf/esp32p4",
     "esp-backtrace/esp32p4",
+    "sys/esp32p4",
 ]
 
 [dependencies]
 esp-hal = { version = "=1.2.2", features = ["unstable"] }
-esp-rtos = { version = "=0.4.0", features = ["esp-radio"] }
+esp-rtos = { version = "=0.4.0", features = ["esp-radio", "log-04"] }
 esp-alloc = "=0.11.0"
+esp-radio-rtos-driver = "=0.4.2"
+critical-section = "=1.2.0"
+printf-compat = { version = "=0.5.0", default-features = false }
 esp-println = { version = "=0.18.0", features = ["log-04"] }
 log = "=0.4.34"
 esp-bootloader-esp-idf = "=0.6.0"
 esp-backtrace = { version = "=0.20.0", features = ["panic-handler", "println", "custom-halt"] }
+sys = { package = "baja-sys", path = "sys" }
+macros = { package = "baja-macros", path = "macros" }
 
 [lints.rust]
 future_incompatible = { level = "warn", priority = -1 }
