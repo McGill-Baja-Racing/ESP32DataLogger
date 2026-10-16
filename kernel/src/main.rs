@@ -3,6 +3,8 @@
 #![no_std]
 #![no_main]
 
+extern crate alloc;
+
 use esp_backtrace as _;
 
 mod drivers;
@@ -26,11 +28,42 @@ extern "Rust" fn custom_halt() -> ! {
 fn main() -> ! {
     // ESP-IDF's default is the maximum clock; esp-hal's is lower.
     let config = esp_hal::Config::default().with_cpu_clock(esp_hal::clock::CpuClock::max());
-    let _peripherals = esp_hal::init(config);
+    let peripherals = esp_hal::init(config);
     esp_println::logger::init_logger(log::LevelFilter::Info);
+    esp_alloc::heap_allocator!(size: 64 * 1024);
+    let timg0 = esp_hal::timer::timg::TimerGroup::new(peripherals.TIMG0);
+    esp_rtos::start(timg0.timer0, peripherals.FROM_CPU_INTR0);
+    drivers::init([
+        peripherals.GPIO0.into(),
+        peripherals.GPIO1.into(),
+        peripherals.GPIO2.into(),
+        peripherals.GPIO3.into(),
+        peripherals.GPIO4.into(),
+        peripherals.GPIO5.into(),
+        peripherals.GPIO6.into(),
+        peripherals.GPIO7.into(),
+        peripherals.GPIO8.into(),
+        peripherals.GPIO9.into(),
+        peripherals.GPIO10.into(),
+        peripherals.GPIO11.into(),
+        peripherals.GPIO12.into(),
+        peripherals.GPIO13.into(),
+        peripherals.GPIO14.into(),
+        peripherals.GPIO15.into(),
+        peripherals.GPIO16.into(),
+        peripherals.GPIO17.into(),
+        peripherals.GPIO18.into(),
+        peripherals.GPIO19.into(),
+        peripherals.GPIO20.into(),
+        peripherals.GPIO21.into(),
+    ]);
+    drivers::adc::init(peripherals.ADC1);
+    // ESP-IDF runs `app_main` at priority 1; esp-rtos starts the main task at 0.
+    esp_rtos::CurrentThreadHandle::get().set_priority(1);
     // SAFETY: `app_main` is the firmware's entry point, takes no arguments and runs once.
     unsafe { app_main() };
+    // ESP-IDF deletes the main task when `app_main` returns; esp-rtos can't, so it sleeps forever.
     loop {
-        core::hint::spin_loop();
+        esp_radio_rtos_driver::usleep_until(u64::MAX);
     }
 }
