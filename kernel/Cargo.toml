@@ -34,7 +34,8 @@ esp32p4 = [
 esp-hal = { version = "=1.2.2", features = ["unstable"] }
 esp-rtos = { version = "=0.4.0", features = ["esp-radio"] }
 esp-alloc = "=0.11.0"
-esp-println = "=0.18.0"
+esp-println = { version = "=0.18.0", features = ["log-04"] }
+log = "=0.4.34"
 esp-bootloader-esp-idf = "=0.6.0"
 esp-backtrace = { version = "=0.20.0", features = ["panic-handler", "println", "custom-halt"] }
 
