@@ -128,8 +128,8 @@ Tests:
 kernel/
   Cargo.toml           bin crate; esp32c3 (default) and esp32p4 features; lints;
                        later the workspace root for sys/ and portable/
-  .cargo/config.toml   default target (C3), linker script, espflash runners
-  build.rs             links the firmware's C archive
+  .cargo/config.toml   default target (C3), espflash runners
+  build.rs             links the firmware's C archive and esp-hal's linker script
   include/             ESP-IDF, FreeRTOS, C library and lwIP headers
   src/main.rs          boot and panic
   src/export.rs        the C export macro
@@ -140,7 +140,6 @@ kernel/
   sys/                 bindgen output, chip-only, no lints
   portable/            hardware-free code, tested on the laptop
   pio/                 cargo hook and per-chip PlatformIO settings
-  tests/hello/         smallest C program on the kernel
 ```
 
 ## Resources
