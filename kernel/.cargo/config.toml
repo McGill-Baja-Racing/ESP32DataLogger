@@ -1,0 +1,10 @@
+[target.riscv32imc-unknown-none-elf]
+runner = "espflash flash --monitor --chip esp32c3"
+
+[target.riscv32imafc-unknown-none-elf]
+runner = "espflash flash --monitor --chip esp32p4"
+
+[build]
+target = "riscv32imc-unknown-none-elf"
+# esp-backtrace needs frame pointers to unwind on RISC-V.
+rustflags = ["-C", "force-frame-pointers"]
