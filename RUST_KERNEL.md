@@ -41,7 +41,7 @@ Goals:
 
 ### Layer 2: system and C library
 
-- **Reuse:** `esp-hal` 1.2.2, `esp-println` 0.18.0, `printf-compat` 0.5.0, Rust's `core`. The
+- **Reuse:** `esp-hal` 1.2.2, `esp-println` 0.18.0, `log` 0.4.34, `printf-compat` 0.5.0, Rust's `core`. The
   compiler provides `memcpy`, `memset`, `memcmp` and `strlen`.
 - **We write:** the rest of the C library (no `math.h` or `scanf`), `esp_err`, `esp_log`,
   `esp_timer_get_time`, time, stdio and the POSIX file calls.
@@ -93,7 +93,7 @@ Step 1 checks:
 
 - `pio` builds and flashes a C program through the cargo hook.
 - The linked C code runs on the board.
-- `pio device monitor` reliably shows C text and defmt lines together.
+- `pio device monitor` reliably shows C and Rust log lines together.
 - The symbol list: link every firmware against the empty kernel and record what is missing
   (`nm -u`). This is the to-do list for steps 2–6.
 - The core test passes.
@@ -127,8 +127,8 @@ Tests:
 - **By hand:** set `BAJA_APP_ARCHIVE`, then `cargo build` (C3 by default) or `cargo run` to
   flash and monitor.
 - **Upload:** `upload_command` runs `espflash flash`.
-- **Logs:** `pio device monitor`. C logs are plain text, Rust logs are defmt; the filter
-  `kernel/pio/filter_defmt.py` decodes them.
+- **Logs:** `pio device monitor`. C and Rust logs are both plain text; Rust logs through the
+  `log` crate and `esp-println`.
 
 ```
 kernel/
@@ -145,7 +145,7 @@ kernel/
   src/services.rs      layer 4
   sys/                 bindgen output, chip-only, no lints
   portable/            hardware-free code, tested on the laptop
-  pio/                 cargo hook and monitor filter
+  pio/                 cargo hook
 ```
 
 ## Resources
@@ -156,5 +156,5 @@ kernel/
 - [Rust on ESP Book](https://docs.espressif.com/projects/rust/book/) · [esp-hal](https://docs.espressif.com/projects/rust/esp-hal/latest/) · [esp-rtos](https://docs.espressif.com/projects/rust/esp-rtos/latest/) · [esp-alloc](https://docs.espressif.com/projects/rust/esp-alloc/latest/) · [esp-backtrace](https://docs.rs/esp-backtrace) · [esp-bootloader-esp-idf](https://docs.rs/esp-bootloader-esp-idf)
 - [Embassy](https://embassy.dev/book/) · [embassy-net](https://docs.rs/embassy-net) · [embassy-net-esp-hosted](https://docs.embassy.dev/embassy-net-esp-hosted/git/default/index.html) · [edge-http](https://docs.rs/edge-http) · [edge-dhcp](https://docs.rs/edge-dhcp) · [rust-fatfs](https://github.com/rafalh/rust-fatfs)
 - [bindgen](https://rust-lang.github.io/rust-bindgen/) · [critical-section](https://docs.rs/critical-section) · [printf-compat](https://github.com/lights0123/printf-compat) · [lwIP threading](https://www.nongnu.org/lwip/2_1_x/multithreading.html)
-- [defmt](https://defmt.ferrous-systems.com/) · [defmt-print](https://crates.io/crates/defmt-print) · [esp-println](https://github.com/esp-rs/esp-hal/tree/main/esp-println) · [espflash](https://github.com/esp-rs/espflash) · [ESP-Hosted-MCU](https://github.com/espressif/esp-hosted-mcu)
-- [PlatformIO scripting](https://docs.platformio.org/en/latest/scripting/index.html) · [monitor filters](https://docs.platformio.org/en/latest/core/userguide/device/cmd_monitor.html#filters) · [embuild `platformio.cargo.py`](https://github.com/esp-rs/embuild/blob/master/src/pio/resources/platformio.cargo.py.resource) · [`upload_command`](https://docs.platformio.org/en/latest/projectconf/sections/env/options/upload/upload_command.html) · [Cargo build scripts](https://doc.rust-lang.org/cargo/reference/build-scripts.html)
+- [log](https://docs.rs/log) · [esp-println](https://github.com/esp-rs/esp-hal/tree/main/esp-println) · [espflash](https://github.com/esp-rs/espflash) · [ESP-Hosted-MCU](https://github.com/espressif/esp-hosted-mcu)
+- [PlatformIO scripting](https://docs.platformio.org/en/latest/scripting/index.html) · [embuild `platformio.cargo.py`](https://github.com/esp-rs/embuild/blob/master/src/pio/resources/platformio.cargo.py.resource) · [`upload_command`](https://docs.platformio.org/en/latest/projectconf/sections/env/options/upload/upload_command.html) · [Cargo build scripts](https://doc.rust-lang.org/cargo/reference/build-scripts.html)
