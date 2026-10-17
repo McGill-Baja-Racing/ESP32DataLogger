@@ -20,6 +20,7 @@ unsafe extern "C" {
 // esp-backtrace's `custom-halt` hook: reset after printing the panic, like ESP-IDF.
 #[unsafe(no_mangle)]
 extern "Rust" fn custom_halt() -> ! {
+    system::mark_panic();
     esp_hal::system::software_reset()
 }
 
