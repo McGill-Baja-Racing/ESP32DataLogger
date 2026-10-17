@@ -18,7 +18,9 @@ kernel_dir = Dir("..").abspath
 target_dir = os.path.join(kernel_dir, "target")
 app = env.StaticLibrary("$BUILD_DIR/app", env["PIOBUILDFILES"])
 projenv.Append(CPPPATH=[os.path.join(kernel_dir, "include", env.subst("$BOARD_MCU"))])
-projenv.Append(CFLAGS=["-include", os.path.join(kernel_dir, "include", "unsupported.h")])
+unsupported = os.path.join(kernel_dir, "include", "unsupported.h")
+projenv.Append(CFLAGS=["-include", unsupported])
+env.Depends(env["PIOBUILDFILES"], unsupported)  # SCons scans `#include` lines, not `-include`
 projenv["IDF"] = os.path.join(env.PioPlatform().get_package_dir("framework-espidf"), "components")
 
 
