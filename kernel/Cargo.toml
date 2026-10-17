@@ -1,0 +1,79 @@
+[workspace]
+members = ["sys", "macros"]
+
+[package]
+name = "baja-kernel"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.99"
+publish = false
+
+# The `test` crate does not exist for bare-metal targets.
+[[bin]]
+name = "baja-kernel"
+test = false
+bench = false
+
+[features]
+default = ["esp32c3"]
+esp32c3 = [
+    "esp-hal/esp32c3",
+    "esp-rtos/esp32c3",
+    "esp-alloc/esp32c3",
+    "esp-println/esp32c3",
+    "esp-bootloader-esp-idf/esp32c3",
+    "esp-backtrace/esp32c3",
+    "sys/esp32c3",
+]
+esp32p4 = [
+    "esp-hal/esp32p4",
+    "esp-rtos/esp32p4",
+    "esp-alloc/esp32p4",
+    "esp-println/esp32p4",
+    "esp-bootloader-esp-idf/esp32p4",
+    "esp-backtrace/esp32p4",
+    "sys/esp32p4",
+]
+
+[dependencies]
+esp-hal = { version = "=1.2.2", features = ["unstable"] }
+esp-rtos = { version = "=0.4.0", features = ["esp-radio", "log-04"] }
+esp-alloc = "=0.11.0"
+esp-radio-rtos-driver = "=0.4.2"
+critical-section = "=1.2.0"
+printf-compat = { version = "=0.5.0", default-features = false }
+# Without its `critical-section` feature, printing leaves interrupts on; `esp_log` locks lines.
+esp-println = { version = "=0.18.0", default-features = false, features = ["auto", "colors", "log-04"] }
+log = "=0.4.34"
+esp-bootloader-esp-idf = "=0.6.0"
+esp-backtrace = { version = "=0.20.0", features = ["panic-handler", "println", "custom-halt"] }
+sys = { package = "baja-sys", path = "sys" }
+macros = { package = "baja-macros", path = "macros" }
+
+[lints.rust]
+elided_lifetimes_in_paths = "warn"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+undocumented_unsafe_blocks = "warn"
+unnecessary_safety_comment = "warn"
+unwrap_used = "warn"
+expect_used = "warn"
+panic = "warn"
+todo = "warn"
+unimplemented = "warn"
+indexing_slicing = "warn"
+allow_attributes = "warn"
+allow_attributes_without_reason = "warn"
+mod_module_files = "warn"
+
+[profile.dev]
+# esp-hal is too slow unoptimized.
+opt-level = "s"
+
+[profile.release]
+codegen-units = 1
+debug = 2
+lto = "fat"
+opt-level = "s"
