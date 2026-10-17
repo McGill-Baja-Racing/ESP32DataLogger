@@ -1,7 +1,7 @@
 # Rust kernel
 
-Design draft (2026-10-16). The skeleton in `kernel/` builds for both chips and links a C program
-on the C3; nothing has run on hardware yet.
+Design draft (2026-10-16). The skeleton in `kernel/` builds and links a C program on the C3; the
+P4 build needs its `sdkconfig.h`. Nothing has run on hardware yet.
 
 ## 1. Overview
 
@@ -22,8 +22,10 @@ Goals:
 - The firmware stays C, built by PlatformIO with the same `pio` commands.
 - The C API matches ESP-IDF v5.5.5's headers exactly.
 - Only what our firmware links is implemented (about 130 functions, listed by the linker).
+  Only the options it passes are supported; naming another is a compile error
+  (`kernel/include/unsupported.h`), and a value only known at run time panics.
   Anything missing is a link error, never a stub.
-- `sdkconfig.h` and `FreeRTOSConfig.h` only allow what the kernel supports.
+- Each chip's `sdkconfig.h` is ESP-IDF's generated one, so the headers compile unchanged.
 
 ## 2. Layers
 
@@ -57,22 +59,26 @@ Goals:
 ### Layer 4: master services
 
 - **Reuse:** `fatfs` (rust-fatfs 0.4, commit `2aefc2a`), `embassy-net-esp-hosted` (Wi-Fi via the
-  C6), `embassy-net`, `edge-dhcp` and `edge-http`.
+  C6 over esp-hal's `sdmmc`; SDIO is unreleased, commit `b74e728`), `embassy-net`, `edge-dhcp`
+  and `edge-http`.
 - **We write:** the SD block driver, access-point mode, and the ESP-IDF APIs on top:
   `esp_vfs_fat`, `esp_hosted_init`, `esp_wifi`, `esp_netif`, `esp_event`, `nvs_flash` and
   `httpd_*`.
-- **Glue:** the network runs on one task that never blocks and isn't called from interrupts.
-  C calls post a request that owns its reply, so a timeout can't leave a dangling pointer.
+- **Glue:** the C6 runs esp-hosted-mcu with SDIO streaming mode off. The network runs on one
+  task that never blocks and isn't called from interrupts. C calls post a request that owns its
+  reply, so a timeout can't leave a dangling pointer.
   HTTP handlers and FAT get their own tasks, so streaming a log doesn't stall the network.
 
 ### Rules at the C boundary
 
 - A panic prints a backtrace (`esp-backtrace` 0.20.0) and resets.
 - Exports are `extern "C"` with `#[unsafe(no_mangle)]`; no newlib or ESP-IDF objects are linked.
-- C types come from the headers through bindgen, committed in `kernel/sys/`.
-- Each C function is a safe Rust function returning `Result<T, EspError>`, exported by one
-  macro that rejects NULL and writes outputs only on success.
-- A driver owns its peripheral and pins until it is deleted.
+- C types come from the headers through bindgen, generated at build time by `kernel/sys/build.rs`.
+- Each C function is a Rust function exported by `#[export]` (`kernel/macros/`), which checks it
+  against the header. Outputs are written only on success.
+- A NULL handle or pointer returns `ESP_ERR_INVALID_ARG` from a function returning `esp_err_t`,
+  otherwise panics like `configASSERT`. A NULL or non-UTF-8 `&str` prints as `"?"`.
+- C assigns pins, as in ESP-IDF; the kernel doesn't track which driver uses one.
 - C callbacks run in interrupt context with no lock held. `IRAM_ATTR` still works.
 
 ## 3. Plan and testing
@@ -114,7 +120,8 @@ Tests:
 ## 4. Build, flash and logs
 
 - **Toolchain:** latest stable Rust (1.99.1), pinned in `kernel/rust-toolchain.toml`; every
-  crate pinned exactly. Teammates install `rustup` and `espflash` on top of PlatformIO.
+  crate pinned exactly. Teammates install `rustup`, `espflash` and libclang on top of
+  PlatformIO.
 - **Build:** `pio run` works as before. PlatformIO compiles the C, then `kernel/pio/cargo.py`
   has cargo build the kernel and link the C into it (`kernel/build.rs`). A project opts in by
   extending its chip's section of `kernel/pio/kernel.ini`.
@@ -126,19 +133,18 @@ Tests:
 
 ```
 kernel/
-  Cargo.toml           bin crate; esp32c3 (default) and esp32p4 features; lints;
-                       later the workspace root for sys/ and portable/
+  Cargo.toml           bin crate; esp32c3 (default) and esp32p4 features; workspace root; lints
   .cargo/config.toml   default target (C3), espflash runners
   build.rs             links the firmware's C archive and esp-hal's linker script
-  include/             ESP-IDF, FreeRTOS, C library and lwIP headers
+  include/             each chip's sdkconfig.h; unsupported.h
   src/main.rs          boot and panic
-  src/export.rs        the C export macro
   src/rtos.rs          layer 1 (submodules in src/rtos/, enforced by mod_module_files)
   src/system.rs        layer 2
   src/drivers.rs       layer 3
-  src/services.rs      layer 4
-  sys/                 bindgen output, chip-only, no lints
-  portable/            hardware-free code, tested on the laptop
+  src/services.rs      layer 4 (later)
+  macros/              the #[export] macro
+  sys/                 bindgen, run at build time; no lints
+  portable/            hardware-free code, tested on the laptop (later)
   pio/                 cargo hook and per-chip PlatformIO settings
 ```
 

@@ -12,3 +12,6 @@ doctest = false
 [features]
 esp32c3 = []
 esp32p4 = []
+
+[build-dependencies]
+bindgen = "=0.73.2"
