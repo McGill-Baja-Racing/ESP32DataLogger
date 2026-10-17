@@ -1,2 +1,1 @@
 doc-valid-idents = ["FreeRTOS", ".."]
-stack-size-threshold = 1024

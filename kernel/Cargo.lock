@@ -71,6 +71,9 @@ dependencies = [
 [[package]]
 name = "baja-sys"
 version = "0.1.0"
+dependencies = [
+ "bindgen",
+]
 
 [[package]]
 name = "bindgen"
@@ -89,13 +92,6 @@ dependencies = [
  "rustc-hash",
  "shlex",
  "syn 3.0.9",
-]
-
-[[package]]
-name = "bindings"
-version = "0.1.0"
-dependencies = [
- "bindgen",
 ]
 
 [[package]]

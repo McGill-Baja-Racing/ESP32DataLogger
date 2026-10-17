@@ -1,43 +1,60 @@
 //! Layer 2: errors, logging and the clock.
 
-use core::ffi::{c_char, c_int};
+use alloc::boxed::Box;
+use core::{
+    cell::Cell,
+    ffi::{c_char, c_int},
+};
 
+use critical_section::Mutex;
 use esp_hal::time::Instant;
+use esp_radio_rtos_driver::semaphore::{SemaphoreHandle, SemaphoreKind};
 use macros::export;
-use sys::{CONFIG_LOG_DEFAULT_LEVEL, esp_err_t, esp_log_config_t};
+use sys::{esp_err_t, esp_log_config_t};
 
 #[export]
+#[expect(clippy::panic, reason = "ESP-IDF aborts here too")]
 fn _esp_error_check_failed(
     code: esp_err_t,
     file: &str,
     line: c_int,
-    function: &str,
+    _function: &str,
     expression: &str,
 ) -> ! {
-    #[expect(clippy::panic, reason = "ESP-IDF aborts here too")]
-    {
-        panic!(
-            "ESP_ERROR_CHECK failed: esp_err_t {code:#x}\nfile: \"{file}\" line {line}\nfunc: {function}\nexpression: {expression}"
-        );
-    }
+    panic!("ESP_ERROR_CHECK({expression}) failed: {code:#x} at {file}:{line}");
 }
 
-/// `ESP_LOGx`'s C macros build the whole line's format; this prints it.
+/// Keeps each task's log line whole with interrupts on, like ESP-IDF's stdout lock.
+static LOG_LOCK: Mutex<Cell<Option<&'static SemaphoreHandle>>> = Mutex::new(Cell::new(None));
+
+pub fn init() {
+    let lock = Box::leak(Box::new(SemaphoreHandle::new(SemaphoreKind::Mutex)));
+    critical_section::with(|cs| LOG_LOCK.borrow(cs).set(Some(lock)));
+}
+
+/// `ESP_LOGx`'s C macros build the whole line's format and already drop levels above
+/// `CONFIG_LOG_MAXIMUM_LEVEL`, which equals the default level; this prints it.
 #[export]
-unsafe fn esp_log(config: esp_log_config_t, _tag: *const c_char, format: *const c_char, args: ...) {
-    // SAFETY: every field of the union is a view of the same 32 bits.
-    let level = unsafe { config.__bindgen_anon_1.opts }.log_level().0;
-    if level > CONFIG_LOG_DEFAULT_LEVEL.unsigned_abs() {
-        return;
-    }
+unsafe fn esp_log(
+    _config: esp_log_config_t,
+    _tag: *const c_char,
+    format: *const c_char,
+    args: ...
+) {
     // SAFETY: `format` and `args` are the printf format and arguments the macro passed.
     let line = unsafe { printf_compat::output::display(format, args) };
+    let lock = critical_section::with(|cs| LOG_LOCK.borrow(cs).get());
+    if let Some(lock) = lock {
+        lock.take(None);
+    }
     esp_println::print!("{line}");
+    if let Some(lock) = lock {
+        lock.give();
+    }
 }
 
 #[export]
 #[expect(
-    clippy::as_conversions,
     clippy::cast_possible_truncation,
     reason = "wraps like ESP-IDF's counter"
 )]

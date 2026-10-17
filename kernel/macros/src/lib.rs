@@ -3,23 +3,23 @@
 //! way ESP-IDF's own functions treat them, and fails the build unless the result matches the
 //! declaration bindgen generated into `sys` exactly.
 //!
-//! | Rust | C | When C passes NULL |
-//! |---|---|---|
-//! | `&T`, `&mut T` | `T *` | `ESP_ERR_INVALID_ARG` from a function returning `Result`, otherwise a panic like FreeRTOS's `configASSERT` |
-//! | `&mut MaybeUninit<T>` | `T *` that C hasn't filled in, for out-parameters | as above |
-//! | `Option<&T>`, `Option<&mut T>` | `T *` | `None` |
-//! | `&str` | `const char *` | `"?"`, also for text that isn't UTF-8 |
-//! | `Result<(), esp_err_t>` | `esp_err_t` | |
+//! | Rust | C |
+//! |---|---|
+//! | `&T`, `&mut T` | `T *` |
+//! | `&mut MaybeUninit<T>` | `T *` that C hasn't filled in, for out-parameters |
+//! | `Option<&T>`, `Option<&mut T>` | `T *` that may be NULL |
+//! | `&str` | `const char *` |
+//! | `Result<(), esp_err_t>` | `esp_err_t` |
 //!
-//! A pointer to a kernel type, such as `&Queue`, means the C handle type that its
+//! RUST_KERNEL.md has the NULL rule. A kernel type such as `&Queue` means the C handle its
 //! `sys::CPointer` impl names.
 
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as Tokens;
 use quote::{format_ident, quote};
 use syn::{
-    Error, FnArg, GenericArgument, ItemFn, Pat, PathArguments, ReturnType, Type, parse::Nothing,
-    parse_macro_input, parse_quote,
+    FnArg, GenericArgument, ItemFn, Pat, PathArguments, ReturnType, Type, parse_macro_input,
+    parse_quote,
 };
 
 /// Whether `ty` is written `name` or `name<...>`, like `str` or `Result<(), esp_err_t>`.
@@ -59,33 +59,14 @@ fn c_type(ty: &Type) -> Tokens {
     }
 }
 
-fn error(tokens: impl quote::ToTokens, message: &str) -> TokenStream {
-    Error::new_spanned(tokens, message)
-        .into_compile_error()
-        .into()
-}
-
 #[proc_macro_attribute]
-pub fn export(attribute: TokenStream, item: TokenStream) -> TokenStream {
-    parse_macro_input!(attribute as Nothing);
+pub fn export(_attribute: TokenStream, item: TokenStream) -> TokenStream {
     let ItemFn {
         attrs,
         vis,
         sig,
         block,
     } = parse_macro_input!(item as ItemFn);
-    if !sig.generics.params.is_empty() {
-        return error(&sig.generics, "an export can't be generic");
-    }
-    if let Some(token) = &sig.asyncness {
-        return error(token, "an export can't be async");
-    }
-    if let Some(token) = &sig.constness {
-        return error(token, "an export can't be const");
-    }
-    if let Some(abi) = &sig.abi {
-        return error(abi, "#[export] adds the ABI itself");
-    }
     let name = &sig.ident;
     let output = &sig.output;
     let result = matches!(output, ReturnType::Type(_, ty) if is(ty, "Result"));
@@ -104,10 +85,10 @@ pub fn export(attribute: TokenStream, item: TokenStream) -> TokenStream {
     let mut c_names = Vec::new();
     for input in &sig.inputs {
         let FnArg::Typed(param) = input else {
-            return error(input, "an export can't take `self`");
+            panic!("an export can't take `self`");
         };
         let Pat::Ident(ident) = &*param.pat else {
-            return error(&param.pat, "an export's parameters must be plain names");
+            panic!("an export's parameters must be plain names");
         };
         let ty = &*param.ty;
         let rust_name = &ident.ident;
