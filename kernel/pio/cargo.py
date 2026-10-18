@@ -34,9 +34,11 @@ Import("projenv")  # only exported when building
 app = env.StaticLibrary("$BUILD_DIR/app", env["PIOBUILDFILES"])
 # kernel.ini can't name paths relative to itself, so kernel/'s headers are added here.
 projenv.Append(CPPPATH=[os.path.join(kernel_dir, "include", env.subst("$BOARD_MCU"))])
-unsupported = os.path.join(kernel_dir, "include", "unsupported.h")
-projenv.Append(CFLAGS=["-include", unsupported])
-env.Depends(env["PIOBUILDFILES"], unsupported)  # SCons scans `#include` lines, not `-include`
+unsupported = projenv.File(os.path.join(kernel_dir, "include", "unsupported.h"))
+projenv.Append(CFLAGS=["-include", unsupported.abspath])
+# SCons scans `#include` lines, not `-include`, so the forced header and all it includes are added.
+forced = unsupported.get_implicit_deps(projenv, projenv.get_scanner(".c"), lambda scanner: scanner.path(projenv))
+env.Depends(env["PIOBUILDFILES"], [unsupported, *forced])
 
 
 def link_kernel(target, source, env):
