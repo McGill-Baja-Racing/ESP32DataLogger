@@ -51,7 +51,6 @@ struct Inner {
     callbacks: Option<(twai_event_callbacks_t, Context)>,
 }
 
-/// What a C `twai_node_handle_t` points to.
 struct Node {
     inner: Mutex<RefCell<Inner>>,
     /// Given by the interrupt when the TX buffer frees up or the node goes bus-off.
@@ -63,7 +62,6 @@ sys::c_handle!(Node, twai_node_handle_t);
 /// The node, for the interrupt; it also keeps a second node from taking TWAI0.
 static NODE: Mutex<Cell<Option<&'static Node>>> = Mutex::new(Cell::new(None));
 
-/// ESP-IDF's error state, read from the controller.
 fn state(twai: &Twai<'_, Blocking>) -> twai_error_state_t {
     if twai.is_bus_off() {
         twai_error_state_t::TWAI_ERROR_BUS_OFF
@@ -198,7 +196,7 @@ fn interrupt() {
 #[export]
 fn twai_new_node_onchip(
     config: &twai_onchip_node_config_t,
-    node: &mut MaybeUninit<Option<&'static Node>>,
+    node: &mut MaybeUninit<&'static Node>,
 ) -> Result<(), esp_err_t> {
     assert!(
         config.bit_timing.bitrate == 1_000_000,
@@ -227,13 +225,12 @@ fn twai_new_node_onchip(
             idle: SemaphoreHandle::new(SemaphoreKind::Counting { max: 1, initial: 0 }),
         }));
         slot.set(Some(new));
-        node.write(Some(new));
+        node.write(new);
         Ok(())
     })
 }
 
 #[export]
-#[expect(clippy::unnecessary_wraps, reason = "ESP-IDF's signature")]
 fn twai_node_register_event_callbacks(
     node: &Node,
     callbacks: &twai_event_callbacks_t,
@@ -247,7 +244,6 @@ fn twai_node_register_event_callbacks(
 
 /// The interrupt, and so every callback, starts here.
 #[export]
-#[expect(clippy::unnecessary_wraps, reason = "ESP-IDF's signature")]
 fn twai_node_enable(_node: &Node) -> Result<(), esp_err_t> {
     TWAI0::regs().int_ena().write(|w| {
         w.rx_int_ena().set_bit();
@@ -296,9 +292,14 @@ fn twai_node_transmit_wait_all_done(node: &Node, timeout_ms: c_int) -> Result<()
 /// Only valid in `on_rx_done`, as in ESP-IDF.
 #[export]
 fn twai_node_receive_from_isr(node: &Node, frame: &mut twai_frame_t) -> Result<(), esp_err_t> {
-    if frame.buffer_len > 0 && frame.buffer.is_null() {
+    let buffer = if frame.buffer_len == 0 {
+        &mut []
+    } else if frame.buffer.is_null() {
         return Err(ESP_ERR_INVALID_ARG);
-    }
+    } else {
+        // SAFETY: C gives room for `buffer_len` bytes at `buffer`.
+        unsafe { slice::from_raw_parts_mut(frame.buffer, frame.buffer_len) }
+    };
     let received =
         critical_section::with(|cs| node.inner.borrow_ref(cs).rx).ok_or(ESP_ERR_INVALID_STATE)?;
     let (id, extended) = match received.identifier() {
@@ -312,18 +313,14 @@ fn twai_node_receive_from_isr(node: &Node, frame: &mut twai_frame_t) -> Result<(
         .header
         .__bindgen_anon_1
         .set_rtr(received.is_remote_request().into());
-    if frame.buffer_len > 0 {
-        // SAFETY: C gives room for `buffer_len` bytes at `buffer`.
-        let buffer = unsafe { slice::from_raw_parts_mut(frame.buffer, frame.buffer_len) };
-        for (to, from) in buffer.iter_mut().zip(received.data()) {
-            *to = *from;
-        }
-    }
+    buffer
+        .iter_mut()
+        .zip(received.data())
+        .for_each(|(to, from)| *to = *from);
     Ok(())
 }
 
 #[export]
-#[expect(clippy::unnecessary_wraps, reason = "ESP-IDF's signature")]
 fn twai_node_get_info(
     node: &Node,
     status: Option<&mut MaybeUninit<twai_node_status_t>>,
