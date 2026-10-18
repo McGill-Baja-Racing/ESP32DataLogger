@@ -120,15 +120,18 @@ Tests:
 
 - **Toolchain:** latest stable Rust (1.99.1), pinned in `kernel/rust-toolchain.toml`; every
   crate pinned exactly. Teammates install `rustup` (on Windows, with the Visual Studio build
-  tools it offers) and libclang on top of PlatformIO; `cargo.py` builds `espflash` 4.6.0 into `kernel/target/`.
+  tools it offers) and libclang on top of PlatformIO; `cargo.py` builds the `espflash` version
+  set in `kernel.ini` into cargo's target folder.
   libclang comes with Xcode's command-line tools on macOS; elsewhere: `winget install LLVM.LLVM`,
   `apt install libclang-dev`, `dnf install clang-devel` or `pacman -S clang`.
 - **Build:** `pio run` works as before. PlatformIO compiles the C, then `kernel/pio/cargo.py`
-  has cargo build the kernel and link the C into it (`kernel/build.rs`). A project opts in by
-  extending its chip's section of `kernel/pio/kernel.ini`.
+  has cargo build the kernel and link the C into it (`kernel/build.rs`). espflash makes
+  `firmware.bin` and `firmware.factory.bin` (bootloader, partition table and app, flashed at 0).
+  A project opts in by extending its chip's section of `kernel/pio/kernel.ini`.
 - **By hand:** set `BAJA_APP_ARCHIVE`, then `cargo build` (C3 by default) or `cargo run` to
   flash and monitor.
-- **Upload:** `pio run -t upload` runs `espflash flash`, set in `kernel.ini`.
+- **Upload:** `pio run -t upload` runs `espflash flash` with the board's flash settings, set in
+  `kernel.ini`.
 - **Logs:** `pio device monitor`. C and Rust logs are both plain text; Rust logs through the
   `log` crate and `esp-println`.
 
