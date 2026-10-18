@@ -56,16 +56,14 @@ static RESET_REASON: Mutex<Cell<esp_reset_reason_t>> =
     Mutex::new(Cell::new(esp_reset_reason_t::ESP_RST_UNKNOWN));
 
 pub fn mark_panic() {
-    // SAFETY: only the panic path writes it, with nothing else running.
+    // SAFETY: the panic path and `init` are the only writers, with nothing else running.
     unsafe { PANICKED = 1 };
 }
 
 pub fn init() {
     let lock = Box::leak(Box::new(SemaphoreHandle::new(SemaphoreKind::Mutex)));
     // SAFETY: read and cleared once at boot, before any task runs.
-    let panicked = unsafe { PANICKED } != 0;
-    // SAFETY: as above.
-    unsafe { PANICKED = 0 };
+    let panicked = unsafe { core::ptr::replace(&raw mut PANICKED, 0) } != 0;
     let reason = reset_reason(esp_hal::system::reset_reason(), panicked);
     critical_section::with(|cs| {
         LOG_LOCK.borrow(cs).set(Some(lock));
@@ -105,11 +103,10 @@ fn esp_reset_reason() -> esp_reset_reason_t {
 /// libatomic does the same in a critical section on a single core.
 #[unsafe(no_mangle)]
 unsafe extern "C" fn __atomic_fetch_add_4(pointer: *mut u32, value: u32, _order: c_int) -> u32 {
-    critical_section::with(|_| {
-        // SAFETY: C passes an aligned `atomic_uint`, and interrupts are off.
-        let old = unsafe { pointer.read_volatile() };
-        // SAFETY: as above.
-        unsafe { pointer.write_volatile(old.wrapping_add(value)) };
+    // SAFETY: C passes an aligned `atomic_uint`, and interrupts are off.
+    critical_section::with(|_| unsafe {
+        let old = pointer.read_volatile();
+        pointer.write_volatile(old.wrapping_add(value));
         old
     })
 }

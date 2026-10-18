@@ -7,9 +7,10 @@ extern crate alloc;
 
 use esp_backtrace as _;
 
-mod drivers;
+mod adc;
 mod rtos;
 mod system;
+mod twai;
 
 esp_bootloader_esp_idf::esp_app_desc!();
 
