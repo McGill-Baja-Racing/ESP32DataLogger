@@ -76,8 +76,7 @@ Goals:
 - C types come from the headers through bindgen, generated at build time by `kernel/sys/build.rs`.
 - Each C function is a Rust function exported by `#[export]` (`kernel/macros/`), which checks it
   against the header. Outputs are written only on success.
-- A NULL handle or pointer returns `ESP_ERR_INVALID_ARG` from a function returning `esp_err_t`,
-  otherwise panics like `configASSERT`. A NULL or non-UTF-8 `&str` prints as `"?"`.
+- A NULL `&T` argument panics like `configASSERT`. A NULL or non-UTF-8 `&str` prints as `"?"`.
 - C assigns pins, as in ESP-IDF; the kernel doesn't track which driver uses one.
 - C callbacks run in interrupt context with no lock held. `IRAM_ATTR` still works.
 
@@ -120,8 +119,10 @@ Tests:
 ## 4. Build, flash and logs
 
 - **Toolchain:** latest stable Rust (1.99.1), pinned in `kernel/rust-toolchain.toml`; every
-  crate pinned exactly. Teammates install `rustup`, `espflash` and libclang on top of
-  PlatformIO.
+  crate pinned exactly. Teammates install `rustup` (on Windows, with the Visual Studio build
+  tools it offers) and libclang on top of PlatformIO; `cargo.py` builds `espflash` 4.6.0 into `kernel/target/`.
+  libclang comes with Xcode's command-line tools on macOS; elsewhere: `winget install LLVM.LLVM`,
+  `apt install libclang-dev`, `dnf install clang-devel` or `pacman -S clang`.
 - **Build:** `pio run` works as before. PlatformIO compiles the C, then `kernel/pio/cargo.py`
   has cargo build the kernel and link the C into it (`kernel/build.rs`). A project opts in by
   extending its chip's section of `kernel/pio/kernel.ini`.
@@ -140,7 +141,7 @@ kernel/
   src/main.rs          boot and panic
   src/rtos.rs          layer 1 (submodules in src/rtos/, enforced by mod_module_files)
   src/system.rs        layer 2
-  src/drivers.rs       layer 3
+  src/<driver>.rs      layer 3, one file per ESP-IDF driver (adc.rs, twai.rs)
   src/services.rs      layer 4 (later)
   macros/              the #[export] macro
   sys/                 bindgen, run at build time; no lints

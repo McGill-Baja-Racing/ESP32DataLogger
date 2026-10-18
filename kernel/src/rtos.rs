@@ -13,7 +13,6 @@ use macros::export;
 use sys::{
     BaseType_t, TaskFunction_t, TaskHandle_t, TickType_t, UBaseType_t, configTICK_RATE_HZ,
     errCOULD_NOT_ALLOCATE_REQUIRED_MEMORY, errQUEUE_FULL, pdFAIL, pdFALSE, pdPASS, pdTRUE,
-    queueSEND_TO_BACK, tskNO_AFFINITY,
 };
 
 const TICK_US: u64 = 1_000_000 / configTICK_RATE_HZ.unsigned_abs() as u64;
@@ -40,7 +39,7 @@ unsafe fn xTaskCreatePinnedToCore(
     param: *mut c_void,
     priority: UBaseType_t,
     created: Option<&mut MaybeUninit<TaskHandle_t>>,
-    core: BaseType_t,
+    _core: BaseType_t,
 ) -> BaseType_t {
     let Some(function) = task_code else {
         return pdFAIL;
@@ -51,9 +50,8 @@ unsafe fn xTaskCreatePinnedToCore(
     }
     // SAFETY: C asks for `function` to run with `param` in its own task.
     let function: extern "C" fn(*mut c_void) = unsafe { core::mem::transmute(function) };
-    let pinned = u32::try_from(core).ok().filter(|_| core != tskNO_AFFINITY);
     // SAFETY: C lets the new task use `param`.
-    let task = unsafe { rtos::task_create(name, function, param, priority, pinned, stack_size) };
+    let task = unsafe { rtos::task_create(name, function, param, priority, None, stack_size) };
     if let Some(handle) = created {
         handle.write(task.as_ptr().cast());
     }
@@ -78,7 +76,7 @@ fn vTaskDelay(ticks: TickType_t) {
     }
 }
 
-/// What a C `QueueHandle_t` points to; FreeRTOS's mutexes are queues too.
+/// FreeRTOS's mutexes are queues too.
 enum Queue {
     Items {
         handle: QueueHandle,
@@ -119,11 +117,10 @@ fn xQueueGenericCreate(
 
 /// `unsupported.h` rejects recursive mutexes, the other type.
 #[export]
-#[expect(clippy::unnecessary_wraps, reason = "ESP-IDF's signature")]
-fn xQueueCreateMutex(_queue_type: u8) -> Option<&'static Queue> {
-    Some(Box::leak(Box::new(Queue::Mutex(SemaphoreHandle::new(
+fn xQueueCreateMutex(_queue_type: u8) -> &'static Queue {
+    Box::leak(Box::new(Queue::Mutex(SemaphoreHandle::new(
         SemaphoreKind::Mutex,
-    )))))
+    ))))
 }
 
 #[export]
@@ -135,26 +132,17 @@ fn xQueueSemaphoreTake(queue: &Queue, ticks: TickType_t) -> BaseType_t {
     let Queue::Mutex(mutex) = queue else {
         panic!("the kernel supports only mutexes as semaphores");
     };
-    if mutex.take_with_deadline(deadline(ticks)) {
-        pdTRUE
-    } else {
-        pdFALSE
-    }
+    let taken = mutex.take_with_deadline(deadline(ticks));
+    if taken { pdTRUE } else { pdFALSE }
 }
 
-/// Only `xQueueSend`'s position; the firmware doesn't send to the front or overwrite.
 #[export]
 unsafe fn xQueueGenericSend(
     queue: &Queue,
     item: *const c_void,
     ticks: TickType_t,
-    position: BaseType_t,
+    _position: BaseType_t,
 ) -> BaseType_t {
-    // `unsupported.h` rejects the other positions at compile time.
-    assert!(
-        position == queueSEND_TO_BACK,
-        "the kernel supports only xQueueSend"
-    );
     let sent = match queue {
         Queue::Mutex(mutex) => mutex.give(),
         // SAFETY: `item` points to one item of the queue's item size.
@@ -171,12 +159,8 @@ unsafe fn xQueueGenericSendFromISR(
     queue: &Queue,
     item: *const c_void,
     _woken: Option<&mut BaseType_t>,
-    position: BaseType_t,
+    _position: BaseType_t,
 ) -> BaseType_t {
-    assert!(
-        position == queueSEND_TO_BACK,
-        "the kernel supports only xQueueSendFromISR"
-    );
     // SAFETY: `item` points to one item of the queue's item size.
     let sent = unsafe { queue.items().0.try_send_to_back_from_isr(item.cast(), None) };
     if sent { pdPASS } else { errQUEUE_FULL }

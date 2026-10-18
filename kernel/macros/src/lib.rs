@@ -1,7 +1,6 @@
 //! `#[export]` turns a Rust function into the C function of the same name that ESP-IDF's headers
-//! declare. It adds `#[unsafe(no_mangle)]` and `unsafe extern "C"`, translates the types below the
-//! way ESP-IDF's own functions treat them, and fails the build unless the result matches the
-//! declaration bindgen generated into `sys` exactly.
+//! declare. It adds `#[unsafe(no_mangle)]` and `unsafe extern "C"`, translates the types below,
+//! and fails the build unless the result matches the declaration bindgen generated into `sys`.
 //!
 //! | Rust | C |
 //! |---|---|
@@ -11,51 +10,50 @@
 //! | `&str` | `const char *` |
 //! | `Result<(), esp_err_t>` | `esp_err_t` |
 //!
-//! RUST_KERNEL.md has the NULL rule. A kernel type such as `&Queue` means the C handle its
+//! A NULL `&T` panics, like `configASSERT`. A kernel type such as `&Queue` means the C handle its
 //! `sys::CPointer` impl names.
 
 use proc_macro::TokenStream;
-use proc_macro2::TokenStream as Tokens;
 use quote::{format_ident, quote};
 use syn::{
     FnArg, GenericArgument, ItemFn, Pat, PathArguments, ReturnType, Type, parse_macro_input,
-    parse_quote,
 };
 
-/// Whether `ty` is written `name` or `name<...>`, like `str` or `Result<(), esp_err_t>`.
-fn is(ty: &Type, name: &str) -> bool {
-    matches!(ty, Type::Path(path) if path.path.segments.last().is_some_and(|last| last.ident == name))
-}
-
 /// The `T` in `name<T>`.
-fn argument<'ty>(ty: &'ty Type, name: &str) -> Option<&'ty Type> {
+fn generic<'ty>(ty: &'ty Type, name: &str) -> Option<&'ty Type> {
     let Type::Path(path) = ty else { return None };
-    let PathArguments::AngleBracketed(arguments) = &path.path.segments.last()?.arguments else {
+    let last = path.path.segments.last()?;
+    let PathArguments::AngleBracketed(arguments) = &last.arguments else {
         return None;
     };
     match arguments.args.first()? {
-        GenericArgument::Type(inner) if is(ty, name) => Some(inner),
+        GenericArgument::Type(inner) if last.ident == name => Some(inner),
         _ => None,
     }
 }
 
-/// The C type the check expects in place of `ty`; `MaybeUninit<T>` has `T`'s layout.
-fn c_type(ty: &Type) -> Tokens {
-    if let Some(inner) = argument(ty, "MaybeUninit") {
-        return c_type(inner);
-    }
-    let reference = match ty {
-        Type::Reference(reference) => reference,
-        _ => match argument(ty, "Option") {
-            Some(Type::Reference(reference)) => reference,
-            _ => return quote!(#ty),
-        },
+fn is_str(ty: &Type) -> bool {
+    let Type::Reference(reference) = ty else {
+        return false;
     };
-    let target = c_type(&reference.elem);
-    if reference.mutability.is_some() {
-        quote!(<#target as ::sys::CPointer>::Unique)
-    } else {
-        quote!(<#target as ::sys::CPointer>::Shared)
+    matches!(&*reference.elem, Type::Path(path) if path.path.is_ident("str"))
+}
+
+/// The C type bindgen declares in place of `ty`; `MaybeUninit<T>` has `T`'s layout.
+fn c_type(ty: &Type) -> proc_macro2::TokenStream {
+    match ty {
+        _ if is_str(ty) => quote!(*const ::core::ffi::c_char),
+        Type::Reference(reference) => {
+            let target = c_type(&reference.elem);
+            match reference.mutability {
+                Some(_) => quote!(<#target as ::sys::CPointer>::Unique),
+                None => quote!(<#target as ::sys::CPointer>::Shared),
+            }
+        }
+        _ => match (generic(ty, "Option"), generic(ty, "MaybeUninit")) {
+            (Some(inner @ Type::Reference(_)), _) | (_, Some(inner)) => c_type(inner),
+            _ => quote!(#ty),
+        },
     }
 }
 
@@ -67,101 +65,72 @@ pub fn export(_attribute: TokenStream, item: TokenStream) -> TokenStream {
         sig,
         block,
     } = parse_macro_input!(item as ItemFn);
-    let name = &sig.ident;
-    let output = &sig.output;
-    let result = matches!(output, ReturnType::Type(_, ty) if is(ty, "Result"));
-    let (c_return, check_return) = match output {
-        _ if result => (quote!(-> ::sys::esp_err_t), quote!(-> ::sys::esp_err_t)),
+    let rust_output = &sig.output;
+    let result = matches!(rust_output, ReturnType::Type(_, ty) if generic(ty, "Result").is_some());
+    let (output, c_output) = match rust_output {
         ReturnType::Default => (quote!(), quote!()),
-        ReturnType::Type(arrow, ty) => (quote!(#output), {
+        ReturnType::Type(..) if result => {
+            (quote!(-> ::sys::esp_err_t), quote!(-> ::sys::esp_err_t))
+        }
+        ReturnType::Type(arrow, ty) => {
             let c = c_type(ty);
-            quote!(#arrow #c)
-        }),
+            (quote!(#rust_output), quote!(#arrow #c))
+        }
     };
 
-    let mut c_params = Vec::new(); // the C function's parameters
-    let mut c_types = Vec::new(); // what the check compares with the header
-    let mut conversions = Vec::new(); // each C argument turned into the Rust one, before the call
-    let mut c_names = Vec::new();
+    let mut params = Vec::new();
+    let mut c_types = Vec::new();
+    let mut conversions = Vec::new();
     for input in &sig.inputs {
         let FnArg::Typed(param) = input else {
-            panic!("an export can't take `self`");
+            panic!("an export can't take `self`")
         };
         let Pat::Ident(ident) = &*param.pat else {
-            panic!("an export's parameters must be plain names");
+            panic!("an export's parameters must be plain names")
         };
-        let ty = &*param.ty;
-        let rust_name = &ident.ident;
-        // Unlike the Rust name, the compiler sees this one as generated and doesn't lint it.
-        let c_name = format_ident!("c_{}", rust_name.to_string().trim_start_matches('_'));
+        let (name, ty) = (&ident.ident, &*param.ty);
+        // Reading `_name` to convert it would count as using an unused parameter.
+        let c = format_ident!("{}", name.to_string().trim_start_matches('_'));
+        c_types.push(c_type(ty));
         match ty {
-            Type::Reference(reference) if is(&reference.elem, "str") => {
-                c_params.push(quote!(#c_name: *const ::core::ffi::c_char));
-                c_types.push(quote!(*const ::core::ffi::c_char));
+            _ if is_str(ty) => {
+                params.push(quote!(#c: *const ::core::ffi::c_char));
                 // C passes NULL or a NUL-terminated string that outlives the call.
                 conversions.push(quote! {
-                    let #c_name = if #c_name.is_null() {
-                        "?"
-                    } else {
-                        unsafe { ::core::ffi::CStr::from_ptr(#c_name) }.to_str().unwrap_or("?")
+                    let #name: &'call str = if #c.is_null() { "?" } else {
+                        unsafe { ::core::ffi::CStr::from_ptr(#c) }.to_str().unwrap_or("?")
                     };
                 });
             }
             Type::Reference(_) => {
-                let on_null = if result {
-                    quote!(return ::sys::ESP_ERR_INVALID_ARG)
-                } else {
-                    quote!(::core::panic!(::core::concat!(
-                        "NULL ",
-                        ::core::stringify!(#rust_name)
-                    )))
-                };
-                c_params.push(quote!(#c_name: ::core::option::Option<#ty>));
-                c_types.push(c_type(ty));
+                // ESP-IDF returns ESP_ERR_INVALID_ARG where it can; NULL is a firmware bug.
+                let message = format!("NULL {c}");
+                params.push(quote!(#c: ::core::option::Option<#ty>));
                 conversions.push(quote! {
-                    let ::core::option::Option::Some(#c_name) = #c_name else { #on_null };
+                    let ::core::option::Option::Some(#name) = #c else { ::core::panic!(#message) };
                 });
             }
-            _ => {
-                c_params.push(quote!(#c_name: #ty));
-                c_types.push(c_type(ty));
-            }
+            _ => params.push(quote!(#param)),
         }
-        c_names.push(c_name);
     }
-    let variadic = sig.variadic.as_ref().map(|_| quote!(, ...));
-    let check = quote! {
-        const _: () = {
-            let _: unsafe extern "C" fn(#(#c_types),* #variadic) #check_return = ::sys::#name;
-        };
-    };
 
-    // A variadic Rust function must itself be the C function, so it takes C's types unchanged.
-    if sig.variadic.is_some() {
-        let mut c_sig = sig.clone();
-        c_sig.abi = Some(parse_quote!(extern "C"));
-        return quote!(#(#attrs)* #[unsafe(no_mangle)] #vis #c_sig #block #check).into();
-    }
-    let unsafety = &sig.unsafety;
-    let call = quote!(#unsafety { inner(#(#c_names),*) });
-    let finish = if result {
-        quote!(match #call {
-            ::core::result::Result::Ok(()) => ::sys::ESP_OK,
-            ::core::result::Result::Err(error) => error,
-        })
+    let body = if result {
+        quote!((|| #rust_output #block)().map_or_else(|error| error, |()| ::sys::ESP_OK))
     } else {
-        call
+        quote!(#block)
     };
-    let inputs = &sig.inputs;
+    let name = &sig.ident;
+    let variadic = &sig.variadic;
     quote! {
+        #(#attrs)*
         #[unsafe(no_mangle)]
-        #vis unsafe extern "C" fn #name(#(#c_params),*) #c_return {
-            #(#attrs)*
-            #unsafety fn inner(#inputs) #output #block
+        #vis unsafe extern "C" fn #name<'call>(#(#params,)* #variadic) #output {
             #(#conversions)*
-            #finish
+            #body
         }
-        #check
+        const _: () = {
+            let _: unsafe extern "C" fn(#(#c_types,)* #variadic) #c_output = ::sys::#name;
+        };
     }
     .into()
 }

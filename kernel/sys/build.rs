@@ -8,16 +8,17 @@ fn main() {
         PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").expect("cargo sets it")).join("..");
     let out = PathBuf::from(env::var_os("OUT_DIR").expect("cargo sets it"));
     let platformio = env::var_os("PLATFORMIO_CORE_DIR").map_or_else(
-        || PathBuf::from(env::var_os("HOME").expect("HOME is set")).join(".platformio"),
+        || env::home_dir().expect("the home folder is known").join(".platformio"),
         PathBuf::from,
     );
     let idf = platformio.join("packages/framework-espidf/components");
     let newlib = platformio.join("packages/toolchain-riscv32-esp/riscv32-esp-elf/include");
-    let (chip, march, mabi) = if env::var_os("CARGO_FEATURE_ESP32P4").is_some() {
-        ("esp32p4", "rv32imafc_zicsr_zifencei", "ilp32f")
-    } else {
-        ("esp32c3", "rv32imc_zicsr_zifencei", "ilp32")
-    };
+    let (chip, march, mabi) =
+        if env::var("TARGET").is_ok_and(|target| target.starts_with("riscv32imafc")) {
+            ("esp32p4", "rv32imafc_zicsr_zifencei", "ilp32f")
+        } else {
+            ("esp32c3", "rv32imc_zicsr_zifencei", "ilp32")
+        };
     let ini = kernel.join("pio/kernel.ini");
     let sdkconfig = kernel.join("include").join(chip);
     println!("cargo::rerun-if-changed={}", ini.display());
@@ -42,7 +43,7 @@ fn main() {
         // clang's own `max_align_t` fails its layout test on this target; nothing uses it.
         .blocklist_type("max_align_t")
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
-        .allowlist_file(".*/(framework-espidf/components/.*|sdkconfig\\.h)")
+        .allowlist_file(".*/framework-espidf/components.*")
         .generate_comments(false)
         .clang_macro_fallback()
         .clang_macro_fallback_build_dir(&out)

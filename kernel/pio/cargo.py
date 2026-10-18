@@ -6,16 +6,23 @@ import subprocess
 
 Import("env", "projenv")
 
-if "PIOMAINPROG" not in env:  # `-t nobuild`
-    Return()
-
-for tool, install in (("cargo", "https://rustup.rs"), ("espflash", "cargo install espflash")):
-    if not shutil.which(tool):
-        print(f"{tool} not found. Install: {install}")
-        env.Exit(1)
+if not shutil.which("cargo"):
+    print("cargo not found. Install: https://rustup.rs")
+    env.Exit(1)
 
 kernel_dir = Dir("..").abspath
 target_dir = os.path.join(kernel_dir, "target")
+# Built into target/ rather than installed on PATH; cwd so kernel/'s pinned Rust builds it.
+espflash_root = os.path.join(target_dir, "espflash")
+if not shutil.which("espflash", path=os.path.join(espflash_root, "bin")):
+    print("Building espflash 4.6.0 into kernel/target (first build only, a few minutes)")
+    subprocess.run(["cargo", "install", "--quiet", "espflash@4.6.0", "--locked", "--root", espflash_root],
+                   cwd=kernel_dir, check=True)
+env["ESPFLASH"] = os.path.join(espflash_root, "bin", "espflash")
+
+if "PIOMAINPROG" not in env:  # `-t nobuild`
+    Return()
+
 app = env.StaticLibrary("$BUILD_DIR/app", env["PIOBUILDFILES"])
 projenv.Append(CPPPATH=[os.path.join(kernel_dir, "include", env.subst("$BOARD_MCU"))])
 unsupported = os.path.join(kernel_dir, "include", "unsupported.h")
@@ -40,10 +47,8 @@ def link_kernel(target, source, env):
 env.Replace(LINKCOM=env.Action(link_kernel, "Linking kernel"))
 env.Depends(env["PIOMAINPROG"], app)
 env.AlwaysBuild(env["PIOMAINPROG"])  # cargo tracks the Rust sources; SCons doesn't
-# The platform's map-file report reads only GNU ld maps; rust-lld's differ.
-env["PIOMAINPROG"][0].get_executor().post_actions.clear()
 # The size check matches ESP-IDF's section names; these are esp-hal's.
 env.Replace(SIZEPROGREGEXP=r"^(?:\.trap|\.rwtext|\.data|\.flash\.appdesc|\.rodata|\.text)\s+(\d+).*",
             SIZEDATAREGEXP=r"^(?:\.data|\.bss|\.noinit)\s+(\d+).*")
 if env.subst("$BOARD_MCU") == "esp32p4":  # esptool can't convert esp-hal's P4 ELF
-    env.Replace(ELF2BINCMD='espflash save-image --chip $BOARD_MCU "$SOURCE" "$TARGET"')
+    env.Replace(ELF2BINCMD='"$ESPFLASH" save-image --chip $BOARD_MCU "$SOURCE" "$TARGET"')
