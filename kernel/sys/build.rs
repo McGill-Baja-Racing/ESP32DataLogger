@@ -59,7 +59,7 @@ fn main() {
         .expect("OUT_DIR is writable");
 }
 
-/// The ESP-IDF header folders `kernel.ini` gives the C firmware for `chip`, relative to `$IDF`.
+/// The ESP-IDF header folders `kernel.ini` gives the C firmware for `chip`, under `custom_idf`.
 fn include_dirs<'ini>(ini: &'ini str, chip: &str) -> impl Iterator<Item = &'ini str> {
     let mut section = "";
     ini.lines().map(str::trim).filter_map(move |line| {
@@ -71,6 +71,7 @@ fn include_dirs<'ini>(ini: &'ini str, chip: &str) -> impl Iterator<Item = &'ini 
             return None;
         }
         let ours = section == "kernel" || section == format!("kernel_{chip}");
-        line.strip_prefix("-I$IDF/").filter(|_| ours)
+        line.strip_prefix("-I${kernel.custom_idf}/")
+            .filter(|_| ours)
     })
 }
