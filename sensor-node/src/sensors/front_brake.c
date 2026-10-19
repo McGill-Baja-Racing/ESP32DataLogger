@@ -3,11 +3,11 @@
 #include "adc_input.h"
 #include "protocol/app_protocol.h"
 
-#define GPIO                    1
+#define GPIO                    0
 #define DIVIDER_SCALE           0.5f
 #define SENSOR_MIN_MV           500.0f
 #define SENSOR_MAX_MV           4500.0f
-#define PRESSURE_SPAN_PSI       3000.0f
+#define PRESSURE_SPAN_PSI       1600.0f
 
 static esp_err_t read_pressure(sensor_t *sensor, int32_t *value)
 {
