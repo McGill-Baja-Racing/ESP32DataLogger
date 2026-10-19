@@ -3,8 +3,8 @@
 #include "adc_input.h"
 #include "protocol/app_protocol.h"
 
-#define GPIO                    1
-#define DIVIDER_SCALE           (2.33f / 4.33f)
+#define GPIO                    0
+#define DIVIDER_SCALE           0.5f
 #define SENSOR_MIN_MV           500.0f
 #define SENSOR_MAX_MV           4500.0f
 #define PRESSURE_SPAN_PSI       3000.0f
