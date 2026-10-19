@@ -17,10 +17,14 @@ static esp_err_t read_pressure(sensor_t *sensor, int32_t *value)
     if (error != ESP_OK) {
         return error;
     }
-    const float minimum_mv = SENSOR_MIN_MV * DIVIDER_SCALE;
-    const float span_mv = (SENSOR_MAX_MV - SENSOR_MIN_MV) * DIVIDER_SCALE;
-    float pressure = ((voltage_mv - minimum_mv) / span_mv) * PRESSURE_SPAN_PSI;
+    //const float minimum_mv = SENSOR_MIN_MV * DIVIDER_SCALE;
+    //const float span_mv = (SENSOR_MAX_MV - SENSOR_MIN_MV) * DIVIDER_SCALE;
+    float pressure = (voltage_mv * 2.0f - 500.0f) * (4.0f/3.0f) + 70.0f ;
+#if SENSOR_SERIAL_TEST
+    *value = (int32_t)pressure;
+#else
     *value = pressure > 0.0f ? (int32_t)pressure : 0;
+#endif
     return ESP_OK;
 }
 

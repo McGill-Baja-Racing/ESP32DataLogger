@@ -4,7 +4,7 @@
 #include "protocol/app_protocol.h"
 
 #define GPIO                    0
-#define DIVIDER_SCALE           (2.33f / 4.33f)
+#define DIVIDER_SCALE           0.5f
 #define SENSOR_MIN_MV           500.0f
 #define SENSOR_MAX_MV           4500.0f
 #define PRESSURE_SPAN_PSI       1600.0f
