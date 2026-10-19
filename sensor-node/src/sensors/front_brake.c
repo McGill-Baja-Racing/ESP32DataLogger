@@ -4,7 +4,7 @@
 #include "protocol/app_protocol.h"
 
 #define GPIO                    1
-#define DIVIDER_SCALE           (2.33f / 4.33f)
+#define DIVIDER_SCALE           0.5f
 #define SENSOR_MIN_MV           500.0f
 #define SENSOR_MAX_MV           4500.0f
 #define PRESSURE_SPAN_PSI       3000.0f
@@ -17,14 +17,10 @@ static esp_err_t read_pressure(sensor_t *sensor, int32_t *value)
     if (error != ESP_OK) {
         return error;
     }
-    //const float minimum_mv = SENSOR_MIN_MV * DIVIDER_SCALE;
-    //const float span_mv = (SENSOR_MAX_MV - SENSOR_MIN_MV) * DIVIDER_SCALE;
-    float pressure = (voltage_mv * 2.0f - 500.0f) * (4.0f/3.0f) + 70.0f ;
-#if SENSOR_SERIAL_TEST
-    *value = (int32_t)pressure;
-#else
+    const float minimum_mv = SENSOR_MIN_MV * DIVIDER_SCALE;
+    const float span_mv = (SENSOR_MAX_MV - SENSOR_MIN_MV) * DIVIDER_SCALE;
+    float pressure = ((voltage_mv - minimum_mv) / span_mv) * PRESSURE_SPAN_PSI;
     *value = pressure > 0.0f ? (int32_t)pressure : 0;
-#endif
     return ESP_OK;
 }
 
