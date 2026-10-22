@@ -1,4 +1,4 @@
-//! Layer 1: FreeRTOS's API on top of esp-rtos.
+//! FreeRTOS's API on top of esp-rtos.
 
 use alloc::{boxed::Box, vec, vec::Vec};
 use core::{cell::Cell, ffi::c_void, mem::MaybeUninit};
@@ -78,21 +78,25 @@ fn vTaskDelay(ticks: TickType_t) {
 
 /// FreeRTOS's mutexes are queues too.
 enum Queue {
-    Items {
-        handle: QueueHandle,
-        /// For `xQueueGenericReset`.
-        item_size: usize,
-    },
+    Items(Items),
     Mutex(SemaphoreHandle),
+}
+
+struct Items {
+    handle: QueueHandle,
+    /// For `xQueueGenericReset`.
+    item_size: usize,
+    /// esp-rtos queues report only how many items they hold.
+    length: usize,
 }
 
 sys::c_handle!(Queue, QueueHandle_t);
 
 impl Queue {
     #[expect(clippy::panic, reason = "a mutex used as a queue is a firmware bug")]
-    fn items(&self) -> (&QueueHandle, usize) {
+    fn items(&self) -> &Items {
         match self {
-            Self::Items { handle, item_size } => (handle, *item_size),
+            Self::Items(items) => items,
             Self::Mutex(_) => panic!("a FreeRTOS mutex used as a queue"),
         }
     }
@@ -108,10 +112,11 @@ fn xQueueGenericCreate(
     if !length.checked_mul(item_size).is_some_and(fits) {
         return None;
     }
-    let new = Queue::Items {
+    let new = Queue::Items(Items {
         handle: QueueHandle::new(length, item_size),
         item_size,
-    };
+        length,
+    });
     Some(Box::leak(Box::new(new)))
 }
 
@@ -146,8 +151,10 @@ unsafe fn xQueueGenericSend(
     let sent = match queue {
         Queue::Mutex(mutex) => mutex.give(),
         // SAFETY: `item` points to one item of the queue's item size.
-        Queue::Items { handle, .. } => unsafe {
-            handle.send_to_back_with_deadline(item.cast(), deadline(ticks))
+        Queue::Items(items) => unsafe {
+            items
+                .handle
+                .send_to_back_with_deadline(item.cast(), deadline(ticks))
         },
     };
     if sent { pdPASS } else { errQUEUE_FULL }
@@ -162,8 +169,18 @@ unsafe fn xQueueGenericSendFromISR(
     _position: BaseType_t,
 ) -> BaseType_t {
     // SAFETY: `item` points to one item of the queue's item size.
-    let sent = unsafe { queue.items().0.try_send_to_back_from_isr(item.cast(), None) };
+    let sent = unsafe {
+        queue
+            .items()
+            .handle
+            .try_send_to_back_from_isr(item.cast(), None)
+    };
     if sent { pdPASS } else { errQUEUE_FULL }
+}
+
+#[export]
+fn vPortYieldFromISR() {
+    rtos::yield_task_from_isr();
 }
 
 #[export]
@@ -172,19 +189,30 @@ unsafe fn xQueueReceive(queue: &Queue, buffer: *mut c_void, ticks: TickType_t) -
     let received = unsafe {
         queue
             .items()
-            .0
+            .handle
             .receive_with_deadline(buffer.cast(), deadline(ticks))
     };
     if received { pdTRUE } else { pdFALSE }
 }
 
+#[export]
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "at most the `UBaseType_t` length C created the queue with"
+)]
+fn uxQueueSpacesAvailable(queue: &Queue) -> UBaseType_t {
+    let items = queue.items();
+    items.length.saturating_sub(items.handle.messages_waiting()) as UBaseType_t
+}
+
 /// esp-rtos queues have no reset, so this drains `queue`.
 #[export]
 fn xQueueGenericReset(queue: &Queue, _new_queue: BaseType_t) -> BaseType_t {
-    let (handle, item_size) = queue.items();
-    let mut item = vec![0_u8; item_size];
-    // SAFETY: `item` holds one item; a zero timeout never blocks.
-    while unsafe { handle.receive(item.as_mut_ptr(), Some(0)) } {}
+    let items = queue.items();
+    let mut item = vec![0_u8; items.item_size];
+    // Never waits: the firmware resets queues inside portENTER_CRITICAL.
+    // SAFETY: `item` holds one item.
+    while unsafe { items.handle.try_receive_from_isr(item.as_mut_ptr(), None) } {}
     pdPASS
 }
 
