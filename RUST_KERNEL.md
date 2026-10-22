@@ -1,7 +1,7 @@
 # Rust kernel
 
-Design draft (2026-10-16). The skeleton in `kernel/` builds and links a C program on the C3; the
-P4 build needs its `sdkconfig.h`. Nothing has run on hardware yet.
+Design draft (2026-10-16). `NodeBrake` and `NodeADC` build and link on the C3; the P4 build needs
+its `sdkconfig.h`. Nothing has run on hardware yet.
 
 ## 1. Overview
 
@@ -25,7 +25,8 @@ Goals:
   Only the options it passes are supported; naming another is a compile error
   (`kernel/include/unsupported.h`), and a value only known at run time panics.
   Anything missing is a link error, never a stub.
-- Each chip's `sdkconfig.h` is ESP-IDF's generated one, so the headers compile unchanged.
+- Each chip's `sdkconfig.h` is ESP-IDF's generated one, trimmed to the options the headers and
+  firmware read, so the headers compile unchanged.
 
 ## 2. Layers
 
@@ -39,14 +40,17 @@ Goals:
   software timers.
 - **Glue:** boot sets the full CPU clock and runs `app_main` as a task. `esp-bootloader-esp-idf`
   0.6.0 adds the app descriptor. `esp-alloc` 0.11.0 provides `malloc`, `free`, `calloc` and
-  `realloc`. The C3's `__atomic_*` come from `esp-radio/src/compat/atomic.rs`.
+  `realloc`. The kernel defines the C3's `__atomic_*`. An RTC watchdog, fed by a
+  lowest-priority task, resets the board when any task runs 2 s without blocking.
 
 ### Layer 2: system and C library
 
 - **Reuse:** `esp-hal` 1.2.2, `esp-println` 0.18.0, `log` 0.4.34, `printf-compat` 0.5.0, Rust's
-  `core`. The compiler provides `memcpy`, `memset`, `memcmp` and `strlen`.
+  `core`. The C3's ROM provides `memcpy`, `memset`, `memcmp` and `memmove`; the compiler
+  provides `strlen`. Never export a function the ROM already provides.
 - **We write:** the rest of the C library (no `math.h` or `scanf`), `esp_err`, `esp_log`,
-  `esp_timer_get_time`, time, stdio and the POSIX file calls.
+  `esp_timer_get_time`, time, stdio and the POSIX file calls. Whether the master links newlib
+  instead is decided at step 5.
 - **Glue:** stdout writes whole lines per task. `fgets` on stdin reads the serial console.
 
 ### Layer 3: drivers
@@ -91,7 +95,7 @@ v3.x boards: `esp-hal` doesn't support our v1.3.
 | 1    | Proof of concept on the C3                                  | the checks below pass                               |
 | 2    | What `NodeBrake` needs from layers 1–3                      | `NodeBrake` works with the ESP-IDF master           |
 | 3    | `NodeEngine`, `NodeEncoder`, `NodeMPU`, then the simulators | each works with the ESP-IDF master                  |
-| 4    | Layers 1–3 and the CAN driver on P4 v3.x                    | core and API tests pass on the P4                   |
+| 4    | Layers 1–3 and the CAN driver on P4 v3.x, one core          | the core test passes on the P4                      |
 | 5    | Master storage (SD, `fatfs`, files)                         | `.bin` and `.bin.utc` files match the ESP-IDF build |
 | 6    | Master network, then master firmware                        | web page, graphs, CSV download work                 |
 
@@ -108,11 +112,11 @@ Step 1 checks:
 Tests:
 
 - **Core test:** the FreeRTOS demo tasks and ESP-IDF's FreeRTOS tests, covering preemption on
-  give, `xHigherPriorityTaskWoken`, stack sizes in bytes, `vTaskDelete(NULL)`, and critical
-  sections on the P4's two cores.
-- **API tests:** one C program per component, run on stock ESP-IDF and on the kernel; serial
-  outputs must match.
-- **Bench:** each node and the master match the ESP-IDF build.
+  give, `xHigherPriorityTaskWoken`, stack sizes in bytes and `vTaskDelete(NULL)`. The P4 runs on
+  one core first; critical sections on its two cores are tested later.
+- **Bench:** A/B runs of each node and the master, ESP-IDF build against kernel build, compared
+  through the logger's own output. A focused test is added only for a bug the logs can't pin
+  down.
 - **Host tests:** `master-node/tests`, plus `cargo test` for the hardware-free code in
   `kernel/portable/`, which exports nothing to C so it can't replace the laptop's C library.
 
@@ -132,16 +136,17 @@ Tests:
   flash and monitor.
 - **Upload:** `pio run -t upload` runs `espflash flash` with the board's flash settings, set in
   `kernel.ini`.
-- **Logs:** `pio device monitor`. C and Rust logs are both plain text; Rust logs through the
-  `log` crate and `esp-println`.
+- **Logs:** `pio device monitor`. C and Rust logs are both colored by level; Rust logs through
+  the `log` crate and `esp-println`.
 
 ```
 kernel/
   Cargo.toml           bin crate; esp32c3 (default) and esp32p4 features; workspace root; lints
   .cargo/config.toml   default target (C3), espflash runners
   build.rs             links the firmware's C archive and esp-hal's linker script
+  no_c.x               the error a plain `cargo build` gives without the firmware's C
   include/             each chip's sdkconfig.h; unsupported.h
-  src/main.rs          boot and panic
+  src/main.rs          boot, watchdog and panic
   src/rtos.rs          layer 1 (submodules in src/rtos/, enforced by mod_module_files)
   src/system.rs        layer 2
   src/<driver>.rs      layer 3, one file per ESP-IDF driver (adc.rs, twai.rs)
