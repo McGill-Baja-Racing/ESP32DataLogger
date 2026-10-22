@@ -17,6 +17,7 @@ use proc_macro::TokenStream;
 use quote::{format_ident, quote};
 use syn::{
     FnArg, GenericArgument, ItemFn, Pat, PathArguments, ReturnType, Type, parse_macro_input,
+    parse_quote,
 };
 
 /// The `T` in `name<T>`.
@@ -40,19 +41,19 @@ fn is_str(ty: &Type) -> bool {
 }
 
 /// The C type bindgen declares in place of `ty`; `MaybeUninit<T>` has `T`'s layout.
-fn c_type(ty: &Type) -> proc_macro2::TokenStream {
+fn c_type(ty: &Type) -> Type {
     match ty {
-        _ if is_str(ty) => quote!(*const ::core::ffi::c_char),
+        _ if is_str(ty) => parse_quote!(*const ::core::ffi::c_char),
         Type::Reference(reference) => {
             let target = c_type(&reference.elem);
             match reference.mutability {
-                Some(_) => quote!(<#target as ::sys::CPointer>::Unique),
-                None => quote!(<#target as ::sys::CPointer>::Shared),
+                Some(_) => parse_quote!(<#target as ::sys::CPointer>::Unique),
+                None => parse_quote!(<#target as ::sys::CPointer>::Shared),
             }
         }
         _ => match (generic(ty, "Option"), generic(ty, "MaybeUninit")) {
             (Some(inner @ Type::Reference(_)), _) | (_, Some(inner)) => c_type(inner),
-            _ => quote!(#ty),
+            _ => ty.clone(),
         },
     }
 }
@@ -83,10 +84,13 @@ pub fn export(_attribute: TokenStream, item: TokenStream) -> TokenStream {
     let mut conversions = Vec::new();
     for input in &sig.inputs {
         let FnArg::Typed(param) = input else {
-            panic!("an export can't take `self`")
+            let error = syn::Error::new_spanned(input, "an export can't take `self`");
+            return error.to_compile_error().into();
         };
         let Pat::Ident(ident) = &*param.pat else {
-            panic!("an export's parameters must be plain names")
+            let error =
+                syn::Error::new_spanned(&param.pat, "an export's parameters must be plain names");
+            return error.to_compile_error().into();
         };
         let (name, ty) = (&ident.ident, &*param.ty);
         // Reading `_name` to convert it would count as using an unused parameter.
