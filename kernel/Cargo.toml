@@ -36,6 +36,7 @@ esp-rtos = { version = "=0.4.0", features = ["esp-radio", "log-04"] }
 esp-alloc = "=0.11.0"
 esp-radio-rtos-driver = "=0.4.2"
 critical-section = "=1.2.0"
+portable-atomic = { version = "=1.15.0", default-features = false }
 printf-compat = { version = "=0.5.0", default-features = false }
 # Without its `critical-section` feature, printing leaves interrupts on; `esp_log` locks lines.
 esp-println = { version = "=0.18.0", default-features = false, features = ["auto", "colors", "log-04"] }
@@ -45,10 +46,13 @@ esp-backtrace = { version = "=0.20.0", features = ["panic-handler", "println", "
 sys = { package = "baja-sys", path = "sys" }
 macros = { package = "baja-macros", path = "macros" }
 
-[lints.rust]
+[lints]
+workspace = true
+
+[workspace.lints.rust]
 elided_lifetimes_in_paths = "warn"
 
-[lints.clippy]
+[workspace.lints.clippy]
 all = { level = "warn", priority = -1 }
 pedantic = { level = "warn", priority = -1 }
 undocumented_unsafe_blocks = "warn"
