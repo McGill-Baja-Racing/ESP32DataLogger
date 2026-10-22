@@ -1,15 +1,19 @@
-//! Layer 2: errors, logging and the clock.
+//! Errors, logging and the clock.
 
 use alloc::boxed::Box;
 use core::{
     cell::Cell,
-    ffi::{c_char, c_int},
+    ffi::{CStr, c_char, c_int},
 };
 
 use critical_section::Mutex;
-use esp_hal::{rtc_cntl::SocResetReason, time::Instant};
-use esp_radio_rtos_driver::semaphore::{SemaphoreHandle, SemaphoreKind};
+use esp_hal::rtc_cntl::SocResetReason;
+use esp_radio_rtos_driver::{
+    self as rtos,
+    semaphore::{SemaphoreHandle, SemaphoreKind},
+};
 use macros::export;
+use portable_atomic::{AtomicU32, Ordering};
 use sys::{
     ESP_ERR_INVALID_ARG, ESP_ERR_INVALID_STATE, ESP_ERR_NO_MEM, ESP_ERR_NOT_FOUND,
     ESP_ERR_NOT_SUPPORTED, ESP_ERR_TIMEOUT, ESP_FAIL, ESP_OK, esp_err_t, esp_log_config_t,
@@ -17,8 +21,7 @@ use sys::{
 };
 
 /// Only the codes the kernel and firmware return.
-#[export]
-fn esp_err_to_name(code: esp_err_t) -> *const c_char {
+fn error_name(code: esp_err_t) -> &'static CStr {
     match code {
         ESP_OK => c"ESP_OK",
         ESP_FAIL => c"ESP_FAIL",
@@ -30,7 +33,11 @@ fn esp_err_to_name(code: esp_err_t) -> *const c_char {
         ESP_ERR_TIMEOUT => c"ESP_ERR_TIMEOUT",
         _ => c"UNKNOWN ERROR",
     }
-    .as_ptr()
+}
+
+#[export]
+fn esp_err_to_name(code: esp_err_t) -> *const c_char {
+    error_name(code).as_ptr()
 }
 
 #[export]
@@ -39,10 +46,13 @@ fn _esp_error_check_failed(
     code: esp_err_t,
     file: &str,
     line: c_int,
-    _function: &str,
+    function: &str,
     expression: &str,
 ) -> ! {
-    panic!("ESP_ERROR_CHECK({expression}) failed: {code:#x} at {file}:{line}");
+    let name = error_name(code).to_str().unwrap_or("?");
+    panic!(
+        "ESP_ERROR_CHECK({expression}) failed: {code:#x} ({name}) in {function} at {file}:{line}"
+    );
 }
 
 /// Keeps each task's log line whole with interrupts on, like ESP-IDF's stdout lock.
@@ -99,16 +109,11 @@ fn esp_reset_reason() -> esp_reset_reason_t {
     critical_section::with(|cs| RESET_REASON.borrow(cs).get())
 }
 
-/// GCC calls this for C's `atomic_fetch_add`: the C3 has no atomic instructions. ESP-IDF's
-/// libatomic does the same in a critical section on a single core.
+/// GCC calls this for C's `atomic_fetch_add` because the C3 has no atomic instructions.
 #[unsafe(no_mangle)]
 unsafe extern "C" fn __atomic_fetch_add_4(pointer: *mut u32, value: u32, _order: c_int) -> u32 {
-    // SAFETY: C passes an aligned `atomic_uint`, and interrupts are off.
-    critical_section::with(|_| unsafe {
-        let old = pointer.read_volatile();
-        pointer.write_volatile(old.wrapping_add(value));
-        old
-    })
+    // SAFETY: C passes an aligned `atomic_uint` that it only accesses atomically.
+    unsafe { AtomicU32::from_ptr(pointer) }.fetch_add(value, Ordering::SeqCst)
 }
 
 /// `ESP_LOGx`'s C macros build the whole line's format and already drop levels above
@@ -138,10 +143,10 @@ unsafe fn esp_log(
     reason = "wraps like ESP-IDF's counter"
 )]
 fn esp_log_timestamp() -> u32 {
-    Instant::now().duration_since_epoch().as_millis() as u32
+    (rtos::now() / 1000) as u32
 }
 
 #[export]
 fn esp_timer_get_time() -> i64 {
-    i64::try_from(Instant::now().duration_since_epoch().as_micros()).unwrap_or(i64::MAX)
+    rtos::now().cast_signed()
 }
