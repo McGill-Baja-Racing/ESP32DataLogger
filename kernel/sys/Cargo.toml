@@ -5,6 +5,7 @@ edition = "2024"
 [lib]
 test = false
 doctest = false
+bench = false
 
 [build-dependencies]
 bindgen = "=0.73.2"
