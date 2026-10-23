@@ -1,150 +1,40 @@
-# DAQ 3.0 Master Node
+# Master node
 
-ESP32-P4 firmware that coordinates the Baja DAQ 3.0 sensor nodes and stores
-their synchronized CAN samples on an SD card.
-
-The bench CAN bus runs at 1 Mbit/s on master TX GPIO20/RX GPIO21 and Sensor
-Node TX GPIO21/RX GPIO20.
+The ESP32-P4 master collects vehicle samples and saves recording sessions. Read the [system overview](../docs/SYSTEM_OVERVIEW.md) first if CAN, firmware, or timestamps are new to you.
 
 ## Responsibilities
 
-- Mount the SD card and create safely named binary log files without overwriting
-  an existing session.
-- Broadcast START and STOP commands to fixed-configuration sensor nodes.
-- Broadcast a master-time beacon with recording state every 100 ms so rebooted
-  nodes can rejoin an active session.
-- Receive the configured sensor CAN IDs and buffer them to the SD card.
-- During recording, use received sensor frames to mark nodes active and report
-  a node offline after three seconds without data.
-- Select installed nodes with `MASTER_EXPECTED_NODE_MASK` in
-  `src/node_state/node_registry.h` (currently nodes 4 and 5).
-- Recover the CAN controller after bus-off.
-- Provide `start`, `stop`, and `status` serial commands at 115200 baud.
-- Host an open `BajaDAQ` Wi-Fi access point with controls and log downloads at
-  `http://192.168.4.1`.
-- Provide explicitly enabled live sensor graphs during recording at a capped
-  1-20 Hz display rate.
+The master receives sensor readings over CAN and GPS messages over a serial connection. It broadcasts recording commands and clock beacons, monitors configured nodes, buffers samples to SD, and hosts the browser interface through the board's ESP32-C6 Wi-Fi coprocessor.
 
-## Build
+After initialization it attempts to start recording after five seconds. An unnamed start waits up to three additional seconds for GPS UTC before selecting a filename; without it, a numbered filename is used. Existing recordings are not overwritten. Serial `start`, `stop`, and `status` commands and browser controls provide manual operation.
+
+Connect to the open `BajaDAQ` network and open `http://192.168.4.1` for controls, session naming, completed-log rename/download, and up to four live graphs. Live viewing is enabled separately while recording and ends on stop or viewer lease expiry. SD collection continues independently of viewing.
+
+## Build profiles
+
+| Environment | Use |
+|---|---|
+| `MasterStable` | Normal master firmware with CAN |
+| `Master` | Same current configuration as `MasterStable`; base environment |
+| `MasterNoCAN` | GPS/SD/web operation without initializing CAN or monitoring remote nodes |
+
+With PlatformIO installed, from the repository root and without a board:
 
 ```bash
-pio run -e MasterStable
-pio run -e MasterNoCAN  # GPS/SD/web master without CAN hardware
+pio run -d master-node -e MasterStable -t buildprog
 ```
 
-`MasterNoCAN` does not initialize TWAI, transmit node commands or time beacons,
-or monitor CAN nodes. GPS logging, SD sessions, serial commands, Wi-Fi controls,
-downloads, and live GPS graphs remain available.
+Expect `SUCCESS`. Initial downloads can be substantial. For uploads and expected observations, use [Flashing](../docs/FLASHING.md).
 
-The master automatically starts recording five seconds after boot. An unnamed
-start waits up to three additional seconds for GPS UTC and uses
-`log_YYYY-MM-DD_HH-MM-SS.bin` when available; otherwise it falls back to the
-first free `log_XXXX.bin`. A repeated timestamp receives a numeric suffix
-instead of overwriting an existing log. The web filename field stays empty
-while idle; entering a name before Start uses that custom filename instead.
+## Find your work area
 
-`SD_FORMAT_IF_MOUNT_FAILED` in `platformio.ini` controls automatic formatting.
-It defaults to `1`, so an inserted card that cannot be mounted as FAT is erased
-and formatted. Set it to `0` for non-destructive mount failures.
+| Task | Start here |
+|---|---|
+| Recording and SD buffering | [Logger guide](src/logger/README.md) |
+| Browser controls, graphs, exports | [Web guide](src/web/README.md) |
+| GPS, time, CAN, node status, lifecycle | [Source map](src/README.md) and [architecture](docs/MASTER_ARCHITECTURE.md) |
+| Interpret recorded data | [Log format](../docs/LOG_FORMAT.md) |
 
-## Data flow
+Wi-Fi startup failure is reported on serial while collection can continue. SD mount failure prevents normal startup; automatic formatting is disabled in the current build configuration. See [Troubleshooting](../docs/TROUBLESHOOTING.md).
 
-```text
-Sensor CAN frames -> can/can_master.c -> main dispatch
-                                            |-- node state -> node_registry
-                                            `-- sensor data -> data_logger
-                                                                  |
-                                                                  v
-                                                               SD card
-
-time/time_beacon.c -> can_master_send() -> synchronized sensor nodes
-console commands   -> main policy       -> logger + node commands
-web controls       -> main policy       -> logger + node commands
-```
-
-## Wi-Fi controls
-
-The Waveshare ESP32-P4-WIFI6 uses its ESP32-C6 coprocessor over SDIO through
-ESP-Hosted. Connect a phone or laptop to the open `BajaDAQ` network and browse
-to `http://192.168.4.1`. The page reports logger and node state, lets the driver
-name a session before Start, accepts Stop commands, and offers completed sessions as their original binary log
-or as a streamed CSV conversion. A three-dot menu beside each completed log
-can rename its binary file and UTC companion without overwriting another log.
-Completed logs are listed in descending alphabetical order and can be filtered
-by date, custom, or numbered names. Live Data supports up to four independent
-graphs with adjustable axes. It must be enabled separately during each
-recording and turns off when recording stops or its viewer disconnects. The SD
-log continues to retain samples at their native rates.
-
-The C6 must run an ESP-Hosted slave firmware compatible with the version pinned
-in `dependencies.lock`. Network startup failures are reported on serial and do
-not disable SD logging, CAN collection, or serial commands.
-
-[src/main.c](src/main.c) is the composition root. Module ownership and change
-guidance are documented in [src/README.md](src/README.md). The CAN payload and
-log formats are described in [docs/MASTER_ARCHITECTURE.md](docs/MASTER_ARCHITECTURE.md).
-
-The master and sensor nodes intentionally duplicate a very small protocol
-header because they are separate firmware projects. Changes to CAN command IDs,
-node-state encoding, or sensor IDs must be made in both protocol headers and
-validated by building all firmware profiles.
-
-The master accepts the following sensor channels for SD logging, live graphs,
-and CSV export:
-
-| Sensor | Source | IDs | Units |
-| --- | --- | --- | --- |
-| Front/rear brake pressure | CAN node 1 | `0x0B1–0x0B2` | psi |
-| Acceleration X/Y/Z | CAN node 3 (MPU6500) | `0x0B3–0x0B5` | mg |
-| Gyroscope X/Y/Z | CAN node 3 (MPU6500) | `0x0B6–0x0B8` | mdps |
-| Wheel/bearing speed | CAN node 4 | `0x0B9` | signed rpm |
-| Generic ADC | CAN node 6 (optional) | `0x0BA` | mV |
-| Engine speed | CAN node 5 | `0x0BB` | rpm |
-| GPS speed, latitude, longitude | Master UART | `0x700–0x702` (log IDs) | km/h × 100, degrees × 10⁷ |
-
-CAN sensor messages must contain exactly 8 bytes: a little-endian signed
-32-bit value followed by a little-endian unsigned 32-bit timestamp in ms.
-Nodes 1, 3, 4, and 5 are monitored for missing data during recording.
-GPS uses UART1 at 9600 baud, RX GPIO33 and TX GPIO32, and accepts
-checksum-valid NMEA RMC sentences with an active position fix.
-
-Build `Master` or `MasterStable` for the full sensor setup (`MasterNoCAN`
-only collects local GPS). CAN uses TX GPIO20, RX GPIO21, at 1 Mbit/s.
-Build the corresponding sensor profiles with `SENSOR_SERIAL_TEST=0`;
-`NodeMPU` is configured for CAN operation by default. Recording starts
-automatically five seconds after initialization and can also be controlled
-through the web interface or serial console.
-
-### Engine and wheel RPM across nodes
-
-NodeEngine measures engine RPM from spark input GPIO3 and sends `engine_rpm`
-(0x0BB) and spark events (0x0BC). NodeEncoder independently measures bearing
-RPM on GPIO6/GPIO7 and sends `bearing_rpm` (0x0B9) every 20 ms, averaged over
-100 ms. The sensors run on separate boards. The master logs and displays
-these original channels without generating another wheel RPM signal.
-NodeEngineBench uses the shared throttled serial format for engine RPM only.
-
-### Powertrain CSV export
-
-**Powertrain CSV** downloads `log_XXXX_powertrain.csv` with the columns
-`Relative time,Absolute time,Brake pressure,Bearing RPM,Engine RPM,GPS latitude,GPS longitude,GPS Speed`.
-Relative time is the engine sample's master-clock time in milliseconds. Absolute
-time is its GPS-synchronized UTC timestamp and is blank before synchronization
-or when the `.utc` companion is unavailable.
-
-Brake pressure uses the latest front-brake reading (`0x0B1`) in PSI when it is
-no more than 100 ms old. The rear-brake channel remains available in the full
-CSV. Each engine sample uses the latest bearing RPM at or before its timestamp,
-provided it is no more than 100 ms old. Missing, future, or stale bearing values
-omit the row; zeros and signed RPM values are preserved. Bearing RPM is the raw
-reading, without gear scaling.
-
-GPS latitude and longitude are decimal degrees, and GPS speed is km/h. Each
-field holds the latest corresponding GPS value recorded at or before the engine
-sample, with no age cutoff. A field is blank until its first eligible reading.
-
-Endpoint: `/api/logs/download?name=log_0001.bin&format=paired`.
-Validate the exporter with `python3 tests/test_paired_csv.py`.
-
-Full CSV exports also retain `timestamp_ms` and `absolute_time_utc` from GPS.
-See [GPS absolute time](docs/ABSOLUTE_TIME.md) for wiring, accuracy, and UTC companion files.
+Next: [Source map](src/README.md). Shared references: [protocol](../docs/PROTOCOL.md), [hardware](../docs/HARDWARE.md), [testing](../docs/TESTING.md), and [contribution workflow](../CONTRIBUTING.md).
