@@ -284,9 +284,24 @@ the new registry references a descriptor whose definition is compiled out.
 Adding the file to `SRCS` alone does not override preprocessor conditions.
 
 If the configuration uses shared support hardware, ensure it is initialized.
-For example, the existing brake and generic-ADC configurations call
-`adc_input_init()` from `sampler_init()`. A new ADC-using configuration must be
-included in that compile-time condition, or the ADC reads will fail.
+The steering example above includes `generic_adc_sensor`, so add
+`NODE_FIXED_STEERING_CONFIG` to the ADC initialization condition in
+`src/sampler/sampler.c`, inside `sampler_init()`:
+
+```c
+/* Keep every existing ADC-using configuration and append the new one. */
+#if NODE_FIXED_BRAKE_CONFIG || NODE_FIXED_ADC_CONFIG || NODE_FIXED_STEERING_CONFIG
+    esp_err_t error = adc_input_init();
+    if (error != ESP_OK) {
+        return error;
+    }
+#endif
+```
+
+Selecting the configuration in `platformio.ini` and `sensor_registry.c` does
+not automatically initialize the shared ADC. Without this addition, ADC reads
+return an error and the sampler skips those values. Extend this condition only
+when the new configuration uses the shared ADC helper.
 
 ### 2. Add a PlatformIO environment
 
