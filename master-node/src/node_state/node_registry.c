@@ -6,6 +6,7 @@
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "health/node_health.h"
 #include "protocol/app_protocol.h"
 
 #define NODE_OFFLINE_TIMEOUT_MS 3000
@@ -106,16 +107,22 @@ static void monitor_task(void *argument)
     (void)argument;
     while (true) {
         TickType_t now = xTaskGetTickCount();
+        uint32_t went_offline = 0;
+        uint32_t offline_mask = 0;
         for (uint32_t id = 1; id < CAN_NODE_SLOT_COUNT; id++) {
             if (!is_configured_node(id)) continue;
             if (monitoring && !nodes[id].offline &&
-                now - nodes[id].last_seen >=
-                    pdMS_TO_TICKS(NODE_OFFLINE_TIMEOUT_MS)) {
+                /* Signed: dispatch can record a frame after now was read. */
+                (int32_t)(now - nodes[id].last_seen) >=
+                    (int32_t)pdMS_TO_TICKS(NODE_OFFLINE_TIMEOUT_MS)) {
                 nodes[id].offline = true;
+                went_offline++;
                 ESP_LOGW(TAG, "Node %" PRIu32 " offline; no frames for %u ms",
                          id, NODE_OFFLINE_TIMEOUT_MS);
             }
+            if (nodes[id].offline) offline_mask |= 1U << id;
         }
+        node_health_count(HEALTH_NODE_OFFLINE, went_offline, offline_mask, ESP_OK);
         vTaskDelay(pdMS_TO_TICKS(NODE_MONITOR_PERIOD_MS));
     }
 }

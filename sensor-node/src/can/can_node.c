@@ -171,6 +171,16 @@ esp_err_t can_node_send(uint32_t can_id, const uint8_t *payload, uint8_t length)
     return error;
 }
 
+void can_node_error_counts(uint8_t *tx_errors, uint8_t *rx_errors)
+{
+    twai_node_status_t status = {0};
+    if (!can_handle || twai_node_get_info(can_handle, &status, NULL) != ESP_OK) {
+        status = (twai_node_status_t){0};
+    }
+    *tx_errors = status.tx_error_count > UINT8_MAX ? UINT8_MAX : (uint8_t)status.tx_error_count;
+    *rx_errors = status.rx_error_count > UINT8_MAX ? UINT8_MAX : (uint8_t)status.rx_error_count;
+}
+
 void can_node_report_state(node_state_t state, node_state_reason_t reason)
 {
     current_state = state;
