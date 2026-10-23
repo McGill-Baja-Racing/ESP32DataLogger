@@ -6,6 +6,7 @@
 #include "esp_adc/adc_cali_scheme.h"
 #include "esp_adc/adc_oneshot.h"
 #include "esp_log.h"
+#include "health/node_health.h"
 
 static const char *TAG = "ADC";
 static adc_oneshot_unit_handle_t adc_handle;
@@ -60,6 +61,7 @@ static esp_err_t configure_channel(adc_channel_t channel)
     if (error != ESP_OK) {
         calibration[channel] = NULL;
         ESP_LOGW(TAG, "Calibration unavailable on GPIO%d", channel);
+        node_health_count(HEALTH_ADC_UNCALIBRATED, 1, channel, ESP_OK);
     }
     return ESP_OK;
 }

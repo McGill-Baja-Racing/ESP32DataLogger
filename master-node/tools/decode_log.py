@@ -35,6 +35,76 @@ SIGNAL_METADATA = {
     0x702: ("gps_longitude", "master_gps", "deg_e7"),
 }
 
+# Health frames, matching health_code_t, health_error_t and node_health_t in app_protocol.h.
+NODE_STATUS_BASE = 0x0D0
+NODE_EVENT_BASE = 0x0E0
+NODE_DIAGNOSTICS_BASE = 0x0F0
+NODE_SLOT_COUNT = 7
+HEALTH_FAULT_COUNT = 16
+HEALTH_CODE_NAMES = [
+    "sensor_init", "sensor_read", "sensor_dead", "samples_late", "samples_dropped",
+    "bad_timestamp", "no_time_sync", "can_tx", "can_rx_overflow", "can_no_ack",
+    "can_bus_error", "can_passive", "can_bus_off", "sd_write", "gps_no_data",
+    "gps_no_fix", "boot", "adc_uncalibrated", "node_offline",
+]
+HEALTH_ERROR_NAMES = [
+    "ESP_OK", "ESP_FAIL", "ESP_ERR_NO_MEM", "ESP_ERR_INVALID_ARG", "ESP_ERR_INVALID_STATE",
+    "ESP_ERR_NOT_FOUND", "ESP_ERR_TIMEOUT", "ESP_ERR_INVALID_RESPONSE", "other error",
+]
+HEALTH_NAMES = ["ok", "warning", "error", "critical"]
+# Indexed by esp_reset_reason_t.
+RESET_NAMES = [
+    "unknown", "power_on", "external", "software", "panic", "interrupt_watchdog",
+    "task_watchdog", "watchdog", "deep_sleep", "brownout", "sdio", "usb", "jtag",
+    "efuse", "power_glitch", "cpu_lockup",
+]
+NODE_NAMES = [
+    "master", "brake_node_1", "node_2", "mpu_node_3", "encoder_node_4", "engine_node_5",
+    "adc_node_6",
+]
+
+
+def name_or_unknown(names: list[str], index: int) -> str:
+    return names[index] if index < len(names) else "unknown"
+
+
+def describe_health(can_id: int, packed: int) -> tuple[str, str, str] | None:
+    """Return (signal, node, detail) for a status, event or diagnostics frame, else None."""
+    if NODE_STATUS_BASE <= can_id < NODE_STATUS_BASE + NODE_SLOT_COUNT:
+        node_id = can_id - NODE_STATUS_BASE
+        faults = packed & 0xFFFF
+        words = [
+            name_or_unknown(HEALTH_NAMES, (packed >> 16) & 0xFF),
+            "recording" if (packed >> 24) & 0xFF == 1 else "idle",
+        ]
+        words += [HEALTH_CODE_NAMES[f] for f in range(HEALTH_FAULT_COUNT) if faults >> f & 1]
+        signal = "node_status"
+    elif NODE_EVENT_BASE <= can_id < NODE_EVENT_BASE + NODE_SLOT_COUNT:
+        node_id = can_id - NODE_EVENT_BASE
+        code, error = packed & 0x1F, packed >> 5 & 0xF
+        subject, count = packed >> 9 & 0xFF, packed >> 17 & 0x7FFF
+        if code == HEALTH_CODE_NAMES.index("node_offline"):
+            words = ["node_offline"] + [NODE_NAMES[n] for n in range(NODE_SLOT_COUNT) if subject >> n & 1]
+        else:
+            words = [
+                name_or_unknown(HEALTH_CODE_NAMES, code),
+                f"subject 0x{subject:02X}",
+                f"count {count}",
+                name_or_unknown(HEALTH_ERROR_NAMES, error),
+            ]
+        signal = "health_event"
+    elif NODE_DIAGNOSTICS_BASE <= can_id < NODE_DIAGNOSTICS_BASE + NODE_SLOT_COUNT:
+        node_id = can_id - NODE_DIAGNOSTICS_BASE
+        tx_errors, rx_errors, resets, reason = (packed >> (8 * i) & 0xFF for i in range(4))
+        words = [
+            f"tx_errors {tx_errors}", f"rx_errors {rx_errors}", f"resets {resets}",
+            f"last_reset {name_or_unknown(RESET_NAMES, reason)}",
+        ]
+        signal = "node_diagnostics"
+    else:
+        return None
+    return signal, NODE_NAMES[node_id], " ".join(words)
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Decode a master SD .bin log into CSV.")
@@ -78,6 +148,7 @@ def decode_log(input_path: Path, output_path: Path) -> list[str]:
                 "value",
                 "units",
                 "raw_data",
+                "detail",
             ]
         )
 
@@ -89,6 +160,11 @@ def decode_log(input_path: Path, output_path: Path) -> list[str]:
             value = signed_u32(packed)
             timestamp_ms = (packed >> 32) & 0xFFFFFFFF
             signal, node, units = SIGNAL_METADATA.get(can_id, ("", "", "raw"))
+            detail = ""
+            health = describe_health(can_id, packed)
+            if health:
+                signal, node, detail = health
+                units = ""
             counts_by_id[can_id] = counts_by_id.get(can_id, 0) + 1
 
             writer.writerow(
@@ -102,6 +178,7 @@ def decode_log(input_path: Path, output_path: Path) -> list[str]:
                     f"{value / 100:.2f}" if can_id == 0x700 else value,
                     units,
                     packed,
+                    detail,
                 ]
             )
 

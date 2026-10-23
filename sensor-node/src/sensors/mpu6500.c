@@ -87,7 +87,8 @@ static esp_err_t init_mpu(sensor_t *sensor)
         .glitch_ignore_cnt = 7,
         .flags.enable_internal_pullup = true,
     };
-    esp_err_t error = i2c_new_master_bus(&bus_config, &mpu.bus);
+    /* The sampler retries a failed init, so keep a bus or device made earlier. */
+    esp_err_t error = mpu.bus ? ESP_OK : i2c_new_master_bus(&bus_config, &mpu.bus);
     if (error != ESP_OK) {
         ESP_LOGE(TAG, "Could not create I2C bus on SDA GPIO%d/SCL GPIO%d: %s",
                  MPU_I2C_SDA_GPIO, MPU_I2C_SCL_GPIO,
@@ -118,7 +119,8 @@ static esp_err_t init_mpu(sensor_t *sensor)
         .device_address = mpu.address,
         .scl_speed_hz = MPU_I2C_CLOCK_HZ,
     };
-    error = i2c_master_bus_add_device(mpu.bus, &device_config, &mpu.device);
+    error = mpu.device ? ESP_OK
+                       : i2c_master_bus_add_device(mpu.bus, &device_config, &mpu.device);
     if (error != ESP_OK) {
         ESP_LOGE(TAG, "Could not attach MPU at 0x%02X: %s", mpu.address,
                  esp_err_to_name(error));
@@ -158,6 +160,13 @@ static esp_err_t init_mpu(sensor_t *sensor)
              identity == MPU_WHO_AM_I_9250 ? "MPU-9250" : "MPU-6500",
              mpu.address);
     return ESP_OK;
+}
+
+/* The other channels fail init with the device, so they are never sampled alone. */
+static esp_err_t check_mpu(sensor_t *sensor)
+{
+    (void)sensor;
+    return mpu.initialized ? ESP_OK : ESP_ERR_INVALID_STATE;
 }
 
 static void start_mpu(sensor_t *sensor)
@@ -226,12 +235,12 @@ static mpu_sensor_context_t contexts[MPU_CHANNEL_COUNT] = {
 MPU_SENSOR(mpu_accel_x_sensor, "mpu_accel_x", CAN_ID_MPU_ACCEL_X,
            MPU_ACCEL_X, init_mpu, start_mpu);
 MPU_SENSOR(mpu_accel_y_sensor, "mpu_accel_y", CAN_ID_MPU_ACCEL_Y,
-           MPU_ACCEL_Y, NULL, NULL);
+           MPU_ACCEL_Y, check_mpu, NULL);
 MPU_SENSOR(mpu_accel_z_sensor, "mpu_accel_z", CAN_ID_MPU_ACCEL_Z,
-           MPU_ACCEL_Z, NULL, NULL);
+           MPU_ACCEL_Z, check_mpu, NULL);
 MPU_SENSOR(mpu_gyro_x_sensor, "mpu_gyro_x", CAN_ID_MPU_GYRO_X,
-           MPU_GYRO_X, NULL, NULL);
+           MPU_GYRO_X, check_mpu, NULL);
 MPU_SENSOR(mpu_gyro_y_sensor, "mpu_gyro_y", CAN_ID_MPU_GYRO_Y,
-           MPU_GYRO_Y, NULL, NULL);
+           MPU_GYRO_Y, check_mpu, NULL);
 MPU_SENSOR(mpu_gyro_z_sensor, "mpu_gyro_z", CAN_ID_MPU_GYRO_Z,
-           MPU_GYRO_Z, NULL, NULL);
+           MPU_GYRO_Z, check_mpu, NULL);

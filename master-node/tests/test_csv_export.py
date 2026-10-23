@@ -10,6 +10,17 @@ helper_start=source.index('static int64_t read_utc_ms(')
 helper_end=source.index('static bool sample_at_or_before(',helper_start)
 start=source.index('static esp_err_t stream_csv(')
 end=source.index('static esp_err_t download_handler',start)
+health=(ROOT/'src/health/node_health.c').read_text()
+health_start=health.index('static const char *const code_names')
+health_end=health.index('static void print_frame(',health_start)
+slot_define=next(line for line in health.splitlines() if line.startswith('#define NODE_SLOT_COUNT'))
+# Statuses (one with every fault and out-of-range health and mode), an event for every byte value, then GPS.
+records=[(0x0BB,3000),(0x0B9,-1000),(0x0BC,1),(0x0BE,4),(0x0BD,1000),(0x0BB,0),(0x0B9,20000),(0x0BB,3100),
+         (0x0D3,0x8800|2<<16|1<<24),(0x0D0,0),(0x0D6,0xFFFF|7<<16|2<<24)]
+# Event payloads pack code:5 error:4 subject:8 count:15, so every code and error value is covered.
+records+=[(0x0E5,code%32|(code%16)<<5|((0xB0+code)&0xFF)<<9|(code*127)<<17) for code in range(256)]
+records+=[(0x0F4,3|200<<8|2<<16|4<<24),(0x0F0,255|0<<8|0<<16|99<<24)]
+records+=[(0x700,1234),(0x700,0),(0x700,1)]
 harness=r'''
 #define _POSIX_C_SOURCE 200809L
 #include <time.h>
@@ -19,6 +30,8 @@ harness=r'''
 #include <stdio.h>
 #include <string.h>
 #include "protocol/app_protocol.h"
+'''+slot_define+r'''
+#define NODE_HEALTH_TEXT_MAX 320
 typedef int esp_err_t;
 typedef int httpd_req_t;
 #define ESP_OK 0
@@ -32,12 +45,12 @@ static const live_signal_metadata_t *metadata_for(uint32_t id) {
 static int httpd_resp_send_chunk(httpd_req_t *request,const char *data,size_t size) {
     (void)request;return size&&fwrite(data,1,size,stdout)!=size?ESP_FAIL:ESP_OK;
 }
-'''+source[helper_start:helper_end]+source[start:end]+r'''
+'''+health[health_start:health_end]+source[helper_start:helper_end]+source[start:end]+r'''
 int main(void) {
-    const uint32_t ids[]={187,185,188,190,189,187,185,187,0x700,0x700,0x700};
-    const int32_t values[]={3000,-1000,1,4,1000,0,20000,3100,1234,0,1};
+    const uint32_t ids[]={'''+','.join(str(i) for i,_ in records)+r'''};
+    const int32_t values[]={'''+','.join(str(v-(1<<32) if v>=1<<31 else v) for _,v in records)+r'''};
     FILE *file=tmpfile();if(!file)return 1;
-    for(unsigned i=0;i<11;i++){
+    for(unsigned i=0;i<sizeof(ids)/sizeof(ids[0]);i++){
         uint64_t record[]={ids[i],((uint64_t)(1000+i*20)<<32)|(uint32_t)values[i]};
         fwrite(record,sizeof(record),1,file);
     }
@@ -49,9 +62,18 @@ with tempfile.TemporaryDirectory() as directory:
     temp=Path(directory);(temp/'test.c').write_text(harness)
     subprocess.run(['cc','-std=c11','-Wall','-Wextra','-Werror','-I'+str(ROOT/'src'),str(temp/'test.c'),'-o',str(temp/'test')],check=True)
     full=subprocess.check_output([str(temp/'test')],text=True)
-    assert full.splitlines()[0]=='sample_index,can_id,can_id_hex,signal,node,timestamp_ms,absolute_time_utc,value,units,raw_data'
+    assert full.splitlines()[0]=='sample_index,can_id,can_id_hex,signal,node,timestamp_ms,absolute_time_utc,value,units,raw_data,detail'
     full_rows=list(csv.DictReader(io.StringIO(full)))
-    assert len(full_rows)==11
+    assert len(full_rows)==len(records)
+    status,master=full_rows[8],full_rows[9]
+    assert (status['signal'],status['node'],status['detail'])==('node_status','mpu_node_3','error recording can_passive gps_no_fix')
+    assert (master['node'],master['detail'])==('master','ok idle')
+    assert full_rows[11+7]['detail']=='can_tx subject 0xB7 count 889 ESP_ERR_INVALID_RESPONSE', full_rows[18]
+    assert (full_rows[11+18]['node'],full_rows[11+18]['detail'])==('engine_node_5','node_offline brake_node_1 adc_node_6')
+    diagnostics,own=full_rows[11+256],full_rows[11+257]
+    assert (diagnostics['signal'],diagnostics['node'],diagnostics['detail'])==('node_diagnostics','encoder_node_4','tx_errors 3 rx_errors 200 resets 2 last_reset panic')
+    assert (own['node'],own['detail'])==('master','tx_errors 255 rx_errors 0 resets 0 last_reset unknown')
+    assert full_rows[11+201]['detail']=='can_no_ack subject 0x79 count 25527 unknown'
     assert [r['value'] for r in full_rows[-3:]]==['12.34','0.00','0.01']
     assert all(r['units']=='km/h' for r in full_rows[-3:])
     import runpy
@@ -63,6 +85,8 @@ with tempfile.TemporaryDirectory() as directory:
     decoded=list(csv.DictReader((temp/'speed.csv').open()))
     assert all(r['units']=='km/h' for r in decoded[-3:])
     for firmware,python in zip(full_rows,decoded):
-        for key in ('value','raw_data','timestamp_ms'):
+        # The metadata stub knows only two sensors, so names are compared on health rows.
+        keys=('signal','node','units') if firmware['detail'] else ()
+        for key in ('value','raw_data','timestamp_ms','detail')+keys:
             assert firmware[key]==python[key], (key,firmware,python)
 print('Full CSV export passed: GPS units, precision, and decoder parity')

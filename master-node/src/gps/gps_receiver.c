@@ -9,6 +9,7 @@
 #include "driver/uart.h"
 #include "esp_log.h"
 #include "esp_timer.h"
+#include "health/node_health.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "protocol/app_protocol.h"
@@ -21,6 +22,7 @@
 #define GPS_UART_BUFFER_BYTES  1024
 #define GPS_TASK_STACK_BYTES   4096
 #define GPS_NMEA_LINE_MAX      128
+#define GPS_SILENT_TIMEOUT_MS  3000
 
 static const char *TAG = "GpsReceiver";
 static TaskHandle_t gps_task_handle;
@@ -44,10 +46,17 @@ static void gps_task(void *argument)
     size_t length = 0;
     bool overflow = false;
     uint8_t byte;
+    int64_t last_byte_ms = esp_timer_get_time() / 1000;
+    int64_t last_fix_ms = last_byte_ms;
     ESP_LOGI(TAG, "UART ready: uart=%d baud=%d rx_gpio=%d tx_gpio=%d",
              GPS_UART_NUM, GPS_UART_BAUD_RATE, GPS_UART_RX_GPIO, GPS_UART_TX_GPIO);
     while (true) {
-        if (uart_read_bytes(GPS_UART_NUM, &byte, 1, pdMS_TO_TICKS(1000)) <= 0) continue;
+        bool got_byte = uart_read_bytes(GPS_UART_NUM, &byte, 1, pdMS_TO_TICKS(1000)) > 0;
+        int64_t now_ms = esp_timer_get_time() / 1000;
+        if (got_byte) last_byte_ms = now_ms;
+        node_health_set(HEALTH_GPS_NO_DATA, now_ms - last_byte_ms >= GPS_SILENT_TIMEOUT_MS);
+        node_health_set(HEALTH_GPS_NO_FIX, now_ms - last_fix_ms >= GPS_SILENT_TIMEOUT_MS);
+        if (!got_byte) continue;
         if (byte == '\n') {
             if (length && line[length - 1] == '\r') --length;
             line[length] = '\0';
@@ -56,6 +65,7 @@ static void gps_task(void *argument)
             if (!gps_rmc_parse(line, &fix)) { length = 0; continue; }
             if (fix.has_utc) absolute_clock_observe_utc(fix.utc_ms);
             if (fix.has_location && fix.has_speed) {
+                last_fix_ms = now_ms;
                 uint32_t timestamp_ms = (uint32_t)(esp_timer_get_time() / 1000);
                 emit_sample(CAN_ID_GPS_SPEED, fix.speed_kph_x100, timestamp_ms);
                 emit_sample(CAN_ID_GPS_LATITUDE, fix.latitude_e7, timestamp_ms);
