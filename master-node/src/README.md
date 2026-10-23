@@ -9,7 +9,6 @@ contains only application-level policy.
 ```text
 src/
 ├── main.c                    Startup and cross-module application flow
-├── protocol/app_protocol.h   CAN commands, state base ID, and sensor IDs
 ├── can/can_master.*          TWAI transport, RX dispatch, TX, and recovery
 ├── console/serial_console.*  Parsing of start/stop/status commands
 ├── gps/gps_receiver.*       UART ownership and NMEA RMC parsing
@@ -43,7 +42,7 @@ main -> sd_card
 
 ## Compatibility with Sensor Node
 
-The following values in `protocol/app_protocol.h` must match the Sensor Node:
+Both firmwares read these values from the shared `../../protocol/app_protocol.h`:
 
 | Purpose | CAN ID |
 |---|---:|
@@ -67,7 +66,7 @@ is still required to validate timing and physical communication.
 
 | Change | Location |
 |---|---|
-| Accepted sensors or protocol IDs | `protocol/app_protocol.h` |
+| Accepted sensors or protocol IDs | `../../protocol/app_protocol.h` |
 | CAN pins, queues, or recovery | `can/can_master.c` |
 | SD pins and mount options | `storage/sd_card.c` |
 | Binary record buffering | `logger/data_logger.c` |

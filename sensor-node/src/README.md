@@ -10,8 +10,6 @@ private variables or duplicating CAN IDs outside `protocol/app_protocol.h`.
 src/
 ├── main.c                  Application initialization and callback wiring
 ├── CMakeLists.txt          ESP-IDF source and include registration
-├── protocol/
-│   └── app_protocol.h      CAN IDs, node states, and transition reasons
 ├── can/
 │   ├── can_node.h          Public CAN API and application callbacks
 │   └── can_node.c          TWAI driver, RX dispatch, state TX, and recovery
@@ -96,7 +94,7 @@ For the MPU, a failed burst skips all six axes until the next successful burst.
 | Change | Location |
 |---|---|
 | CAN pins, node ID, selected build | `platformio.ini` |
-| CAN command or state ID | `protocol/app_protocol.h` and the master protocol |
+| CAN command or state ID | `../../protocol/app_protocol.h` (shared with the master) |
 | CAN driver/recovery behavior | `can/can_node.c` |
 | Timestamp calculation | `time/time_sync.c` |
 | Scheduling or queue policy | `sampler/sampler.c` |
