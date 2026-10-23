@@ -15,7 +15,7 @@ idf_component_register(
         "time/absolute_clock.c"
         "web/web_server.c"
         "web/index_html.S"
-    INCLUDE_DIRS "."
+    INCLUDE_DIRS "." "../.."
     REQUIRES
         fatfs
         sdmmc

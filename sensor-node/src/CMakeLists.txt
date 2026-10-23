@@ -14,8 +14,8 @@ idf_component_register(
         "time/time_sync.c"
     INCLUDE_DIRS
         "."
+        "../.."
         "can"
-        "protocol"
         "sampler"
         "sensors"
         "time"

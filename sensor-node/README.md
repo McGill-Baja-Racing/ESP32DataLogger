@@ -19,7 +19,7 @@ starts and stops sampling but does not configure sensor hardware at runtime.
 
 All builds use CAN TX GPIO21 and RX GPIO20.
 
-The CAN bitrate is set with `NODE_CAN_BITRATE` and defaults to 1 Mbit/s. START
+The CAN bitrate is 1 Mbit/s, set by `CAN_BITRATE` in `../protocol/app_protocol.h`. START
 and STOP commands are idempotent and acknowledgements are repeated so command
 retries do not restart or stop the sampler more than once.
 

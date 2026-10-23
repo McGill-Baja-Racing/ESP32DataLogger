@@ -33,7 +33,7 @@ The implementation is organized by responsibility:
 
 | Path | Responsibility |
 |---|---|
-| `protocol/app_protocol.h` | Shared CAN identifiers, node states, and reason codes |
+| `../../protocol/app_protocol.h` | Shared CAN identifiers, node states, and reason codes |
 | `can/can_node.c` | TWAI setup, command dispatch, state reports, transmission, and recovery |
 | `time/time_sync.c` | Master-clock offset and synchronized timestamps |
 | `sampler/sampler.c` | Sensor scheduling, sample queue, and transmission task |
