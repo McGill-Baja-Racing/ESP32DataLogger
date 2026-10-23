@@ -20,6 +20,7 @@ typedef struct {
     uint8_t reason;
     uint8_t reset_reason;
     TickType_t last_seen;
+    TickType_t last_data;
     bool offline;
 } registered_node_t;
 
@@ -73,18 +74,31 @@ void node_registry_set_monitoring(bool enabled)
     }
 }
 
-void node_registry_record_sensor_frame(const can_message_t *message)
+/* Any frame proves the node is alive; only sensor frames prove data flows. */
+static void record_frame(uint8_t id, bool sensor_data)
 {
-    if (!monitoring) return;
-    uint8_t id = protocol_sensor_node_id(message->id);
-    if (id == 0 || id >= CAN_NODE_SLOT_COUNT) return;
+    if (!monitoring || id == 0 || id >= CAN_NODE_SLOT_COUNT) return;
     bool reconnected = nodes[id].offline;
-    nodes[id].data_seen = true;
-    nodes[id].last_seen = xTaskGetTickCount();
+    TickType_t now = xTaskGetTickCount();
+    if (sensor_data) {
+        nodes[id].data_seen = true;
+        nodes[id].last_data = now;
+    }
+    nodes[id].last_seen = now;
     nodes[id].offline = false;
     if (reconnected) {
-        ESP_LOGI(TAG, "Node %u active; sensor data resumed", id);
+        ESP_LOGI(TAG, "Node %u back online", id);
     }
+}
+
+void node_registry_record_sensor_frame(const can_message_t *message)
+{
+    record_frame(protocol_sensor_node_id(message->id), true);
+}
+
+void node_registry_record_health_frame(uint8_t node_id)
+{
+    record_frame(node_id, false);
 }
 
 static void monitor_task(void *argument)
@@ -98,7 +112,7 @@ static void monitor_task(void *argument)
                 now - nodes[id].last_seen >=
                     pdMS_TO_TICKS(NODE_OFFLINE_TIMEOUT_MS)) {
                 nodes[id].offline = true;
-                ESP_LOGW(TAG, "Node %" PRIu32 " offline; no sensor data for %u ms",
+                ESP_LOGW(TAG, "Node %" PRIu32 " offline; no frames for %u ms",
                          id, NODE_OFFLINE_TIMEOUT_MS);
             }
         }
@@ -118,5 +132,8 @@ const char *node_registry_state_name(uint8_t node_id)
     if (!is_configured_node(node_id)) return "disabled";
     if (!monitoring) return "off";
     if (nodes[node_id].offline) return "offline";
-    return nodes[node_id].data_seen ? "active" : "waiting";
+    bool data_recent = nodes[node_id].data_seen &&
+                       xTaskGetTickCount() - nodes[node_id].last_data <
+                           pdMS_TO_TICKS(NODE_OFFLINE_TIMEOUT_MS);
+    return data_recent ? "active" : "waiting";
 }

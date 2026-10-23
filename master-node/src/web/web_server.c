@@ -18,6 +18,7 @@
 #include "esp_wifi.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
+#include "health/node_health.h"
 #include "logger/data_logger.h"
 #include "live/live_data.h"
 #include "protocol/app_protocol.h"
@@ -399,7 +400,7 @@ static esp_err_t stream_paired_csv(httpd_req_t *request, FILE *file,
 static esp_err_t stream_csv(httpd_req_t *request, FILE *file, FILE *utc_file)
 {
     static const char header[] =
-        "sample_index,can_id,can_id_hex,signal,node,timestamp_ms,absolute_time_utc,value,units,raw_data\r\n";
+        "sample_index,can_id,can_id_hex,signal,node,timestamp_ms,absolute_time_utc,value,units,raw_data,detail\r\n";
     if (httpd_resp_send_chunk(request, header, sizeof(header) - 1) != ESP_OK) {
         return ESP_FAIL;
     }
@@ -418,6 +419,13 @@ static esp_err_t stream_csv(httpd_req_t *request, FILE *file, FILE *utc_file)
         const char *signal = metadata ? metadata->signal : "";
         const char *node = metadata ? metadata->node : "";
         const char *units = metadata ? metadata->units : "raw";
+        char detail[NODE_HEALTH_TEXT_MAX] = "";
+        const char *health_signal = node_health_describe(can_id, packed, &node,
+                                                         detail, sizeof(detail));
+        if (health_signal) {
+            signal = health_signal;
+            units = "";
+        }
         char value_text[32];
         if (can_id == CAN_ID_GPS_SPEED) {
             snprintf(value_text, sizeof(value_text), "%.2f", value / 100.0);
@@ -425,12 +433,12 @@ static esp_err_t stream_csv(httpd_req_t *request, FILE *file, FILE *utc_file)
         } else {
             snprintf(value_text, sizeof(value_text), "%" PRId32, value);
         }
-        char row[256];
+        char row[256 + NODE_HEALTH_TEXT_MAX];
         int length = snprintf(row, sizeof(row),
                               "%" PRIu64 ",%" PRIu32 ",0x%03" PRIX32
-                              ",%s,%s,%" PRIu32 ",%s,%s,%s,%" PRIu64 "\r\n",
+                              ",%s,%s,%" PRIu32 ",%s,%s,%s,%" PRIu64 ",%s\r\n",
                               sample_index++, can_id, can_id, signal, node,
-                              timestamp, absolute_time, value_text, units, packed);
+                              timestamp, absolute_time, value_text, units, packed, detail);
         if (length < 0 || length >= (int)sizeof(row) ||
             httpd_resp_send_chunk(request, row, length) != ESP_OK) {
             return ESP_FAIL;
