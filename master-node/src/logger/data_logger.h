@@ -37,7 +37,8 @@ bool data_logger_stop(void);
 bool data_logger_valid_filename(const char *filename);
 data_logger_rename_result_t data_logger_rename(const char *old_filename,
                                                const char *new_filename);
-void data_logger_enqueue(const can_message_t *message);
+/* Returns false if the sample was not queued: not running, or queue full. */
+bool data_logger_enqueue(const can_message_t *message);
 logger_state_t data_logger_state(void);
 const char *data_logger_state_name(void);
 const char *data_logger_path(void);

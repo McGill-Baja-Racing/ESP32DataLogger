@@ -10,6 +10,7 @@
 #include "driver/uart.h"
 #include "esp_log.h"
 #include "esp_timer.h"
+#include "health/node_health.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "protocol/app_protocol.h"
@@ -39,6 +40,7 @@
 #define GPS_COMMAND_ATTEMPTS   2
 /* Fixes arrive five times a second; log only one per this period. */
 #define GPS_FIX_LOG_PERIOD_US  1000000
+#define GPS_SILENT_TIMEOUT_MS  3000
 
 static const char *TAG = "GpsReceiver";
 static TaskHandle_t gps_task_handle;
@@ -120,9 +122,16 @@ static void read_sentences(void)
     int64_t burst_start_us = 0;
     int64_t previous_byte_us = 0;
     int64_t last_fix_log_us = -GPS_FIX_LOG_PERIOD_US;
+    int64_t last_byte_ms = esp_timer_get_time() / 1000;
+    int64_t last_fix_ms = last_byte_ms;
     while (true) {
-        if (uart_read_bytes(GPS_UART_NUM, &byte, 1, pdMS_TO_TICKS(1000)) <= 0) continue;
+        bool got_byte = uart_read_bytes(GPS_UART_NUM, &byte, 1, pdMS_TO_TICKS(1000)) > 0;
         int64_t received_us = esp_timer_get_time();
+        int64_t now_ms = received_us / 1000;
+        if (got_byte) last_byte_ms = now_ms;
+        node_health_set(HEALTH_GPS_NO_DATA, now_ms - last_byte_ms >= GPS_SILENT_TIMEOUT_MS);
+        node_health_set(HEALTH_GPS_NO_FIX, now_ms - last_fix_ms >= GPS_SILENT_TIMEOUT_MS);
+        if (!got_byte) continue;
         if (starts_new_burst(received_us, previous_byte_us)) burst_start_us = received_us;
         previous_byte_us = received_us;
         if (byte == '\n') {
@@ -139,6 +148,7 @@ static void read_sentences(void)
                 burst_start_us = 0;
             }
             if (fix.has_location && fix.has_speed) {
+                last_fix_ms = now_ms;
                 uint32_t timestamp_ms = (uint32_t)(esp_timer_get_time() / 1000);
                 emit_sample(CAN_ID_GPS_SPEED, fix.speed_kph_x100, timestamp_ms);
                 emit_sample(CAN_ID_GPS_LATITUDE, fix.latitude_e7, timestamp_ms);

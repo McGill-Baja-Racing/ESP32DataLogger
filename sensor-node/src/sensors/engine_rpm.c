@@ -74,7 +74,10 @@ static esp_err_t init_engine_rpm(sensor_t *sensor)
 {
     engine_rpm_context_t *context = sensor->context;
 
-    context->events = xQueueCreate(256, sizeof(spark_capture_t));
+    /* The sampler retries a failed init, so keep a queue made earlier. */
+    if (!context->events) {
+        context->events = xQueueCreate(256, sizeof(spark_capture_t));
+    }
     if (!context->events) {
         return ESP_ERR_NO_MEM;
     }

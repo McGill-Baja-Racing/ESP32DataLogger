@@ -1,5 +1,6 @@
 #pragma once
 
+#include <stdbool.h>
 #include <stdint.h>
 
 /* Replaces the clock offset using the newest master microsecond beacon. */
@@ -9,3 +10,6 @@ void time_sync_update(uint64_t master_time_us);
 int32_t time_sync_timestamp_ms(void);
 
 int32_t time_sync_timestamp_ms_at(int64_t local_us);
+
+/* True if a master beacon arrived within max_age_ms. */
+bool time_sync_is_current(uint32_t max_age_ms);
