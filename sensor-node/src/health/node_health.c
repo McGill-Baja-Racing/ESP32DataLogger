@@ -3,6 +3,7 @@
 #include <inttypes.h>
 
 #include "can/can_node.h"
+#include "esp_attr.h"
 #include "esp_log.h"
 #include "esp_system.h"
 #include "esp_timer.h"
@@ -15,18 +16,22 @@
  * Node health
  * -----------
  * Other modules only count problems here. Once a second health_task sends a
- * status frame and, while recording, one event per counted code since the
- * last report. A count is marked reported only after its event reached the
+ * status and a diagnostics frame and, while recording, one event per counted
+ * code and subject since the last report. A count is marked reported only after its event reached the
  * bus, so problems while idle or during a bus-off are sent later, stamped
  * with when they last happened. Occurrence times are kept on the local clock
  * because counting runs in interrupts; they are converted when sent.
  */
 
 #define MAX_SENSORS          8
+#define SHARED_COUNTERS      16
+#define COUNTER_COUNT        (HEALTH_CODE_COUNT + SHARED_COUNTERS)
 #define TIME_SYNC_TIMEOUT_MS 1000
+#define RESET_COUNT_MAGIC    0xB4A7DA03u
 
 /* Counts are cumulative, so unsigned differences survive wrap-around. */
 typedef struct {
+    uint8_t code;
     uint32_t count;
     uint32_t subject;
     esp_err_t error;
@@ -45,7 +50,7 @@ typedef struct {
 
 /* Copied whole under the lock so a status and its events agree. */
 typedef struct {
-    counter_t counters[HEALTH_CODE_COUNT];
+    counter_t counters[COUNTER_COUNT];
     sensor_health_t sensors[MAX_SENSORS];
     size_t sensor_count;
     bool active[HEALTH_FAULT_COUNT];
@@ -54,6 +59,12 @@ typedef struct {
 static const char *TAG = "Health";
 static health_state_t state;
 static portMUX_TYPE lock = portMUX_INITIALIZER_UNLOCKED;
+/* Kept through every reset but power-on; the magic tells a kept count from
+ * power-on garbage. */
+static RTC_NOINIT_ATTR uint32_t reset_count_magic;
+static RTC_NOINIT_ATTR uint32_t reset_count;
+static uint8_t resets;
+static uint8_t reset_reason;
 
 static uint32_t local_ms(void)
 {
@@ -94,6 +105,33 @@ void node_health_sensor_read(size_t index, esp_err_t error)
     portEXIT_CRITICAL_SAFE(&lock);
 }
 
+static bool counted_per_subject(health_code_t code)
+{
+    return code == HEALTH_SAMPLES_LATE || code == HEALTH_SAMPLES_DROPPED ||
+           code == HEALTH_BAD_TIMESTAMP || code == HEALTH_CAN_TX ||
+           code == HEALTH_CAN_RX_OVERFLOW;
+}
+
+/* Counter N belongs to code N. A code counted per subject keeps its first
+ * subject there and takes shared counters for the others. Shared counters are
+ * taken in order and never freed, so the first unused one ends the search;
+ * once all are taken, a new subject is added to the code's own counter.
+ * Call under lock. */
+static counter_t *counter_for(health_code_t code, uint32_t subject)
+{
+    counter_t *own = &state.counters[code];
+    if (!counted_per_subject(code) || own->count == 0 || own->subject == subject) {
+        return own;
+    }
+    for (size_t i = HEALTH_CODE_COUNT; i < COUNTER_COUNT; i++) {
+        counter_t *counter = &state.counters[i];
+        if (counter->count == 0 || (counter->code == code && counter->subject == subject)) {
+            return counter;
+        }
+    }
+    return own;
+}
+
 void node_health_count(health_code_t code, uint32_t amount, uint32_t subject,
                        esp_err_t error)
 {
@@ -101,8 +139,9 @@ void node_health_count(health_code_t code, uint32_t amount, uint32_t subject,
         return;
     }
     uint32_t now = local_ms();
-    counter_t *counter = &state.counters[code];
     portENTER_CRITICAL_SAFE(&lock);
+    counter_t *counter = counter_for(code, subject);
+    counter->code = code;
     counter->count += amount;
     counter->subject = subject;
     counter->error = error;
@@ -143,7 +182,7 @@ static health_event_frame_t event_frame(uint8_t code, uint32_t subject, uint32_t
     health_event_frame_t event = {
         .code = code,
         .subject = (uint8_t)subject,
-        .count = count > UINT8_MAX ? UINT8_MAX : (uint8_t)count,
+        .count = count > HEALTH_EVENT_COUNT_MAX ? HEALTH_EVENT_COUNT_MAX : count,
         .error = health_error(error),
         .timestamp_ms = (uint32_t)timestamp_ms,
     };
@@ -170,8 +209,14 @@ static bool send_event(uint8_t code, uint32_t subject, uint32_t count, esp_err_t
     return true;
 }
 
+static uint32_t sendable(uint32_t pending)
+{
+    return pending > HEALTH_EVENT_COUNT_MAX ? HEALTH_EVENT_COUNT_MAX : pending;
+}
+
 /* Stops at the first unsent event: on a failing bus each send holds the
- * transmitter long enough to delay samples. */
+ * transmitter long enough to delay samples. Only the count sent is marked
+ * reported, so the rest of a larger count goes in the next report. */
 static void report_events(const health_state_t *now, health_state_t *reported,
                           bool *init_reported)
 {
@@ -188,22 +233,37 @@ static void report_events(const health_state_t *now, health_state_t *reported,
             continue;
         }
         init_reported[i] = false;
-        uint32_t failed = sensor->failed_reads - reported->sensors[i].failed_reads;
+        uint32_t failed = sendable(sensor->failed_reads - reported->sensors[i].failed_reads);
         if (failed && !send_event(HEALTH_SENSOR_READ, sensor->can_id, failed,
                                   sensor->last_error, sensor->last_failure_ms)) {
             return;
         }
-        reported->sensors[i].failed_reads = sensor->failed_reads;
+        reported->sensors[i].failed_reads += failed;
     }
-    for (int code = 0; code < HEALTH_CODE_COUNT; code++) {
-        const counter_t *counter = &now->counters[code];
-        uint32_t count = counter->count - reported->counters[code].count;
-        if (count && !send_event(code, counter->subject, count, counter->error,
+    for (size_t i = 0; i < COUNTER_COUNT; i++) {
+        const counter_t *counter = &now->counters[i];
+        uint32_t count = sendable(counter->count - reported->counters[i].count);
+        if (count && !send_event(counter->code, counter->subject, count, counter->error,
                                  counter->last_ms)) {
             return;
         }
-        reported->counters[code].count = counter->count;
+        reported->counters[i].count += count;
     }
+}
+
+static void send_diagnostics(void)
+{
+    uint8_t tx_errors = 0;
+    uint8_t rx_errors = 0;
+    can_node_error_counts(&tx_errors, &rx_errors);
+    node_diagnostics_frame_t diagnostics = {
+        .tx_errors = tx_errors,
+        .rx_errors = rx_errors,
+        .resets = resets,
+        .reset_reason = reset_reason,
+    };
+    (void)can_node_send(CAN_ID_NODE_DIAGNOSTICS, (const uint8_t *)&diagnostics,
+                        sizeof(diagnostics));
 }
 
 static void health_task(void *argument)
@@ -222,9 +282,14 @@ static void health_task(void *argument)
         /* Status covers only the last period; events carry everything else. */
         uint16_t faults = 0;
         for (int fault = 0; fault < HEALTH_FAULT_COUNT; fault++) {
-            if (now.active[fault] ||
-                now.counters[fault].count != previous.counters[fault].count) {
+            if (now.active[fault]) {
                 faults |= HEALTH_BIT(fault);
+            }
+        }
+        for (size_t i = 0; i < COUNTER_COUNT; i++) {
+            if (now.counters[i].count != previous.counters[i].count &&
+                now.counters[i].code < HEALTH_FAULT_COUNT) {
+                faults |= HEALTH_BIT(now.counters[i].code);
             }
         }
         if (!time_sync_is_current(TIME_SYNC_TIMEOUT_MS)) {
@@ -254,8 +319,10 @@ static void health_task(void *argument)
             .mode = recording ? NODE_MODE_RECORDING : NODE_MODE_IDLE,
             .timestamp_ms = (uint32_t)time_sync_timestamp_ms(),
         };
-        if (can_node_send(CAN_ID_NODE_STATUS, (const uint8_t *)&status,
-                          sizeof(status)) == ESP_OK && recording) {
+        bool status_sent = can_node_send(CAN_ID_NODE_STATUS, (const uint8_t *)&status,
+                                         sizeof(status)) == ESP_OK;
+        send_diagnostics();
+        if (status_sent && recording) {
             report_events(&now, &reported, init_reported);
         }
     }
@@ -263,7 +330,16 @@ static void health_task(void *argument)
 
 esp_err_t node_health_init(void)
 {
-    node_health_count(HEALTH_BOOT, 1, esp_reset_reason(), ESP_OK);
+    esp_reset_reason_t reason = esp_reset_reason();
+    if (reason == ESP_RST_POWERON || reset_count_magic != RESET_COUNT_MAGIC) {
+        reset_count_magic = RESET_COUNT_MAGIC;
+        reset_count = 0;
+    } else if (reset_count < UINT8_MAX) {
+        reset_count++;
+    }
+    resets = (uint8_t)reset_count;
+    reset_reason = (uint8_t)reason;
+    node_health_count(HEALTH_BOOT, 1, reason, ESP_OK);
     return xTaskCreate(health_task, "health", 4096, NULL, 4, NULL) == pdPASS
          ? ESP_OK : ESP_ERR_NO_MEM;
 }
