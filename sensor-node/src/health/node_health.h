@@ -7,8 +7,9 @@
 #include "esp_err.h"
 #include "protocol/app_protocol.h"
 
-/* Starts the task that sends the status frame every second and, while
- * recording, an event frame for each counted fault. Call after can_node_init(). */
+/* Counts this reset and starts the task that sends the status and diagnostics
+ * frames every second and, while recording, an event frame for each counted
+ * fault. Call after can_node_init(). */
 esp_err_t node_health_init(void);
 
 /* Call once per sensor before node_health_init(), with the init result. */

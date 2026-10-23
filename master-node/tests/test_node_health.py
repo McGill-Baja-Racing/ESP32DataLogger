@@ -65,12 +65,22 @@ int main(void)
     CHECK((uint32_t)(record >> 32) == 987654);
     CHECK((record & 0xFFFF) == 0x1234);
 
-    health_event_frame_t event = event_frame(HEALTH_SENSOR_READ, 0x0B1, 300, ESP_ERR_TIMEOUT, 123456);
-    CHECK(event.code == HEALTH_SENSOR_READ && event.subject == 0xB1 && event.count == 255);
+    health_event_frame_t event = event_frame(HEALTH_SENSOR_READ, 0x0B1, 40000, ESP_ERR_TIMEOUT, 123456);
+    CHECK(event.code == HEALTH_SENSOR_READ && event.subject == 0xB1);
+    CHECK(event.count == HEALTH_EVENT_COUNT_MAX);
     CHECK(event.error == HEALTH_ERROR_TIMEOUT && event.timestamp_ms == 123456);
     record = logged(&event);
     CHECK((uint32_t)(record >> 32) == 123456);
-    CHECK((record & 0xFF) == HEALTH_SENSOR_READ);
+    CHECK((record & 0x1F) == HEALTH_SENSOR_READ);
+    CHECK((record >> 5 & 0xF) == HEALTH_ERROR_TIMEOUT);
+    CHECK((record >> 9 & 0xFF) == 0xB1);
+    CHECK((record >> 17 & 0x7FFF) == HEALTH_EVENT_COUNT_MAX);
+
+    node_diagnostics_frame_t diagnostics = {.tx_errors = 7, .rx_errors = 128, .resets = 3,
+                                            .reset_reason = 4, .timestamp_ms = 4242};
+    record = logged(&diagnostics);
+    CHECK((uint32_t)(record >> 32) == 4242);
+    CHECK((record & 0xFFFFFFFF) == (7u | 128u << 8 | 3u << 16 | 4u << 24));
 
     CHECK(health_error(ESP_OK) == HEALTH_ERROR_NONE);
     CHECK(health_error(ESP_FAIL) == HEALTH_ERROR_FAIL);

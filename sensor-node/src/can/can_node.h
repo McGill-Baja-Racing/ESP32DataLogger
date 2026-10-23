@@ -20,5 +20,8 @@ esp_err_t can_node_init(const can_node_callbacks_t *callbacks,
 /* Sends one standard CAN frame. The payload is copied by the TWAI driver. */
 esp_err_t can_node_send(uint32_t can_id, const uint8_t *payload, uint8_t length);
 
+/* Reads the TWAI error counters, capped at 255; zeros if they cannot be read. */
+void can_node_error_counts(uint8_t *tx_errors, uint8_t *rx_errors);
+
 /* Sends the three-byte state acknowledgement defined in app_protocol.h. */
 void can_node_report_state(node_state_t state, node_state_reason_t reason);

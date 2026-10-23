@@ -54,16 +54,19 @@ typedef enum {
 
 #define CAN_ID_NODE_STATUS_BASE     0x0D0
 #define CAN_ID_NODE_EVENT_BASE      0x0E0
+#define CAN_ID_NODE_DIAGNOSTICS_BASE 0x0F0
 
 /*
  * Node health. Health frames use the sample layout, a 4-byte payload then a
  * uint32 timestamp_ms on the master clock, so the master logs them like
- * samples. Every node, and the master as node 0, sends a status frame each
- * second. While recording it also sends one event frame per counted fault
- * since the previous one. Status bits say what is wrong now; events say how
- * often and why. An event's timestamp is its last occurrence, so events counted
- * while idle reach the next log with their real time. Subjects are one byte:
- * every CAN ID on the bus is below 0x100.
+ * samples. Every node, and the master as node 0, sends a status frame and a
+ * diagnostics frame each second. While recording it also sends one event
+ * frame per counted fault since the previous one. Status bits say what is
+ * wrong now; events say how often and why. An event's timestamp is its last
+ * occurrence, so events counted while idle reach the next log with their real
+ * time. Subjects are one byte: every CAN ID on the bus is below 0x100. Late,
+ * dropped, bad-timestamp, CAN TX and CAN RX overflow faults are counted per
+ * subject, so one report can hold several events with the same code.
  */
 #define NODE_STATUS_PERIOD_MS 1000
 
@@ -104,12 +107,14 @@ typedef enum {
     /* Events that are not faults. */
     HEALTH_BOOT = HEALTH_FAULT_COUNT,  /* subject: esp_reset_reason_t */
     HEALTH_ADC_UNCALIBRATED,           /* subject: GPIO, raw conversion used */
+    HEALTH_NODE_OFFLINE,               /* master; subject: bit N set while node N is offline */
     HEALTH_CODE_COUNT,
 } health_code_t;
 
 #define HEALTH_BIT(code) (1U << (code))
 
 _Static_assert(HEALTH_FAULT_COUNT <= 16, "faults must fit the 16 status bits");
+_Static_assert(HEALTH_CODE_COUNT <= 32, "codes must fit the 5 event bits");
 
 /* An event's error: one entry per esp_err_t the firmware returns. */
 typedef enum {
@@ -122,7 +127,10 @@ typedef enum {
     HEALTH_ERROR_TIMEOUT,
     HEALTH_ERROR_INVALID_RESPONSE,
     HEALTH_ERROR_OTHER,
+    HEALTH_ERROR_COUNT,
 } health_error_t;
+
+_Static_assert(HEALTH_ERROR_COUNT <= 16, "errors must fit the 4 event bits");
 
 typedef struct __attribute__((packed)) {
     uint16_t faults;        /* HEALTH_BIT() of each fault */
@@ -131,16 +139,32 @@ typedef struct __attribute__((packed)) {
     uint32_t timestamp_ms;
 } node_status_frame_t;
 
+/* GCC packs bit-fields from bit 0 up: code is bits 0-4 of the first byte,
+ * count the top 15 bits of the first uint32. */
 typedef struct __attribute__((packed)) {
-    uint8_t code;           /* health_code_t */
-    uint8_t subject;
-    uint8_t count;          /* occurrences since the previous event; 255 means 255 or more */
-    uint8_t error;          /* health_error_t */
+    uint32_t code : 5;      /* health_code_t */
+    uint32_t error : 4;     /* health_error_t */
+    uint32_t subject : 8;
+    uint32_t count : 15;    /* occurrences since the previous event; the rest of a
+                             * larger count follows in the next event */
     uint32_t timestamp_ms;
 } health_event_frame_t;
 
+#define HEALTH_EVENT_COUNT_MAX 0x7FFF
+
+/* The master stamps it on arrival: a node that has just reset has no master
+ * clock yet. */
+typedef struct __attribute__((packed)) {
+    uint8_t tx_errors;      /* TWAI transmit error counter, 255 or more at bus-off */
+    uint8_t rx_errors;      /* TWAI receive error counter, capped at 255 */
+    uint8_t resets;         /* resets since power-on, stops at 255 */
+    uint8_t reset_reason;   /* esp_reset_reason_t of the last reset or power-on */
+    uint32_t timestamp_ms;
+} node_diagnostics_frame_t;
+
 _Static_assert(sizeof(node_status_frame_t) == 8, "status must fill one CAN frame");
 _Static_assert(sizeof(health_event_frame_t) == 8, "event must fill one CAN frame");
+_Static_assert(sizeof(node_diagnostics_frame_t) == 8, "diagnostics must fill one CAN frame");
 
 static inline node_health_t health_for(uint16_t faults, bool no_sensor_works)
 {

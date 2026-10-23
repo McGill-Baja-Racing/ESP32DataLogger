@@ -21,6 +21,8 @@
 #define LOG_QUEUE_LENGTH        256
 #define LOG_RECORDS_PER_BLOCK   100
 #define LOG_FLUSH_INTERVAL_MS   15000
+/* Nodes may send health events until they hear STOP. */
+#define LOG_STOP_GRACE_MS       200
 #define LOG_PATH_LENGTH         64
 #define DEFAULT_NAME_GPS_WAIT_MS 3000
 
@@ -33,6 +35,7 @@ static char utc_path[LOG_PATH_LENGTH + 8];
 typedef struct { can_message_t message; int64_t utc_ms; } queued_sample_t;
 static char log_path[LOG_PATH_LENGTH];
 static volatile logger_state_t state = LOGGER_IDLE;
+static volatile TickType_t stop_tick;
 static atomic_uint queue_drops;
 
 bool data_logger_valid_filename(const char *filename)
@@ -213,14 +216,14 @@ bool data_logger_stop(void)
         ESP_LOGW(TAG, "Logger is not running");
         return false;
     }
+    stop_tick = xTaskGetTickCount();
     state = LOGGER_STOPPING;
     ESP_LOGI(TAG, "Stopping; queued samples will be written before close");
     return true;
 }
 
-bool data_logger_enqueue(const can_message_t *message)
+static bool enqueue(const can_message_t *message)
 {
-    if (state != LOGGER_RUNNING) return false;
     queued_sample_t sample = { .message = *message,
         .utc_ms = absolute_clock_sample_utc((uint32_t)(message->data >> 32)) };
     if (xQueueSend(log_queue, &sample, 0) != pdPASS) {
@@ -229,6 +232,16 @@ bool data_logger_enqueue(const can_message_t *message)
         return false;
     }
     return true;
+}
+
+bool data_logger_enqueue(const can_message_t *message)
+{
+    return state == LOGGER_RUNNING && enqueue(message);
+}
+
+bool data_logger_enqueue_health(const can_message_t *message)
+{
+    return state != LOGGER_IDLE && enqueue(message);
 }
 
 logger_state_t data_logger_state(void) { return state; }
@@ -327,7 +340,8 @@ static void writer_task(void *argument)
             }
             last_checkpoint = now;
         }
-        if (state == LOGGER_STOPPING && uxQueueMessagesWaiting(log_queue) == 0) {
+        if (state == LOGGER_STOPPING && uxQueueMessagesWaiting(log_queue) == 0 &&
+            now - stop_tick >= pdMS_TO_TICKS(LOG_STOP_GRACE_MS)) {
             if (count > 0) {
                 (void)write_records(records, utc, count);
                 count = 0;
