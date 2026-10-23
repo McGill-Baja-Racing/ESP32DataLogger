@@ -35,6 +35,53 @@ SIGNAL_METADATA = {
     0x702: ("gps_longitude", "master_gps", "deg_e7"),
 }
 
+# Health frames, matching health_code_t, health_error_t and node_health_t in app_protocol.h.
+NODE_STATUS_BASE = 0x0D0
+NODE_EVENT_BASE = 0x0E0
+NODE_SLOT_COUNT = 7
+HEALTH_FAULT_COUNT = 16
+HEALTH_CODE_NAMES = [
+    "sensor_init", "sensor_read", "sensor_dead", "samples_late", "samples_dropped",
+    "bad_timestamp", "no_time_sync", "can_tx", "can_rx_overflow", "can_no_ack",
+    "can_bus_error", "can_passive", "can_bus_off", "sd_write", "gps_no_data",
+    "gps_no_fix", "boot", "adc_uncalibrated",
+]
+HEALTH_ERROR_NAMES = [
+    "ESP_OK", "ESP_FAIL", "ESP_ERR_NO_MEM", "ESP_ERR_INVALID_ARG", "ESP_ERR_INVALID_STATE",
+    "ESP_ERR_NOT_FOUND", "ESP_ERR_TIMEOUT", "ESP_ERR_INVALID_RESPONSE", "other error",
+]
+HEALTH_NAMES = ["ok", "warning", "error", "critical"]
+
+
+def name_or_unknown(names: list[str], index: int) -> str:
+    return names[index] if index < len(names) else "unknown"
+
+
+def describe_health(can_id: int, packed: int) -> tuple[str, str, str] | None:
+    """Return (signal, node, detail) for a status or event frame, else None."""
+    if NODE_STATUS_BASE <= can_id < NODE_STATUS_BASE + NODE_SLOT_COUNT:
+        node_id = can_id - NODE_STATUS_BASE
+        faults = packed & 0xFFFF
+        words = [
+            name_or_unknown(HEALTH_NAMES, (packed >> 16) & 0xFF),
+            "recording" if (packed >> 24) & 0xFF == 1 else "idle",
+        ]
+        words += [HEALTH_CODE_NAMES[f] for f in range(HEALTH_FAULT_COUNT) if faults >> f & 1]
+        signal = "node_status"
+    elif NODE_EVENT_BASE <= can_id < NODE_EVENT_BASE + NODE_SLOT_COUNT:
+        node_id = can_id - NODE_EVENT_BASE
+        code, subject, count, error = (packed >> (8 * i) & 0xFF for i in range(4))
+        words = [
+            name_or_unknown(HEALTH_CODE_NAMES, code),
+            f"subject 0x{subject:02X}",
+            f"count {count}",
+            name_or_unknown(HEALTH_ERROR_NAMES, error),
+        ]
+        signal = "health_event"
+    else:
+        return None
+    return signal, "master" if node_id == 0 else f"node_{node_id}", " ".join(words)
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Decode a master SD .bin log into CSV.")
@@ -78,6 +125,7 @@ def decode_log(input_path: Path, output_path: Path) -> list[str]:
                 "value",
                 "units",
                 "raw_data",
+                "detail",
             ]
         )
 
@@ -89,6 +137,11 @@ def decode_log(input_path: Path, output_path: Path) -> list[str]:
             value = signed_u32(packed)
             timestamp_ms = (packed >> 32) & 0xFFFFFFFF
             signal, node, units = SIGNAL_METADATA.get(can_id, ("", "", "raw"))
+            detail = ""
+            health = describe_health(can_id, packed)
+            if health:
+                signal, node, detail = health
+                units = ""
             counts_by_id[can_id] = counts_by_id.get(can_id, 0) + 1
 
             writer.writerow(
@@ -102,6 +155,7 @@ def decode_log(input_path: Path, output_path: Path) -> list[str]:
                     f"{value / 100:.2f}" if can_id == 0x700 else value,
                     units,
                     packed,
+                    detail,
                 ]
             )
 

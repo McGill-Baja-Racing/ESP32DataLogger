@@ -8,6 +8,7 @@
 #include "esp_log.h"
 #include "esp_twai.h"
 #include "esp_twai_onchip.h"
+#include "health/node_health.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/semphr.h"
@@ -48,6 +49,24 @@ static bool state_change_callback(twai_node_handle_t node,
     if (event->new_sta == TWAI_ERROR_BUS_OFF) {
         atomic_fetch_add(&bus_off_generation, 1);
     }
+    node_health_set(HEALTH_CAN_PASSIVE,
+                    event->new_sta == TWAI_ERROR_PASSIVE ||
+                    event->new_sta == TWAI_ERROR_BUS_OFF);
+    return false;
+}
+
+static bool error_callback(twai_node_handle_t node,
+                           const twai_error_event_data_t *event,
+                           void *context)
+{
+    (void)node;
+    (void)context;
+    /* CRC errors set no flag, and arbitration loss is not an error. */
+    if (event->err_flags.ack_err) {
+        node_health_count(HEALTH_CAN_NO_ACK, 1, 0, ESP_OK);
+    } else if (!event->err_flags.arb_lost) {
+        node_health_count(HEALTH_CAN_BUS_ERROR, 1, 0, ESP_OK);
+    }
     return false;
 }
 
@@ -70,12 +89,13 @@ static bool receive_callback(twai_node_handle_t node,
         }
         if (xQueueSendFromISR(rx_queue, &message, &task_woken) != pdPASS) {
             rx_drops++;
+            node_health_count(HEALTH_CAN_RX_OVERFLOW, 1, message.id, ESP_OK);
         }
     }
     return task_woken == pdTRUE;
 }
 
-esp_err_t can_master_send(uint32_t id, const uint8_t *payload, uint8_t length)
+static esp_err_t transmit(uint32_t id, const uint8_t *payload, uint8_t length)
 {
     if (length > 8 || (length > 0 && !payload)) {
         return ESP_ERR_INVALID_ARG;
@@ -110,6 +130,15 @@ esp_err_t can_master_send(uint32_t id, const uint8_t *payload, uint8_t length)
         }
     }
     xSemaphoreGive(tx_mutex);
+    return error;
+}
+
+esp_err_t can_master_send(uint32_t id, const uint8_t *payload, uint8_t length)
+{
+    esp_err_t error = transmit(id, payload, length);
+    if (error != ESP_OK) {
+        node_health_count(HEALTH_CAN_TX, 1, id, error);
+    }
     return error;
 }
 
@@ -205,6 +234,7 @@ static void recovery_task(void *argument)
             if (status.state == TWAI_ERROR_BUS_OFF &&
                 (!recovering || generation != recovery_generation)) {
                 error = twai_node_recover(can_handle);
+                node_health_count(HEALTH_CAN_BUS_OFF, 1, 0, error);
                 recovering = error == ESP_OK;
                 if (recovering) {
                     recovery_generation = generation;
@@ -250,6 +280,7 @@ esp_err_t can_master_init(can_message_handler_t message_handler)
     twai_event_callbacks_t callbacks = {
         .on_rx_done = receive_callback,
         .on_state_change = state_change_callback,
+        .on_error = error_callback,
     };
     error = twai_node_register_event_callbacks(can_handle, &callbacks, NULL);
     if (error != ESP_OK) return error;
