@@ -15,6 +15,7 @@
 #include "protocol/app_protocol.h"
 #include "storage/sd_card.h"
 #include "time/time_beacon.h"
+#include "update/firmware_update.h"
 #include "web/web_server.h"
 
 #define AUTO_START_DELAY_MS 5000
@@ -34,6 +35,7 @@ static bool stop_logging(void)
 static void print_status(void)
 {
     app_control_print_status();
+    firmware_update_print_identity();
 }
 
 #if MASTER_CAN_ENABLED
@@ -44,6 +46,8 @@ static void handle_can_message(const can_message_t *message)
     } else if (node_health_is_frame(message)) {
         node_registry_record_health_frame(node_health_node_id(message));
         node_health_handle_frame(message);
+    } else if (firmware_update_is_identity_frame(message)) {
+        firmware_update_handle_identity(message);
     } else if (protocol_is_sensor_id(message->id) && message->dlc == 8) {
         uint32_t timestamp_ms = (uint32_t)(message->data >> 32);
         if ((message->id == CAN_ID_ENGINE_SPARK ||
@@ -95,6 +99,7 @@ void app_main(void)
         ESP_ERROR_CHECK_WITHOUT_ABORT(can_master_stop_nodes());
         vTaskDelay(pdMS_TO_TICKS(50));
     }
+    ESP_ERROR_CHECK_WITHOUT_ABORT(firmware_update_request_identity());
 #endif
 
     serial_console_callbacks_t console = {

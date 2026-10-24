@@ -11,6 +11,7 @@ typedef struct {
     void (*on_stop)(void);
     void (*on_time_beacon)(uint64_t master_time_us);
     void (*on_bus_off)(void);
+    void (*on_update_command)(const uint8_t *payload, uint8_t length);
 } can_node_callbacks_t;
 
 /* Initializes TWAI and starts the command-dispatch and recovery tasks. */
