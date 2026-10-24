@@ -52,6 +52,42 @@ typedef enum {
     NODE_STATE_REASON_BEACON_SYNC = 5,
 } node_state_reason_t;
 
+#define CAN_PROTOCOL_VERSION        1
+
+/* u8 target node (0xFF for all) | u8 update_op_t */
+#define CAN_ID_UPDATE_COMMAND       0x0A4
+
+typedef enum {
+    UPDATE_OP_IDENTIFY = 1,
+} update_op_t;
+
+/* Node N sends node_identity_frame_t on CAN_ID_NODE_IDENTITY_BASE + N at boot
+ * and in answer to UPDATE_OP_IDENTIFY. */
+#define CAN_ID_NODE_IDENTITY_BASE   0x090
+#define NODE_IDENTITY_HASH_LENGTH   6
+#define NODE_IDENTITY_PENDING       0x01  /* image booted on trial, not yet confirmed */
+
+typedef struct __attribute__((packed)) {
+    uint8_t elf_sha256[NODE_IDENTITY_HASH_LENGTH];  /* start of esp_app_desc_t.app_elf_sha256 */
+    uint8_t protocol_version;
+    uint8_t flags;
+} node_identity_frame_t;
+
+/* Every image carries firmware_identity_t right after esp_app_desc_t: image
+ * header (24) + first segment header (8) + esp_app_desc_t (256). */
+#define FIRMWARE_IDENTITY_OFFSET    288
+#define FIRMWARE_IDENTITY_MAGIC     0x42414A41
+
+typedef struct __attribute__((packed)) {
+    uint32_t magic;
+    uint8_t node_id;            /* 0 for the master */
+    uint8_t protocol_version;
+    uint8_t serial_test;        /* prints to serial and never joins the bus */
+    uint8_t reserved;
+} firmware_identity_t;
+
+_Static_assert(sizeof(node_identity_frame_t) == 8, "identity must fill one CAN frame");
+
 #define CAN_ID_NODE_STATUS_BASE     0x0D0
 #define CAN_ID_NODE_EVENT_BASE      0x0E0
 #define CAN_ID_NODE_DIAGNOSTICS_BASE 0x0F0

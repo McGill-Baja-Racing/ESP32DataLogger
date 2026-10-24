@@ -8,6 +8,7 @@
 #include "health/node_health.h"
 #include "sampler/sampler.h"
 #include "time/time_sync.h"
+#include "update/firmware_update.h"
 
 #ifndef SENSOR_SERIAL_TEST
 #define SENSOR_SERIAL_TEST 0
@@ -57,10 +58,12 @@ void app_main(void)
         .on_stop = handle_stop,
         .on_time_beacon = time_sync_update,
         .on_bus_off = sampler_discard_pending,
+        .on_update_command = firmware_update_handle_command,
     };
     ESP_ERROR_CHECK(can_node_init(&callbacks, (uint8_t)esp_reset_reason()));
     /* The master uses this acknowledgement to register the node after boot. */
     can_node_report_state(NODE_STATE_IDLE, NODE_STATE_REASON_BOOT);
+    firmware_update_report_identity();
     ESP_ERROR_CHECK(node_health_init());
 #endif
 }
