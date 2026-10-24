@@ -13,3 +13,10 @@ CONFIG_ESP32P4_REV_MIN_1=y
 CONFIG_PM_SLEEP_FUNC_IN_IRAM=y
 CONFIG_MBEDTLS_CMAC_C=y
 # CONFIG_LIBC_OPTIMIZED_MISALIGNED_ACCESS is not set
+
+# The module has 32 MB; partitions stay below 16 MB, which needs no 32-bit flash addressing.
+CONFIG_ESPTOOLPY_FLASHSIZE_32MB=y
+# A new image boots once on trial and reverts unless it confirms itself.
+CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
+# Rebuilding the same commit must give the same image hash, or `update` reflashes it.
+# CONFIG_APP_COMPILE_TIME_DATE is not set
