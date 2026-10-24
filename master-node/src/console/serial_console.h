@@ -8,6 +8,7 @@ typedef struct {
     bool (*start)(void);
     bool (*stop)(void);
     void (*status)(void);
+    bool (*update)(void);
 } serial_console_callbacks_t;
 
 esp_err_t serial_console_start(const serial_console_callbacks_t *callbacks);

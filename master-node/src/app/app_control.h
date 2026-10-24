@@ -69,6 +69,15 @@ app_control_result_t app_control_start_logging(const char *filename);
 app_control_result_t app_control_stop_logging(void);
 
 /**
+ * @brief Start the firmware update task for sensor nodes and the master.
+ *
+ * @return APP_CONTROL_OK, CONFLICT unless the logger is idle, BUSY if an
+ *         update is running, or FAILED if the lock was held for over 1 s or
+ *         the task could not start.
+ */
+app_control_result_t app_control_update_firmware(void);
+
+/**
  * @brief Give one viewer the live data lease, only while logging. See
  * live_data_start().
  *
