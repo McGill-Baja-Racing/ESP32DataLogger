@@ -27,9 +27,6 @@
 #ifndef NODE_CAN_RX_GPIO
 #define NODE_CAN_RX_GPIO 20
 #endif
-#ifndef NODE_CAN_BITRATE
-#define NODE_CAN_BITRATE 1000000
-#endif
 
 #define CAN_TX_QUEUE_DEPTH      5
 #define CAN_RX_QUEUE_LENGTH     16
@@ -45,6 +42,9 @@ typedef struct {
 } can_message_t;
 
 static const char *TAG = "CAN";
+
+_Static_assert(CAN_NODE_ID_MASK & (1U << NODE_ID), "NODE_ID is not in CAN_NODE_ID_MASK");
+
 static QueueHandle_t rx_queue;
 static SemaphoreHandle_t tx_mutex;
 static twai_node_handle_t can_handle;
@@ -144,12 +144,13 @@ esp_err_t can_node_send(uint32_t can_id, const uint8_t *payload, uint8_t length)
 void can_node_report_state(node_state_t state, node_state_reason_t reason)
 {
     current_state = state;
-    uint8_t payload[3] = {
+    uint8_t payload[] = {
         state,
         reason,
         reason == NODE_STATE_REASON_BOOT ? reset_reason : 0,
     };
-    esp_err_t error = can_node_send(CAN_ID_NODE_STATE, payload, sizeof(payload));
+    _Static_assert(sizeof(payload) == CAN_NODE_STATE_LENGTH, "payload must be CAN_NODE_STATE_LENGTH bytes");
+    esp_err_t error = can_node_send(CAN_ID_NODE_STATE_BASE + NODE_ID, payload, sizeof(payload));
     if (error != ESP_OK) {
         ESP_LOGW(TAG, "State report failed: %s", esp_err_to_name(error));
     }
@@ -305,7 +306,7 @@ esp_err_t can_node_init(const can_node_callbacks_t *callbacks,
 
     twai_onchip_node_config_t config = {
         .io_cfg = {.tx = NODE_CAN_TX_GPIO, .rx = NODE_CAN_RX_GPIO},
-        .bit_timing = {.bitrate = NODE_CAN_BITRATE},
+        .bit_timing = {.bitrate = CAN_BITRATE},
         .tx_queue_depth = CAN_TX_QUEUE_DEPTH,
     };
     esp_err_t error = twai_new_node_onchip(&config, &can_handle);

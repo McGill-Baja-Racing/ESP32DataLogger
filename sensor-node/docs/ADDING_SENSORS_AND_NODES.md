@@ -53,10 +53,9 @@ selected registry branch is never initialized, started, or read by the sampler.
 | `src/sensors/<sensor>.c` | Adding or changing hardware access and value conversion |
 | `src/sensors/sensor.h` | Changing the interface shared by every sensor; rarely necessary |
 | `src/sensors/sensor_registry.c` | Choosing which sensor descriptors belong to each build |
-| `src/protocol/app_protocol.h` | Assigning a new sensor CAN ID |
+| `../protocol/app_protocol.h` | Assigning a new sensor CAN ID and mapping it to its node; shared with the Master |
 | `src/CMakeLists.txt` | Adding a new `.c` source file to the firmware build |
 | `platformio.ini` | Adding a build environment, node ID, configuration macro, or test mode |
-| `../master-node/src/protocol/app_protocol.h` | Allowing the Master to recognize the ID and map it to its node |
 | Master logging/metadata files | Giving the new signal a name, unit, or output column when required |
 
 Do not add sensor-specific decisions to `main.c` or `sampler.c`. Those modules
@@ -69,7 +68,7 @@ measurement.
 
 ### 1. Choose a CAN ID and data representation
 
-Add a unique ID to `src/protocol/app_protocol.h`:
+Add a unique ID to `../protocol/app_protocol.h`:
 
 ```c
 #define CAN_ID_STEERING_ANGLE 0x0BC
@@ -194,13 +193,11 @@ physical node ID.
 
 ### 5. Update the Master
 
-Update `../master-node/src/protocol/app_protocol.h` with the matching ID. Add it
-to `protocol_is_sensor_id()` and map it to the correct `NODE_ID` in
+In `../protocol/app_protocol.h`, map the new ID to the correct `NODE_ID` in
 `protocol_sensor_node_id()`.
 
 Also update any Master signal-name, unit, CSV-column, dashboard, or decoding
-table that enumerates supported sensor IDs. The protocol constant must match on
-both sides exactly.
+table that enumerates supported sensor IDs.
 
 ## Workflow B: create a new configuration from existing sensors
 
@@ -274,7 +271,9 @@ Rules:
 
 ### 3. Update the Master mapping
 
-For every sensor transmitted by the new configuration, make sure the Master's
+Add the new node ID to `CAN_NODE_ID_MASK` in `../protocol/app_protocol.h`, and
+raise `CAN_NODE_SLOT_COUNT` above it if needed; the build fails otherwise. For
+every sensor transmitted by the new configuration, make sure
 `protocol_sensor_node_id()` returns the new node ID. Add the node to any Master
 registry or expected-node list used by the current firmware.
 

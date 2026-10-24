@@ -48,6 +48,7 @@ with tempfile.TemporaryDirectory() as directory:
             "-Wextra",
             "-Werror",
             "-I" + str(ROOT / "src"),
+            "-I" + str(ROOT.parent),
             str(temp / "test.c"),
             "-o",
             str(temp / "test"),

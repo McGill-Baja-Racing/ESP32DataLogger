@@ -32,7 +32,7 @@ and store them safely on an SD card.
 
 | Path | Responsibility |
 |---|---|
-| `protocol/app_protocol.h` | CAN IDs shared conceptually with sensor nodes |
+| `../../protocol/app_protocol.h` | CAN IDs shared with sensor nodes |
 | `can/can_master.c` | TWAI transport, receive dispatch, and recovery |
 | `logger/data_logger.c` | Log state, queue, binary blocks, and file writes |
 | `storage/sd_card.c` | SDMMC hardware and FAT mount |
