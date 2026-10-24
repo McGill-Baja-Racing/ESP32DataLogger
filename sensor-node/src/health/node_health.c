@@ -10,6 +10,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "sampler/sampler.h"
+#include "sensors/sensor.h"
 #include "time/time_sync.h"
 
 /*
@@ -17,17 +18,23 @@
  * -----------
  * Other modules only count problems here. Once a second health_task sends a
  * status and a diagnostics frame and, while recording, one event per counted
- * code and subject since the last report. A count is marked reported only after its event reached the
- * bus, so problems while idle or during a bus-off are sent later, stamped
- * with when they last happened. Occurrence times are kept on the local clock
+ * code and subject since the last report. A count is marked reported once the
+ * CAN driver holds its event, so problems while idle are sent later, stamped
+ * with when they last happened; an event the driver then drops shows up at the
+ * master as a gap in the event sequence. A count above HEALTH_EVENT_COUNT_MAX
+ * is sent as that maximum, so a fault storm while idle leaves no backlog. Occurrence times are kept on the local clock
  * because counting runs in interrupts; they are converted when sent.
  */
 
-#define MAX_SENSORS          8
-#define SHARED_COUNTERS      16
+#define SHARED_COUNTERS      24
 #define COUNTER_COUNT        (HEALTH_CODE_COUNT + SHARED_COUNTERS)
 #define TIME_SYNC_TIMEOUT_MS 1000
 #define RESET_COUNT_MAGIC    0xB4A7DA03u
+
+/* One report sends at most one event per sensor and counter. With 64 or more,
+ * a whole lost report could wrap the sequence unseen. */
+_Static_assert(MAX_SENSORS + COUNTER_COUNT < HEALTH_EVENT_SEQUENCE_MASK + 1,
+               "a report must fit the event sequence");
 
 /* Counts are cumulative, so unsigned differences survive wrap-around. */
 typedef struct {
@@ -65,6 +72,7 @@ static RTC_NOINIT_ATTR uint32_t reset_count_magic;
 static RTC_NOINIT_ATTR uint32_t reset_count;
 static uint8_t resets;
 static uint8_t reset_reason;
+static uint8_t event_sequence;
 
 static uint32_t local_ms(void)
 {
@@ -176,12 +184,13 @@ static health_error_t health_error(esp_err_t error)
     }
 }
 
-static health_event_frame_t event_frame(uint8_t code, uint32_t subject, uint32_t count,
-                                        esp_err_t error, int32_t timestamp_ms)
+static health_event_frame_t event_frame(uint8_t code, uint32_t subject, uint8_t sequence,
+                                        uint32_t count, esp_err_t error, int32_t timestamp_ms)
 {
     health_event_frame_t event = {
         .code = code,
         .subject = (uint8_t)subject,
+        .sequence = sequence & HEALTH_EVENT_SEQUENCE_MASK,
         .count = count > HEALTH_EVENT_COUNT_MAX ? HEALTH_EVENT_COUNT_MAX : count,
         .error = health_error(error),
         .timestamp_ms = (uint32_t)timestamp_ms,
@@ -192,34 +201,45 @@ static health_event_frame_t event_frame(uint8_t code, uint32_t subject, uint32_t
 static bool send_event(uint8_t code, uint32_t subject, uint32_t count, esp_err_t error,
                        uint32_t when_local_ms)
 {
-    /* An acknowledged event counts as delivered, so send only while the master
-     * is logging: recording, with its beacons still arriving. */
+    /* A sent event counts as delivered, so send only while the master is
+     * logging: recording, with its beacons still arriving. */
     if (!sampler_is_active() || !time_sync_is_current(TIME_SYNC_TIMEOUT_MS)) {
         return false;
     }
     /* Problems from before the master's clock started are dated at its start. */
     int32_t when_ms = time_sync_timestamp_ms_at((int64_t)when_local_ms * 1000);
-    health_event_frame_t event = event_frame(code, subject, count, error,
+    health_event_frame_t event = event_frame(code, subject, event_sequence, count, error,
                                              when_ms < 0 ? 0 : when_ms);
-    if (can_node_send(CAN_ID_NODE_EVENT_BASE + NODE_ID, (const uint8_t *)&event, sizeof(event)) != ESP_OK) {
+    if (can_node_queue(CAN_ID_NODE_EVENT_BASE + NODE_ID, (const uint8_t *)&event, sizeof(event)) != ESP_OK) {
         return false;
     }
+    event_sequence++;
     ESP_LOGI(TAG, "event %u subject 0x%02" PRIX32 " count %" PRIu32 " %s",
              code, subject, count, esp_err_to_name(error));
     return true;
 }
 
-static uint32_t sendable(uint32_t pending)
+static bool report_counter(const health_state_t *now, health_state_t *reported, size_t i)
 {
-    return pending > HEALTH_EVENT_COUNT_MAX ? HEALTH_EVENT_COUNT_MAX : pending;
+    const counter_t *counter = &now->counters[i];
+    uint32_t count = counter->count - reported->counters[i].count;
+    if (count && !send_event(counter->code, counter->subject, count, counter->error,
+                             counter->last_ms)) {
+        return false;
+    }
+    reported->counters[i].count = counter->count;
+    return true;
 }
 
 /* Stops at the first unsent event: on a failing bus each send holds the
- * transmitter long enough to delay samples. Only the count sent is marked
- * reported, so the rest of a larger count goes in the next report. */
+ * transmitter long enough to delay samples. */
 static void report_events(const health_state_t *now, health_state_t *reported,
                           bool *init_reported)
 {
+    /* The master restarts its sequence check at the boot event. */
+    if (!report_counter(now, reported, HEALTH_BOOT)) {
+        return;
+    }
     for (size_t i = 0; i < now->sensor_count; i++) {
         const sensor_health_t *sensor = &now->sensors[i];
         if (sensor->init_error != ESP_OK) {
@@ -233,21 +253,17 @@ static void report_events(const health_state_t *now, health_state_t *reported,
             continue;
         }
         init_reported[i] = false;
-        uint32_t failed = sendable(sensor->failed_reads - reported->sensors[i].failed_reads);
+        uint32_t failed = sensor->failed_reads - reported->sensors[i].failed_reads;
         if (failed && !send_event(HEALTH_SENSOR_READ, sensor->can_id, failed,
                                   sensor->last_error, sensor->last_failure_ms)) {
             return;
         }
-        reported->sensors[i].failed_reads += failed;
+        reported->sensors[i].failed_reads = sensor->failed_reads;
     }
     for (size_t i = 0; i < COUNTER_COUNT; i++) {
-        const counter_t *counter = &now->counters[i];
-        uint32_t count = sendable(counter->count - reported->counters[i].count);
-        if (count && !send_event(counter->code, counter->subject, count, counter->error,
-                                 counter->last_ms)) {
+        if (!report_counter(now, reported, i)) {
             return;
         }
-        reported->counters[i].count += count;
     }
 }
 
@@ -263,7 +279,7 @@ static void send_diagnostics(void)
         .reset_reason = reset_reason,
     };
     (void)can_node_send(CAN_ID_NODE_DIAGNOSTICS_BASE + NODE_ID, (const uint8_t *)&diagnostics,
-                        sizeof(diagnostics));
+                        NODE_HEALTH_PAYLOAD);
 }
 
 static void health_task(void *argument)
@@ -280,7 +296,7 @@ static void health_task(void *argument)
         portEXIT_CRITICAL(&lock);
 
         /* Status covers only the last period; events carry everything else. */
-        uint16_t faults = 0;
+        uint32_t faults = 0;
         for (int fault = 0; fault < HEALTH_FAULT_COUNT; fault++) {
             if (now.active[fault]) {
                 faults |= HEALTH_BIT(fault);
@@ -317,10 +333,9 @@ static void health_task(void *argument)
             .faults = faults,
             .health = health_for(faults, now.sensor_count > 0 && working == 0),
             .mode = recording ? NODE_MODE_RECORDING : NODE_MODE_IDLE,
-            .timestamp_ms = (uint32_t)time_sync_timestamp_ms(),
         };
         bool status_sent = can_node_send(CAN_ID_NODE_STATUS_BASE + NODE_ID, (const uint8_t *)&status,
-                                         sizeof(status)) == ESP_OK;
+                                         NODE_HEALTH_PAYLOAD) == ESP_OK;
         send_diagnostics();
         if (status_sent && recording) {
             report_events(&now, &reported, init_reported);

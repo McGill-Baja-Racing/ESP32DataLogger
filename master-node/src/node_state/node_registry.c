@@ -140,7 +140,7 @@ const char *node_registry_state_name(uint8_t node_id)
     if (!monitoring) return "off";
     if (nodes[node_id].offline) return "offline";
     bool data_recent = nodes[node_id].data_seen &&
-                       xTaskGetTickCount() - nodes[node_id].last_data <
-                           pdMS_TO_TICKS(NODE_OFFLINE_TIMEOUT_MS);
+                       (int32_t)(xTaskGetTickCount() - nodes[node_id].last_data) <
+                           (int32_t)pdMS_TO_TICKS(NODE_OFFLINE_TIMEOUT_MS);
     return data_recent ? "active" : "waiting";
 }

@@ -58,11 +58,25 @@ static bool error_callback(twai_node_handle_t node,
 {
     (void)node;
     (void)context;
-    /* CRC errors set no flag, and arbitration loss is not an error. */
+    /* CRC errors set no flag. Arbitration loss is not a bus error; the frame
+     * it drops is counted by tx_done_callback. */
     if (event->err_flags.ack_err) {
         node_health_count(HEALTH_CAN_NO_ACK, 1, 0, ESP_OK);
     } else if (!event->err_flags.arb_lost) {
         node_health_count(HEALTH_CAN_BUS_ERROR, 1, 0, ESP_OK);
+    }
+    return false;
+}
+
+/* Frames are sent once, so an error or a lost arbitration drops the frame. */
+static bool tx_done_callback(twai_node_handle_t node,
+                             const twai_tx_done_event_data_t *event,
+                             void *context)
+{
+    (void)node;
+    (void)context;
+    if (!event->is_tx_success) {
+        node_health_count(HEALTH_CAN_TX, 1, event->done_tx_frame->header.id, ESP_FAIL);
     }
     return false;
 }
@@ -278,6 +292,7 @@ esp_err_t can_master_init(can_message_handler_t message_handler)
         .on_rx_done = receive_callback,
         .on_state_change = state_change_callback,
         .on_error = error_callback,
+        .on_tx_done = tx_done_callback,
     };
     error = twai_node_register_event_callbacks(can_handle, &callbacks, NULL);
     if (error != ESP_OK) return error;

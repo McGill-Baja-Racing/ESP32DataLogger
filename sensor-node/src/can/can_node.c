@@ -80,11 +80,25 @@ static bool error_callback(twai_node_handle_t node,
 {
     (void)node;
     (void)context;
-    /* CRC errors set no flag, and arbitration loss is not an error. */
+    /* CRC errors set no flag. Arbitration loss is not a bus error; the frame
+     * it drops is counted by tx_done_callback. */
     if (event->err_flags.ack_err) {
         node_health_count(HEALTH_CAN_NO_ACK, 1, 0, ESP_OK);
     } else if (!event->err_flags.arb_lost) {
         node_health_count(HEALTH_CAN_BUS_ERROR, 1, 0, ESP_OK);
+    }
+    return false;
+}
+
+/* Frames are sent once, so an error or a lost arbitration drops the frame. */
+static bool tx_done_callback(twai_node_handle_t node,
+                             const twai_tx_done_event_data_t *event,
+                             void *context)
+{
+    (void)node;
+    (void)context;
+    if (!event->is_tx_success) {
+        node_health_count(HEALTH_CAN_TX, 1, event->done_tx_frame->header.id, ESP_FAIL);
     }
     return false;
 }
@@ -124,8 +138,12 @@ static bool targets_this_node(const can_message_t *message)
     return target == NODE_ID || target == 0xFF;
 }
 
-static esp_err_t transmit(uint32_t can_id, const uint8_t *payload, uint8_t length)
+/* Sets *queued once the driver holds the frame: it then goes out after a
+ * timeout too, unless bus-off recovery discards it. */
+static esp_err_t transmit(uint32_t can_id, const uint8_t *payload, uint8_t length,
+                          bool *queued)
 {
+    *queued = false;
     if (length > 8 || (length > 0 && !payload)) {
         return ESP_ERR_INVALID_ARG;
     }
@@ -152,6 +170,7 @@ static esp_err_t transmit(uint32_t can_id, const uint8_t *payload, uint8_t lengt
     };
     error = twai_node_transmit(can_handle, &tx_frame, CAN_TX_TIMEOUT_MS);
     if (error == ESP_OK) {
+        *queued = true;
         tx_pending = true;
         error = twai_node_transmit_wait_all_done(can_handle, CAN_TX_TIMEOUT_MS);
         if (error == ESP_OK) {
@@ -164,18 +183,30 @@ static esp_err_t transmit(uint32_t can_id, const uint8_t *payload, uint8_t lengt
 
 esp_err_t can_node_send(uint32_t can_id, const uint8_t *payload, uint8_t length)
 {
-    esp_err_t error = transmit(can_id, payload, length);
+    bool queued;
+    esp_err_t error = transmit(can_id, payload, length, &queued);
     if (error != ESP_OK) {
         node_health_count(HEALTH_CAN_TX, 1, can_id, error);
     }
     return error;
 }
 
+esp_err_t can_node_queue(uint32_t can_id, const uint8_t *payload, uint8_t length)
+{
+    bool queued;
+    esp_err_t error = transmit(can_id, payload, length, &queued);
+    if (queued) {
+        return ESP_OK;
+    }
+    node_health_count(HEALTH_CAN_TX, 1, can_id, error);
+    return error;
+}
+
 void can_node_error_counts(uint8_t *tx_errors, uint8_t *rx_errors)
 {
     twai_node_status_t status = {0};
-    if (!can_handle || twai_node_get_info(can_handle, &status, NULL) != ESP_OK) {
-        status = (twai_node_status_t){0};
+    if (can_handle) {
+        (void)twai_node_get_info(can_handle, &status, NULL);
     }
     *tx_errors = status.tx_error_count > UINT8_MAX ? UINT8_MAX : (uint8_t)status.tx_error_count;
     *rx_errors = status.rx_error_count > UINT8_MAX ? UINT8_MAX : (uint8_t)status.rx_error_count;
@@ -365,6 +396,7 @@ esp_err_t can_node_init(const can_node_callbacks_t *callbacks,
         .on_rx_done = receive_callback,
         .on_state_change = state_change_callback,
         .on_error = error_callback,
+        .on_tx_done = tx_done_callback,
     };
     error = twai_node_register_event_callbacks(can_handle, &driver_callbacks, NULL);
     if (error != ESP_OK) {

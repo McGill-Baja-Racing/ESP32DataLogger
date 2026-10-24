@@ -5,6 +5,8 @@
 
 #include "esp_err.h"
 
+#define MAX_SENSORS 8
+
 typedef struct sensor sensor_t;
 
 /*
