@@ -220,7 +220,7 @@ static void sample_task(void *argument)
                     periods++;
                 }
                 if (periods > 1) {
-                    node_health_count(HEALTH_SAMPLES_LATE, periods - 1, sensor->can_id, ESP_OK);
+                    node_health_count(HEALTH_SAMPLES_MISSED, periods - 1, sensor->can_id, ESP_OK);
                 }
                 if (error == ESP_OK) {
                     enqueue_latest(&sample);

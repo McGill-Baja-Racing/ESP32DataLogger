@@ -63,7 +63,7 @@ static uint32_t now_ms(void)
 
 static bool counted_per_subject(health_code_t code)
 {
-    return code == HEALTH_SAMPLES_LATE || code == HEALTH_SAMPLES_DROPPED ||
+    return code == HEALTH_SAMPLES_MISSED || code == HEALTH_SAMPLES_DROPPED ||
            code == HEALTH_BAD_TIMESTAMP || code == HEALTH_CAN_TX ||
            code == HEALTH_CAN_RX_OVERFLOW || code == HEALTH_EVENT_LOST;
 }
@@ -151,7 +151,7 @@ static const char *const code_names[HEALTH_CODE_COUNT] = {
     [HEALTH_SENSOR_INIT] = "sensor_init",
     [HEALTH_SENSOR_READ] = "sensor_read",
     [HEALTH_SENSOR_DEAD] = "sensor_dead",
-    [HEALTH_SAMPLES_LATE] = "samples_late",
+    [HEALTH_SAMPLES_MISSED] = "samples_missed",
     [HEALTH_SAMPLES_DROPPED] = "samples_dropped",
     [HEALTH_BAD_TIMESTAMP] = "bad_timestamp",
     [HEALTH_NO_TIME_SYNC] = "no_time_sync",

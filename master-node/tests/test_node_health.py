@@ -116,14 +116,14 @@ int main(void)
 {
     int failures = 0;
     const uint32_t expected[][4] = {
-        {3, HEALTH_SAMPLES_LATE, 17, 0},  /* first event seen syncs */
-        {3, HEALTH_SAMPLES_LATE, 18, 0},
+        {3, HEALTH_SAMPLES_MISSED, 17, 0},  /* first event seen syncs */
+        {3, HEALTH_SAMPLES_MISSED, 18, 0},
         {3, HEALTH_CAN_TX, 21, 2},
-        {3, HEALTH_CAN_TX, 21, 99},       /* received twice */
+        {3, HEALTH_CAN_TX, 21, 99},         /* received twice */
         {3, HEALTH_SENSOR_READ, 63, 41},
-        {3, HEALTH_SENSOR_READ, 1, 1},    /* wraps */
-        {5, HEALTH_SAMPLES_LATE, 40, 0},  /* per node */
-        {3, HEALTH_BOOT, 0, 0},           /* reboot */
+        {3, HEALTH_SENSOR_READ, 1, 1},      /* wraps */
+        {5, HEALTH_SAMPLES_MISSED, 40, 0},  /* per node */
+        {3, HEALTH_BOOT, 0, 0},             /* reboot */
         {3, HEALTH_SENSOR_READ, 3, 2},
     };
     for (unsigned i = 0; i < sizeof(expected) / sizeof(expected[0]); i++) {
