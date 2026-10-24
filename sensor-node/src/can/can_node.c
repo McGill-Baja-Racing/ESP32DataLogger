@@ -276,6 +276,15 @@ static void dispatch_task(void *argument)
             }
             /* As with START, repeat only the acknowledgement, not the action. */
             can_node_report_state(NODE_STATE_IDLE, NODE_STATE_REASON_STOP);
+        } else if (message.id == CAN_ID_UPDATE_COMMAND && message.dlc >= 2 &&
+                   targets_this_node(&message)) {
+            uint8_t payload[8];
+            for (uint8_t i = 0; i < message.dlc; i++) {
+                payload[i] = (uint8_t)(message.data >> (8 * i));
+            }
+            if (app_callbacks.on_update_command) {
+                app_callbacks.on_update_command(payload, message.dlc);
+            }
         }
     }
 }
@@ -403,8 +412,8 @@ esp_err_t can_node_init(const can_node_callbacks_t *callbacks,
     if (error != ESP_OK) {
         return error;
     }
-    /* Sensor nodes only consume the master command range 0x0A0-0x0A3. */
-    twai_mask_filter_config_t filter = {.id = CAN_ID_STOP, .mask = 0x7FC};
+    /* Sensor nodes only consume the master command range 0x0A0-0x0A7. */
+    twai_mask_filter_config_t filter = {.id = CAN_ID_STOP, .mask = 0x7F8};
     error = twai_node_config_mask_filter(can_handle, 0, &filter);
     if (error != ESP_OK) {
         return error;
