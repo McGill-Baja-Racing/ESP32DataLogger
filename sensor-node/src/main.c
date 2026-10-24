@@ -1,3 +1,6 @@
+#include <stdatomic.h>
+#include <stdbool.h>
+
 #include "esp_err.h"
 #include "esp_log.h"
 #include "esp_system.h"
@@ -34,6 +37,17 @@ static void handle_stop(void)
     sampler_stop();
 }
 
+/* A new image confirms itself only after every init step passed. */
+static atomic_bool booted;
+
+static void handle_time_beacon(uint64_t master_time_us)
+{
+    time_sync_update(master_time_us);
+    if (atomic_load(&booted)) {
+        firmware_update_confirm();
+    }
+}
+
 void app_main(void)
 {
     /*
@@ -53,17 +67,20 @@ void app_main(void)
     sampler_start();
 #else
     /* CAN translates protocol frames into these application-level actions. */
+    ESP_ERROR_CHECK(firmware_update_init());
     can_node_callbacks_t callbacks = {
         .on_start = handle_start,
         .on_stop = handle_stop,
-        .on_time_beacon = time_sync_update,
+        .on_time_beacon = handle_time_beacon,
         .on_bus_off = sampler_discard_pending,
         .on_update_command = firmware_update_handle_command,
+        .on_update_data = firmware_update_handle_data,
     };
     ESP_ERROR_CHECK(can_node_init(&callbacks, (uint8_t)esp_reset_reason()));
     /* The master uses this acknowledgement to register the node after boot. */
     can_node_report_state(NODE_STATE_IDLE, NODE_STATE_REASON_BOOT);
     firmware_update_report_identity();
     ESP_ERROR_CHECK(node_health_init());
+    atomic_store(&booted, true);
 #endif
 }

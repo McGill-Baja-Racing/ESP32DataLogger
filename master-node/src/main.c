@@ -32,6 +32,11 @@ static bool stop_logging(void)
     return app_control_stop_logging() == APP_CONTROL_OK;
 }
 
+static bool update_firmware(void)
+{
+    return app_control_update_firmware() == APP_CONTROL_OK;
+}
+
 static void print_status(void)
 {
     app_control_print_status();
@@ -48,6 +53,8 @@ static void handle_can_message(const can_message_t *message)
         node_health_handle_frame(message);
     } else if (firmware_update_is_identity_frame(message)) {
         firmware_update_handle_identity(message);
+    } else if (firmware_update_is_reply_frame(message)) {
+        firmware_update_handle_reply(message);
     } else if (protocol_is_sensor_id(message->id) && message->dlc == 8) {
         uint32_t timestamp_ms = (uint32_t)(message->data >> 32);
         if ((message->id == CAN_ID_ENGINE_SPARK ||
@@ -87,6 +94,7 @@ void app_main(void)
     ESP_ERROR_CHECK(node_health_init());
     ESP_ERROR_CHECK(live_data_init());
     ESP_ERROR_CHECK(node_registry_init());
+    ESP_ERROR_CHECK(firmware_update_init());
 #if MASTER_CAN_ENABLED
     ESP_ERROR_CHECK(can_master_init(handle_can_message));
 #endif
@@ -106,6 +114,7 @@ void app_main(void)
         .start = start_logging,
         .stop = stop_logging,
         .status = print_status,
+        .update = update_firmware,
     };
     ESP_ERROR_CHECK(serial_console_start(&console));
 #if MASTER_CAN_ENABLED

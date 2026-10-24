@@ -34,6 +34,7 @@ typedef struct {
 esp_err_t app_control_init(void);
 app_control_result_t app_control_start_logging(const char *filename);
 app_control_result_t app_control_stop_logging(void);
+app_control_result_t app_control_update_firmware(void);
 app_control_result_t app_control_start_live_data(uint32_t *token);
 void app_control_get_status(app_status_t *status);
 void app_control_print_status(void);

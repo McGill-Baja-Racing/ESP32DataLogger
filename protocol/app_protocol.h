@@ -59,6 +59,8 @@ typedef enum {
 
 typedef enum {
     UPDATE_OP_IDENTIFY = 1,
+    UPDATE_OP_BEGIN = 2,   /* | u32 image_size, little-endian */
+    UPDATE_OP_ABORT = 3,
 } update_op_t;
 
 /* Node N sends node_identity_frame_t on CAN_ID_NODE_IDENTITY_BASE + N at boot
@@ -87,6 +89,40 @@ typedef struct __attribute__((packed)) {
 } firmware_identity_t;
 
 _Static_assert(sizeof(node_identity_frame_t) == 8, "identity must fill one CAN frame");
+
+/* u8 tag:3 index:5 | up to 7 image bytes. Answers a READ: frame i carries bytes
+ * 7i to 7i+6 of the chunk at the READ offset, which is
+ * min(UPDATE_CHUNK_BYTES, image_size - offset) long. */
+#define CAN_ID_UPDATE_DATA          0x0A5
+#define UPDATE_FRAME_BYTES          7
+#define UPDATE_CHUNK_FRAMES         32
+#define UPDATE_CHUNK_BYTES          (UPDATE_FRAME_BYTES * UPDATE_CHUNK_FRAMES)
+#define UPDATE_TAG_SHIFT            5
+#define UPDATE_INDEX_MASK           0x1F
+
+_Static_assert(UPDATE_CHUNK_FRAMES <= UPDATE_INDEX_MASK + 1, "chunk frame index must fit the index bits");
+
+/* Node N replies on CAN_ID_NODE_UPDATE_BASE + N: u8 update_reply_t, then for
+ * READ u32 offset | u8 tag, for ERROR u8 update_error_t. */
+#define CAN_ID_NODE_UPDATE_BASE     0x080
+
+typedef enum {
+    UPDATE_REPLY_READ = 1,
+    UPDATE_REPLY_DONE = 2,
+    UPDATE_REPLY_ERROR = 3,
+} update_reply_t;
+
+typedef enum {
+    UPDATE_ERROR_NONE,
+    UPDATE_ERROR_RECORDING,
+    UPDATE_ERROR_TOO_LARGE,
+    UPDATE_ERROR_ON_TRIAL,      /* the running image is not confirmed yet */
+    UPDATE_ERROR_WRONG_IMAGE,   /* identity is for another node, a serial-test build, or missing */
+    UPDATE_ERROR_FLASH,
+    UPDATE_ERROR_BAD_IMAGE,
+    UPDATE_ERROR_TIMEOUT,
+    UPDATE_ERROR_COUNT,
+} update_error_t;
 
 #define CAN_ID_NODE_STATUS_BASE     0x0D0
 #define CAN_ID_NODE_EVENT_BASE      0x0E0
