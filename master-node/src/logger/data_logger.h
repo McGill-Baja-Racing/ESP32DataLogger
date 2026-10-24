@@ -40,7 +40,7 @@ data_logger_rename_result_t data_logger_rename(const char *old_filename,
 /* Returns false if the sample was not queued: not running, or queue full. */
 bool data_logger_enqueue(const can_message_t *message);
 /* Also accepts while stopping: a node sends events until it hears STOP and
- * counts the bus acknowledgement as delivery. */
+ * counts a sent event as delivered. */
 bool data_logger_enqueue_health(const can_message_t *message);
 logger_state_t data_logger_state(void);
 const char *data_logger_state_name(void);

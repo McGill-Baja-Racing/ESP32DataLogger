@@ -30,7 +30,6 @@
 
 #define SAMPLE_QUEUE_LENGTH 64
 #define SERIAL_LOG_SLOT_COUNT 16
-#define MAX_SENSORS 8
 
 typedef struct {
     const char *sensor_name;

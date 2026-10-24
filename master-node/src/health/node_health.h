@@ -16,13 +16,14 @@ esp_err_t node_health_init(void);
 bool node_health_is_frame(const can_message_t *message);
 uint8_t node_health_node_id(const can_message_t *message);
 
-/* For a status or event frame ID, node 0 included: sets *node, writes a
+/* For a health frame ID, node 0 included: sets *node, writes a
  * one-line description without commas to text and returns the signal name.
  * Returns NULL for any other ID. */
 const char *node_health_describe(uint32_t id, uint64_t data, const char **node,
                                  char *text, size_t size);
 
-/* Queues a status or event frame for printing and logs it like a sample.
+/* Queues a health frame for printing and logs it like a sample.
+ * Counts node events that were lost on the way or refused by the logger.
  * Returns whether the logger accepted it. */
 bool node_health_handle_frame(const can_message_t *message);
 

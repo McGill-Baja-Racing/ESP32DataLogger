@@ -13,11 +13,12 @@ end=source.index('static esp_err_t download_handler',start)
 health=(ROOT/'src/health/node_health.c').read_text()
 health_start=health.index('static const char *const code_names')
 health_end=health.index('static void print_frame(',health_start)
-# Statuses (one with every fault and out-of-range health and mode), an event for every byte value, then GPS.
+# Statuses (one with every bit set), an event for every byte value, then GPS.
 records=[(0x0BB,3000),(0x0B9,-1000),(0x0BC,1),(0x0BE,4),(0x0BD,1000),(0x0BB,0),(0x0B9,20000),(0x0BB,3100),
-         (0x0D3,0x8800|2<<16|1<<24),(0x0D0,0),(0x0D6,0xFFFF|7<<16|2<<24)]
-# Event payloads pack code:5 error:4 subject:8 count:15, so every code and error value is covered.
-records+=[(0x0E5,code%32|(code%16)<<5|((0xB0+code)&0xFF)<<9|(code*127)<<17) for code in range(256)]
+         (0x0D3,0x8800|2<<24|1<<26),(0x0D0,0),(0x0D6,0xFFFFFFFF)]
+# Event payloads pack code:5 error:4 subject:8 sequence:6 count:9, so every code and error value is covered.
+records+=[(0x0E5,code%32|(code%16)<<5|((0xB0+code)&0xFF)<<9|(code%64)<<17|(code*3%512)<<23) for code in range(256)]
+records+=[(0x0E5,19|0x70<<9),(0x0E5,7|0x1FF<<23)]
 records+=[(0x0F4,3|200<<8|2<<16|4<<24),(0x0F0,255|0<<8|0<<16|99<<24)]
 records+=[(0x700,1234),(0x700,0),(0x700,1)]
 harness=r'''
@@ -66,12 +67,15 @@ with tempfile.TemporaryDirectory() as directory:
     status,master=full_rows[8],full_rows[9]
     assert (status['signal'],status['node'],status['detail'])==('node_status','mpu_node_3','error recording can_passive gps_no_fix')
     assert (master['node'],master['detail'])==('master','ok idle')
-    assert full_rows[11+7]['detail']=='can_tx subject 0xB7 count 889 ESP_ERR_INVALID_RESPONSE', full_rows[18]
-    assert (full_rows[11+18]['node'],full_rows[11+18]['detail'])==('engine_node_5','node_offline brake_node_1 adc_node_6')
-    diagnostics,own=full_rows[11+256],full_rows[11+257]
+    assert full_rows[11+7]['detail']=='can_tx subject 0xB7 count 21 ESP_ERR_INVALID_RESPONSE', full_rows[18]
+    assert (full_rows[11+19]['node'],full_rows[11+19]['detail'])==('engine_node_5','node_offline master brake_node_1 adc_node_6')
+    assert full_rows[11+192]['detail']=='sensor_init subject 0x700 count 64 ESP_OK'
+    assert full_rows[11+256]['detail']=='node_offline encoder_node_4 engine_node_5 adc_node_6'
+    assert full_rows[11+257]['detail']=='can_tx subject 0x00 count 511+ ESP_OK'
+    diagnostics,own=full_rows[11+258],full_rows[11+259]
     assert (diagnostics['signal'],diagnostics['node'],diagnostics['detail'])==('node_diagnostics','encoder_node_4','tx_errors 3 rx_errors 200 resets 2 last_reset panic')
     assert (own['node'],own['detail'])==('master','tx_errors 255 rx_errors 0 resets 0 last_reset unknown')
-    assert full_rows[11+201]['detail']=='can_no_ack subject 0x79 count 25527 unknown'
+    assert full_rows[11+201]['detail']=='can_no_ack subject 0x79 count 91 unknown'
     assert [r['value'] for r in full_rows[-3:]]==['12.34','0.00','0.01']
     assert all(r['units']=='km/h' for r in full_rows[-3:])
     import runpy

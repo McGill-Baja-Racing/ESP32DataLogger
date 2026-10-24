@@ -241,7 +241,10 @@ bool data_logger_enqueue(const can_message_t *message)
 
 bool data_logger_enqueue_health(const can_message_t *message)
 {
-    return state != LOGGER_IDLE && enqueue(message);
+    bool accepting = state == LOGGER_RUNNING ||
+        (state == LOGGER_STOPPING &&
+         xTaskGetTickCount() - stop_tick < pdMS_TO_TICKS(LOG_STOP_GRACE_MS));
+    return accepting && enqueue(message);
 }
 
 logger_state_t data_logger_state(void) { return state; }
@@ -285,9 +288,9 @@ static bool write_records(const int64_t records[][2], const int64_t *utc, size_t
     update_sd_fault();
     xSemaphoreGive(file_mutex);
     if (written != bytes) {
+        /* Counted by the SD_WRITE onset: a short write closes the UTC file. */
         ESP_LOGE(TAG, "SD write failed (%u/%u bytes)",
                  (unsigned)written, (unsigned)bytes);
-        node_health_count(HEALTH_SD_WRITE, 1, 0, ESP_FAIL);
         return false;
     }
     return true;
@@ -322,7 +325,9 @@ static void writer_task(void *argument)
     queued_sample_t sample;
     TickType_t last_checkpoint = xTaskGetTickCount();
     while (true) {
-        if (xQueueReceive(log_queue, &sample, pdMS_TO_TICKS(100)) == pdTRUE) {
+        /* A frame queued while the file was closing belongs to no run. */
+        if (xQueueReceive(log_queue, &sample, pdMS_TO_TICKS(100)) == pdTRUE &&
+            state != LOGGER_IDLE) {
             records[count][0] = sample.message.id;
             records[count][1] = (int64_t)sample.message.data;
             utc[count] = sample.utc_ms;

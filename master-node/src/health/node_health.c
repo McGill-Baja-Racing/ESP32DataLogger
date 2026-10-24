@@ -65,7 +65,7 @@ static bool counted_per_subject(health_code_t code)
 {
     return code == HEALTH_SAMPLES_LATE || code == HEALTH_SAMPLES_DROPPED ||
            code == HEALTH_BAD_TIMESTAMP || code == HEALTH_CAN_TX ||
-           code == HEALTH_CAN_RX_OVERFLOW;
+           code == HEALTH_CAN_RX_OVERFLOW || code == HEALTH_EVENT_LOST;
 }
 
 /* Counter N belongs to code N. A code counted per subject keeps its first
@@ -92,6 +92,7 @@ void node_health_count(health_code_t code, uint32_t amount, uint32_t subject,
                        esp_err_t error)
 {
     if (amount == 0) return;
+    subject = protocol_health_subject(subject);
     uint32_t now = now_ms();
     portENTER_CRITICAL_SAFE(&lock);
     counter_t *counter = counter_for(code, subject);
@@ -163,6 +164,7 @@ static const char *const code_names[HEALTH_CODE_COUNT] = {
     [HEALTH_SD_WRITE] = "sd_write",
     [HEALTH_GPS_NO_DATA] = "gps_no_data",
     [HEALTH_GPS_NO_FIX] = "gps_no_fix",
+    [HEALTH_EVENT_LOST] = "event_lost",
     [HEALTH_BOOT] = "boot",
     [HEALTH_ADC_UNCALIBRATED] = "adc_uncalibrated",
     [HEALTH_NODE_OFFLINE] = "node_offline",
@@ -222,9 +224,10 @@ const char *node_health_describe(uint32_t id, uint64_t data, const char **node,
             }
             return "health_event";
         }
-        snprintf(text, size, "%s subject 0x%02X count %u %s",
+        snprintf(text, size, "%s subject 0x%02X count %u%s %s",
                  event.code < HEALTH_CODE_COUNT ? code_names[event.code] : "unknown",
-                 event.subject, event.count,
+                 (unsigned)protocol_health_subject_id(event.subject), event.count,
+                 event.count == HEALTH_EVENT_COUNT_MAX ? "+" : "",
                  event.error <= HEALTH_ERROR_OTHER ? error_names[event.error] : "unknown");
         return "health_event";
     }
@@ -261,26 +264,49 @@ static void print_frame(const can_message_t *message)
     ESP_LOGI(TAG, "%s %s", node, text);
 }
 
+/* Used only from CAN dispatch. */
+static uint8_t last_sequence[CAN_NODE_SLOT_COUNT];
+static bool sequence_seen[CAN_NODE_SLOT_COUNT];
+
+/* Sets *missed to the node's events before this one that never arrived.
+ * Returns false for a repeated sequence: CAN delivers a frame twice when only
+ * its sender saw an error in the last bit. */
+static bool check_sequence(unsigned node, const health_event_frame_t *event,
+                           uint32_t *missed)
+{
+    *missed = 0;
+    if (sequence_seen[node] && event->code != HEALTH_BOOT) {
+        if (event->sequence == last_sequence[node]) return false;
+        *missed = (event->sequence - last_sequence[node] - 1u) & HEALTH_EVENT_SEQUENCE_MASK;
+    }
+    sequence_seen[node] = true;
+    last_sequence[node] = event->sequence;
+    return true;
+}
+
 bool node_health_handle_frame(const can_message_t *message)
 {
-    if (message->dlc != 8) return false;
+    uint32_t base = frame_base(message->id);
+    bool event_frame = base == CAN_ID_NODE_EVENT_BASE;
+    if (message->dlc < (event_frame ? 8 : NODE_HEALTH_PAYLOAD)) return false;
     can_message_t frame = *message;
-    if (frame_base(frame.id) == CAN_ID_NODE_DIAGNOSTICS_BASE) {
-        node_diagnostics_frame_t diagnostics;
-        memcpy(&diagnostics, &frame.data, sizeof(diagnostics));
-        diagnostics.timestamp_ms = now_ms();
-        memcpy(&frame.data, &diagnostics, sizeof(diagnostics));
-    } else if (frame.id < CAN_ID_NODE_EVENT_BASE) {
-        node_status_frame_t status;
-        memcpy(&status, &frame.data, sizeof(status));
-        /* Without beacons a node stamps status with its own clock. */
-        if (status.faults & HEALTH_BIT(HEALTH_NO_TIME_SYNC)) {
-            status.timestamp_ms = now_ms();
-            memcpy(&frame.data, &status, sizeof(status));
-        }
+    frame.dlc = 8;
+    unsigned node = message->id - base;
+    bool node_event = event_frame && node != 0;
+    uint32_t missed = 0;
+    if (!event_frame) {
+        frame.data = (uint32_t)frame.data | (uint64_t)now_ms() << 32;
+    } else if (node_event) {
+        health_event_frame_t event;
+        memcpy(&event, &frame.data, sizeof(event));
+        if (!check_sequence(node, &event, &missed)) return true;
     }
     if (print_queue) (void)xQueueSend(print_queue, &frame, 0);
-    return data_logger_enqueue_health(&frame);
+    bool logged = data_logger_enqueue_health(&frame);
+    /* The node counts a sent event as delivered, so a refused one is lost. */
+    if (node_event && !logged) missed++;
+    node_health_count(HEALTH_EVENT_LOST, missed, node, ESP_OK);
+    return logged;
 }
 
 static bool log_own_frame(uint32_t id, const void *frame)
@@ -304,8 +330,6 @@ static void log_diagnostics(void)
     log_own_frame(CAN_ID_NODE_DIAGNOSTICS_BASE, &diagnostics);
 }
 
-/* Only the count logged is marked reported, so the rest of a larger count
- * goes in the next report. */
 static void log_events(const health_state_t *now, health_state_t *reported)
 {
     for (size_t i = 0; i < COUNTER_COUNT; i++) {
@@ -322,7 +346,7 @@ static void log_events(const health_state_t *now, health_state_t *reported)
         };
         /* Not logged, for example at stop: keep it for the next run. */
         if (!log_own_frame(CAN_ID_NODE_EVENT_BASE, &event)) return;
-        reported->counters[i].count += count;
+        reported->counters[i].count = counter->count;
     }
 }
 
@@ -341,7 +365,7 @@ static void health_task(void *argument)
         now = state;
         portEXIT_CRITICAL(&lock);
         /* Status covers only the last period; events carry everything else. */
-        uint16_t faults = 0;
+        uint32_t faults = 0;
         for (int fault = 0; fault < HEALTH_FAULT_COUNT; fault++) {
             if (now.active[fault]) faults |= HEALTH_BIT(fault);
         }
@@ -357,7 +381,6 @@ static void health_task(void *argument)
             .faults = faults,
             .health = health_for(faults, false),
             .mode = recording ? NODE_MODE_RECORDING : NODE_MODE_IDLE,
-            .timestamp_ms = now_ms(),
         };
         log_own_frame(CAN_ID_NODE_STATUS_BASE, &status);
         log_diagnostics();
