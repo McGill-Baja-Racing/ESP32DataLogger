@@ -92,7 +92,7 @@ typedef enum {
     HEALTH_SENSOR_INIT,       /* event once: subject sensor CAN ID, error */
     HEALTH_SENSOR_READ,       /* event: subject sensor CAN ID, failed reads, last error */
     HEALTH_SENSOR_DEAD,       /* every read of a sensor failed */
-    HEALTH_SAMPLES_LATE,      /* event: subject sensor CAN ID, sample periods skipped */
+    HEALTH_SAMPLES_MISSED,    /* event: subject sensor CAN ID, sample periods skipped */
     HEALTH_SAMPLES_DROPPED,   /* event: subject CAN ID, samples or spark captures lost */
     HEALTH_BAD_TIMESTAMP,     /* event: subject CAN ID, negative master time */
     HEALTH_NO_TIME_SYNC,      /* no master time beacon for over 1 s */

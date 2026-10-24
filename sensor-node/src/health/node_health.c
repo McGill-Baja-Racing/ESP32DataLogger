@@ -115,7 +115,7 @@ void node_health_sensor_read(size_t index, esp_err_t error)
 
 static bool counted_per_subject(health_code_t code)
 {
-    return code == HEALTH_SAMPLES_LATE || code == HEALTH_SAMPLES_DROPPED ||
+    return code == HEALTH_SAMPLES_MISSED || code == HEALTH_SAMPLES_DROPPED ||
            code == HEALTH_BAD_TIMESTAMP || code == HEALTH_CAN_TX ||
            code == HEALTH_CAN_RX_OVERFLOW;
 }

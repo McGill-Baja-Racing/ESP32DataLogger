@@ -44,7 +44,7 @@ HEALTH_FAULT_COUNT = 17
 # Health subjects for the master-only GPS IDs 0x700-0x702.
 HEALTH_SUBJECT_GPS_BASE = 0x70
 HEALTH_CODE_NAMES = [
-    "sensor_init", "sensor_read", "sensor_dead", "samples_late", "samples_dropped",
+    "sensor_init", "sensor_read", "sensor_dead", "samples_missed", "samples_dropped",
     "bad_timestamp", "no_time_sync", "can_tx", "can_rx_overflow", "can_no_ack",
     "can_bus_error", "can_passive", "can_bus_off", "sd_write", "gps_no_data",
     "gps_no_fix", "event_lost", "boot", "adc_uncalibrated", "node_offline",
