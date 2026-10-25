@@ -17,7 +17,7 @@
 #include "sdkconfig.h"
 
 #ifndef CAN_PROTOCOL_HASH
-#error "CAN_PROTOCOL_HASH comes from protocol/protocol_hash.py"
+#error "CAN_PROTOCOL_HASH comes from protocol/build_hooks.py"
 #endif
 
 /* sdkconfig.defaults only fills options a stale sdkconfig.<env> lacks. */
@@ -59,7 +59,7 @@ static atomic_bool confirmed;
 const __attribute__((section(".rodata_custom_desc"))) firmware_identity_t firmware_identity = {
     .magic = FIRMWARE_IDENTITY_MAGIC,
     .node_id = NODE_ID,
-    .serial_test = SENSOR_SERIAL_TEST,
+    .bench_only = SENSOR_SERIAL_TEST,
     .protocol_hash = CAN_PROTOCOL_HASH,
 };
 
@@ -207,7 +207,7 @@ static void accept_chunk(void)
         firmware_identity_t identity;
         memcpy(&identity, chunk + (FIRMWARE_IDENTITY_OFFSET - offset), sizeof(identity));
         if (identity.magic != FIRMWARE_IDENTITY_MAGIC || identity.node_id != NODE_ID ||
-            identity.serial_test != 0) {
+            identity.bench_only != 0) {
             fail(UPDATE_ERROR_WRONG_IMAGE);
             return;
         }
