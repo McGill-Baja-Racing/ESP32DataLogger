@@ -136,6 +136,11 @@ app_control_result_t app_control_update_firmware(void)
     return APP_CONTROL_OK;
 }
 
+bool app_control_firmware_busy(void)
+{
+    return updating;
+}
+
 app_control_result_t app_control_start_live_data(uint32_t *token)
 {
     if (!lifecycle_mutex || !token ||
