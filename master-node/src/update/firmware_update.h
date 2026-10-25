@@ -13,3 +13,4 @@ esp_err_t firmware_update_init(void);
 bool firmware_update_is_reply_frame(const can_message_t *message);
 void firmware_update_handle_reply(const can_message_t *message);
 void firmware_update_run(void);
+void firmware_update_confirm(void);
