@@ -100,7 +100,6 @@ app_control_result_t app_control_stop_logging(void)
     return APP_CONTROL_OK;
 }
 
-#if MASTER_CAN_ENABLED
 static void update_task(void *argument)
 {
     (void)argument;
@@ -110,14 +109,9 @@ static void update_task(void *argument)
     xSemaphoreGive(lifecycle_mutex);
     vTaskDelete(NULL);
 }
-#endif
 
 app_control_result_t app_control_update_firmware(void)
 {
-#if !MASTER_CAN_ENABLED
-    ESP_LOGW(TAG, "Firmware update needs CAN");
-    return APP_CONTROL_FAILED;
-#else
     if (!lifecycle_mutex ||
         xSemaphoreTake(lifecycle_mutex, pdMS_TO_TICKS(1000)) != pdTRUE) {
         return APP_CONTROL_FAILED;
@@ -140,7 +134,6 @@ app_control_result_t app_control_update_firmware(void)
     }
     xSemaphoreGive(lifecycle_mutex);
     return APP_CONTROL_OK;
-#endif
 }
 
 app_control_result_t app_control_start_live_data(uint32_t *token)
