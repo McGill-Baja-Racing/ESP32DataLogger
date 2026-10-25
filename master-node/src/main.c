@@ -32,11 +32,6 @@ static bool stop_logging(void)
     return app_control_stop_logging() == APP_CONTROL_OK;
 }
 
-static bool update_firmware(void)
-{
-    return app_control_update_firmware() == APP_CONTROL_OK;
-}
-
 static void print_status(void)
 {
     app_control_print_status();
@@ -114,7 +109,6 @@ void app_main(void)
         .start = start_logging,
         .stop = stop_logging,
         .status = print_status,
-        .update = update_firmware,
     };
     ESP_ERROR_CHECK(serial_console_start(&console));
 #if MASTER_CAN_ENABLED
