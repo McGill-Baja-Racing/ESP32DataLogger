@@ -1,6 +1,7 @@
 #include "firmware_update.h"
 
 #include <inttypes.h>
+#include <stdatomic.h>
 #include <stdbool.h>
 #include <string.h>
 
@@ -53,6 +54,7 @@ static uint32_t received;
 static uint32_t chunk_length;
 static uint32_t retries;
 static TickType_t requested_at;
+static atomic_bool confirmed;
 
 const __attribute__((section(".rodata_custom_desc"))) firmware_identity_t firmware_identity = {
     .magic = FIRMWARE_IDENTITY_MAGIC,
@@ -272,12 +274,10 @@ static void update_task(void *argument)
             }
         }
         /* A new image that cannot reach the master must not stay installed. */
-        if (on_trial) {
-            on_trial = running_image_on_trial();
-            if (on_trial && xTaskGetTickCount() >= pdMS_TO_TICKS(UPDATE_CONFIRM_TIMEOUT_MS)) {
-                ESP_LOGE(TAG, "New image not confirmed; restarting to roll back");
-                esp_restart();
-            }
+        if (on_trial && !atomic_load(&confirmed) &&
+            xTaskGetTickCount() >= pdMS_TO_TICKS(UPDATE_CONFIRM_TIMEOUT_MS)) {
+            ESP_LOGE(TAG, "New image not confirmed; restarting to roll back");
+            esp_restart();
         }
     }
 }
@@ -294,12 +294,11 @@ esp_err_t firmware_update_init(void)
 
 void firmware_update_confirm(void)
 {
-    static bool done;
-    if (done) {
+    if (atomic_load(&confirmed)) {
         return;
     }
-    done = true;
     if (!running_image_on_trial()) {
+        atomic_store(&confirmed, true);
         return;
     }
     esp_err_t error = esp_ota_mark_app_valid_cancel_rollback();
@@ -307,6 +306,7 @@ void firmware_update_confirm(void)
         ESP_LOGW(TAG, "Confirm failed: %s", esp_err_to_name(error));
         return;
     }
+    atomic_store(&confirmed, true);
     ESP_LOGI(TAG, "New image confirmed");
     firmware_update_report_identity();
 }
