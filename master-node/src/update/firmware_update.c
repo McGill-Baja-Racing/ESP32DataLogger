@@ -9,9 +9,11 @@
 #include <sys/stat.h>
 
 #include "esp_app_desc.h"
+#include "esp_app_format.h"
 #include "esp_log.h"
 #include "esp_ota_ops.h"
 #include "esp_system.h"
+#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/task.h"
@@ -33,6 +35,7 @@
 #define IDENTITY_WAIT_MS          500
 #define RESULT_LENGTH             48
 #define MASTER_WRITE_BYTES        4096
+#define MASTER_CONFIRM_TIMEOUT_MS 60000
 
 static const char *TAG = "FirmwareUpdate";
 static QueueHandle_t reply_queue;
@@ -56,6 +59,7 @@ typedef struct {
     char path[96];
     uint32_t size;
     uint8_t hash[NODE_IDENTITY_HASH_LENGTH];
+    uint16_t protocol_hash;
 } image_t;
 
 /* Scanned at boot and again by every update. */
@@ -67,9 +71,11 @@ static bool needs_update(unsigned int id, const uint8_t *hash)
            memcmp(hash, images[id].hash, NODE_IDENTITY_HASH_LENGTH) != 0;
 }
 
+#if MASTER_CAN_ENABLED
 static const char *const error_names[UPDATE_ERROR_COUNT] = {
     "none", "recording", "too large", "on trial", "wrong image", "flash", "bad image", "timeout",
 };
+#endif
 
 static void format_hash(const uint8_t *hash, char *text)
 {
@@ -190,6 +196,11 @@ _Static_assert(offsetof(esp_app_desc_t, app_elf_sha256) == APP_DESC_ELF_SHA256_O
                "image hash offset must match esp_app_desc_t");
 _Static_assert(sizeof(esp_app_desc_t) + IMAGE_APP_DESC_OFFSET == FIRMWARE_IDENTITY_OFFSET,
                "identity must follow esp_app_desc_t");
+_Static_assert(ESP_IMAGE_HEADER_MAGIC == IMAGE_MAGIC, "image magic must match esp_app_format.h");
+_Static_assert(ESP_APP_DESC_MAGIC_WORD == APP_DESC_MAGIC, "app desc magic must match esp_app_desc.h");
+_Static_assert(sizeof(esp_image_header_t) + sizeof(esp_image_segment_header_t) ==
+                   IMAGE_APP_DESC_OFFSET,
+               "app desc must follow the first segment header");
 
 static void scan_images(void)
 {
@@ -235,11 +246,13 @@ static void scan_images(void)
             strcpy(image->path, path);
             image->size = (uint32_t)info.st_size;
             memcpy(image->hash, hash, sizeof(hash));
+            image->protocol_hash = identity.protocol_hash;
         }
     }
     closedir(directory);
 }
 
+#if MASTER_CAN_ENABLED
 static void send_abort(unsigned int id)
 {
     uint8_t payload[] = {(uint8_t)id, UPDATE_OP_ABORT};
@@ -341,17 +354,17 @@ static bool transfer_image(FILE *file, unsigned int id, const image_t *image, ch
     }
 }
 
-static void flash_node(unsigned int id, const image_t *image, char *result)
+static bool flash_node(unsigned int id, const image_t *image, char *result)
 {
     FILE *file = fopen(image->path, "rb");
     if (!file) {
         snprintf(result, RESULT_LENGTH, "failed: cannot open image");
-        return;
+        return false;
     }
     bool sent = transfer_image(file, id, image, result);
     fclose(file);
     if (!sent) {
-        return;
+        return false;
     }
     for (int waited = 0; waited < UPDATE_CONFIRM_WAIT_MS; waited += 100) {
         if (waited % 2000 == 0) {
@@ -361,11 +374,13 @@ static void flash_node(unsigned int id, const image_t *image, char *result)
         if (memcmp(nodes[id].frame.elf_sha256, image->hash, NODE_IDENTITY_HASH_LENGTH) == 0 &&
             !(nodes[id].frame.flags & NODE_IDENTITY_PENDING)) {
             snprintf(result, RESULT_LENGTH, "updated");
-            return;
+            return true;
         }
     }
     snprintf(result, RESULT_LENGTH, "failed: new image not confirmed");
+    return false;
 }
+#endif
 
 /* True once the new image is set to boot. */
 static bool update_master(const image_t *image, bool node_failed, char *result)
@@ -449,11 +464,33 @@ static bool update_master(const image_t *image, bool node_failed, char *result)
     return true;
 }
 
+static void confirm_timeout(void *argument)
+{
+    (void)argument;
+    if (is_on_trial()) {
+        ESP_LOGE(TAG, "New image not confirmed; restarting to roll back");
+        esp_restart();
+    }
+}
+
 esp_err_t firmware_update_init(void)
 {
     reply_queue = xQueueCreate(16, sizeof(can_message_t));
     if (!reply_queue) {
         return ESP_ERR_NO_MEM;
+    }
+    /* An image that hangs before the end of app_main would otherwise stay on trial forever. */
+    if (is_on_trial()) {
+        static esp_timer_handle_t timer;
+        const esp_timer_create_args_t args = {.callback = confirm_timeout, .name = "fw_confirm"};
+        esp_err_t error = esp_timer_create(&args, &timer);
+        if (error != ESP_OK) {
+            return error;
+        }
+        error = esp_timer_start_once(timer, (uint64_t)MASTER_CONFIRM_TIMEOUT_MS * 1000);
+        if (error != ESP_OK) {
+            return error;
+        }
     }
     scan_images();
     if (needs_update(0, esp_app_get_description()->app_elf_sha256)) {
@@ -467,12 +504,23 @@ void firmware_update_run(void)
     memset(images, 0, sizeof(images));
     scan_images();
 
+    bool node_failed = false;
+#if MASTER_CAN_ENABLED
     uint32_t reports[CAN_NODE_SLOT_COUNT];
     for (unsigned int id = 0; id < CAN_NODE_SLOT_COUNT; id++) {
         reports[id] = nodes[id].reports;
     }
     (void)firmware_update_request_identity();
     vTaskDelay(pdMS_TO_TICKS(IDENTITY_WAIT_MS));
+
+    /* Nodes flashed to a protocol the master will not run would be stranded. */
+    uint16_t master_protocol = CAN_PROTOCOL_HASH;
+    const esp_partition_t *part = esp_ota_get_next_update_partition(NULL);
+    if (images[0].present && !images[0].duplicate && part && images[0].size <= part->size &&
+        memcmp(esp_app_get_description()->app_elf_sha256, images[0].hash,
+               NODE_IDENTITY_HASH_LENGTH) != 0) {
+        master_protocol = images[0].protocol_hash;
+    }
 
     char results[CAN_NODE_SLOT_COUNT][RESULT_LENGTH];
     for (unsigned int id = 1; id < CAN_NODE_SLOT_COUNT; id++) {
@@ -488,9 +536,14 @@ void firmware_update_run(void)
         } else if (memcmp(nodes[id].frame.elf_sha256, images[id].hash,
                           NODE_IDENTITY_HASH_LENGTH) == 0) {
             snprintf(results[id], RESULT_LENGTH, "current");
+        } else if (images[id].protocol_hash != master_protocol) {
+            snprintf(results[id], RESULT_LENGTH, "skipped: protocol differs from master");
+            node_failed = true;
         } else {
             ESP_LOGI(TAG, "Node %u: flashing %s", id, images[id].path);
-            flash_node(id, &images[id], results[id]);
+            if (!flash_node(id, &images[id], results[id])) {
+                node_failed = true;
+            }
         }
     }
     for (unsigned int id = 1; id < CAN_NODE_SLOT_COUNT; id++) {
@@ -498,13 +551,8 @@ void firmware_update_run(void)
             ESP_LOGI(TAG, "Node %u: %s", id, results[id]);
         }
     }
+#endif
 
-    bool node_failed = false;
-    for (unsigned int id = 1; id < CAN_NODE_SLOT_COUNT; id++) {
-        if ((CAN_NODE_ID_MASK & (1U << id)) && strncmp(results[id], "failed", 6) == 0) {
-            node_failed = true;
-        }
-    }
     char master_result[RESULT_LENGTH];
     bool restart = update_master(&images[0], node_failed, master_result);
     ESP_LOGI(TAG, "Master: %s", master_result);
