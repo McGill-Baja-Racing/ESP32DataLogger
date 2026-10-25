@@ -29,7 +29,7 @@
 #define SENSOR_SERIAL_TEST 0
 #endif
 
-#define UPDATE_QUEUE_LENGTH       40
+#define UPDATE_QUEUE_LENGTH       (UPDATE_CHUNK_FRAMES + 8)
 #define UPDATE_RETRY_MS           100
 #define UPDATE_RETRY_LIMIT        20
 #define UPDATE_CONFIRM_TIMEOUT_MS 30000
@@ -54,7 +54,7 @@ static uint32_t received;
 static uint32_t chunk_length;
 static uint32_t retries;
 static TickType_t requested_at;
-static atomic_bool confirmed;
+static atomic_bool on_trial;
 
 const __attribute__((section(".rodata_custom_desc"))) firmware_identity_t firmware_identity = {
     .magic = FIRMWARE_IDENTITY_MAGIC,
@@ -63,12 +63,9 @@ const __attribute__((section(".rodata_custom_desc"))) firmware_identity_t firmwa
     .protocol_hash = CAN_PROTOCOL_HASH,
 };
 
-static bool running_image_on_trial(void)
-{
-    esp_ota_img_states_t state;
-    return esp_ota_get_state_partition(esp_ota_get_running_partition(), &state) == ESP_OK &&
-           state == ESP_OTA_IMG_PENDING_VERIFY;
-}
+_Static_assert(FIRMWARE_IDENTITY_OFFSET / UPDATE_CHUNK_BYTES ==
+               (FIRMWARE_IDENTITY_OFFSET + sizeof(firmware_identity_t) - 1) / UPDATE_CHUNK_BYTES,
+               "accept_chunk needs the identity inside one chunk");
 
 void firmware_update_report_identity(void)
 {
@@ -77,7 +74,7 @@ void firmware_update_report_identity(void)
     };
     memcpy(frame.elf_sha256, esp_app_get_description()->app_elf_sha256,
            NODE_IDENTITY_HASH_LENGTH);
-    if (running_image_on_trial()) {
+    if (atomic_load(&on_trial)) {
         frame.flags |= NODE_IDENTITY_PENDING;
     }
     esp_err_t error = can_node_send(CAN_ID_NODE_IDENTITY_BASE + NODE_ID,
@@ -118,15 +115,30 @@ static void send_reply(const uint8_t *payload, uint8_t length)
     }
 }
 
-static void fail(update_error_t error)
+static void stop_receiving(void)
 {
     if (receiving) {
         esp_ota_abort(ota_handle);
         receiving = false;
     }
+}
+
+static void fail(update_error_t error)
+{
+    static const char *const names[UPDATE_ERROR_COUNT] = {
+        [UPDATE_ERROR_NONE] = "none",
+        [UPDATE_ERROR_RECORDING] = "recording",
+        [UPDATE_ERROR_TOO_LARGE] = "too large",
+        [UPDATE_ERROR_ON_TRIAL] = "on trial",
+        [UPDATE_ERROR_WRONG_IMAGE] = "wrong image",
+        [UPDATE_ERROR_FLASH] = "flash",
+        [UPDATE_ERROR_BAD_IMAGE] = "bad image",
+        [UPDATE_ERROR_TIMEOUT] = "timeout",
+    };
+    stop_receiving();
     uint8_t reply[] = {UPDATE_REPLY_ERROR, error};
     send_reply(reply, sizeof(reply));
-    ESP_LOGW(TAG, "Update failed: error %u", error);
+    ESP_LOGW(TAG, "Update failed: %s", error < UPDATE_ERROR_COUNT ? names[error] : "unknown");
 }
 
 static void request_chunk(void)
@@ -148,10 +160,7 @@ static void request_chunk(void)
 
 static void begin_update(const uint8_t *bytes)
 {
-    if (receiving) {
-        esp_ota_abort(ota_handle);
-        receiving = false;
-    }
+    stop_receiving();
     if (can_node_state() == NODE_STATE_ACTIVE) {
         fail(UPDATE_ERROR_RECORDING);
         return;
@@ -178,6 +187,7 @@ static void begin_update(const uint8_t *bytes)
     image_size = size;
     offset = 0;
     retries = 0;
+    tag = NODE_ID & 7;
     request_chunk();
 }
 
@@ -230,9 +240,8 @@ static void handle_input(const update_input_t *input)
     if (!input->data) {
         if (input->bytes[1] == UPDATE_OP_BEGIN) {
             begin_update(input->bytes);
-        } else if (receiving) {
-            esp_ota_abort(ota_handle);
-            receiving = false;
+        } else {
+            stop_receiving();
         }
         return;
     }
@@ -260,7 +269,6 @@ static void handle_input(const update_input_t *input)
 static void update_task(void *argument)
 {
     (void)argument;
-    bool on_trial = running_image_on_trial();
     update_input_t input;
     while (true) {
         if (xQueueReceive(input_queue, &input, pdMS_TO_TICKS(UPDATE_RETRY_MS)) == pdTRUE) {
@@ -274,7 +282,7 @@ static void update_task(void *argument)
             }
         }
         /* A new image that cannot reach the master must not stay installed. */
-        if (on_trial && !atomic_load(&confirmed) &&
+        if (atomic_load(&on_trial) &&
             xTaskGetTickCount() >= pdMS_TO_TICKS(UPDATE_CONFIRM_TIMEOUT_MS)) {
             ESP_LOGE(TAG, "New image not confirmed; restarting to roll back");
             esp_restart();
@@ -284,6 +292,9 @@ static void update_task(void *argument)
 
 esp_err_t firmware_update_init(void)
 {
+    esp_ota_img_states_t state;
+    atomic_init(&on_trial, esp_ota_get_state_partition(esp_ota_get_running_partition(), &state) == ESP_OK &&
+                           state == ESP_OTA_IMG_PENDING_VERIFY);
     input_queue = xQueueCreate(UPDATE_QUEUE_LENGTH, sizeof(update_input_t));
     if (!input_queue) {
         return ESP_ERR_NO_MEM;
@@ -294,11 +305,7 @@ esp_err_t firmware_update_init(void)
 
 void firmware_update_confirm(void)
 {
-    if (atomic_load(&confirmed)) {
-        return;
-    }
-    if (!running_image_on_trial()) {
-        atomic_store(&confirmed, true);
+    if (!atomic_load(&on_trial)) {
         return;
     }
     esp_err_t error = esp_ota_mark_app_valid_cancel_rollback();
@@ -306,7 +313,7 @@ void firmware_update_confirm(void)
         ESP_LOGW(TAG, "Confirm failed: %s", esp_err_to_name(error));
         return;
     }
-    atomic_store(&confirmed, true);
+    atomic_store(&on_trial, false);
     ESP_LOGI(TAG, "New image confirmed");
     firmware_update_report_identity();
 }

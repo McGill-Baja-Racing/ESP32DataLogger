@@ -30,7 +30,7 @@
 #endif
 
 #define CAN_TX_QUEUE_DEPTH      5
-#define CAN_RX_QUEUE_LENGTH     40
+#define CAN_RX_QUEUE_LENGTH     (UPDATE_CHUNK_FRAMES + 8)
 #define CAN_TX_TIMEOUT_MS       50
 #define CAN_RECOVERY_POLL_MS    250
 #define CAN_RECOVERY_WARN_MS    5000
@@ -137,6 +137,13 @@ static bool targets_this_node(const can_message_t *message)
     return target == NODE_ID || target == 0xFF;
 }
 
+static void unpack_payload(const can_message_t *message, uint8_t *payload)
+{
+    for (uint8_t i = 0; i < message->dlc; i++) {
+        payload[i] = (uint8_t)(message->data >> (8 * i));
+    }
+}
+
 /* Sets *queued once the driver holds the frame: it then goes out after a
  * timeout too, unless bus-off recovery discards it. */
 static esp_err_t transmit(uint32_t can_id, const uint8_t *payload, uint8_t length,
@@ -226,13 +233,6 @@ void can_node_report_state(node_state_t state, node_state_reason_t reason)
     }
 }
 
-static void unpack_payload(const can_message_t *message, uint8_t *payload)
-{
-    for (uint8_t i = 0; i < message->dlc; i++) {
-        payload[i] = (uint8_t)(message->data >> (8 * i));
-    }
-}
-
 node_state_t can_node_state(void)
 {
     return current_state;
@@ -283,14 +283,13 @@ static void dispatch_task(void *argument)
             }
             /* As with START, repeat only the acknowledgement, not the action. */
             can_node_report_state(NODE_STATE_IDLE, NODE_STATE_REASON_STOP);
-        } else if (message.id == CAN_ID_UPDATE_COMMAND && message.dlc >= 2 &&
-                   targets_this_node(&message)) {
+        } else if (message.id == CAN_ID_UPDATE_COMMAND && targets_this_node(&message)) {
             uint8_t payload[8];
             unpack_payload(&message, payload);
             if (app_callbacks.on_update_command) {
                 app_callbacks.on_update_command(payload, message.dlc);
             }
-        } else if (message.id == CAN_ID_UPDATE_DATA && message.dlc >= 1) {
+        } else if (message.id == CAN_ID_UPDATE_DATA) {
             uint8_t payload[8];
             unpack_payload(&message, payload);
             if (app_callbacks.on_update_data) {
