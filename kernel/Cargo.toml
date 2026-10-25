@@ -30,6 +30,14 @@ esp32p4 = [
     "esp-backtrace/esp32p4",
 ]
 
+# The sensor-node firmware to build; one at a time.
+brake = ["esp32c3"]
+mpu = ["esp32c3"]
+encoder = ["esp32c3"]
+engine = ["esp32c3"]
+engine-bench = ["esp32c3"]
+adc = ["esp32c3"]
+
 [dependencies]
 esp-hal = { version = "=1.2.2", features = ["unstable"] }
 esp-rtos = { version = "=0.4.0", features = ["esp-radio", "log-04"] }

@@ -1,5 +1,6 @@
 [target.riscv32imc-unknown-none-elf]
-runner = "espflash flash --monitor --chip esp32c3"
+# The sensor nodes' flash.
+runner = "espflash flash --monitor --chip esp32c3 --flash-mode dio --flash-freq 80mhz --flash-size 2mb"
 
 [target.riscv32imafc-unknown-none-elf]
 runner = "espflash flash --monitor --chip esp32p4"

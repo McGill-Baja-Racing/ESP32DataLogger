@@ -1,4 +1,4 @@
-// Force-included into every firmware C file by pio/cargo.py. The kernel supports only the options
+// Force-included into every firmware C file by build.rs. The kernel supports only the options
 // the firmware uses, so naming any other option of a supported ESP-IDF API is a compile error.
 // The headers come first because poisoning only rejects uses after this point, and a macro is
 // undefined before it is poisoned.
