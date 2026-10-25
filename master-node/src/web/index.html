@@ -52,6 +52,18 @@
 
   <section class="card"><div class="logs-header"><h2>Completed logs</h2><label class="muted">Show <select id="logFilter"><option value="all" selected>All files</option><option value="date">Date names</option><option value="custom">Custom names</option><option value="number">Number names</option></select></label></div><div id="logs">Loading...</div></section>
 
+  <section class="card">
+    <h2>Firmware</h2>
+    <div id="firmware">Loading...</div>
+    <div class="controls">
+      <input type="file" id="firmwareFiles" accept=".bin" multiple><button id="firmwareUpload">Upload</button>
+      <button id="firmwareUpdate">Update firmware</button>
+    </div>
+    <div class="muted">Pick the firmware.bin files from .pio/build/&lt;env&gt;/. The master files each image by the node it was built for.</div>
+    <div class="muted">Update flashes every node whose image differs, one at a time, then the master, which restarts and the page reconnects.</div>
+    <div id="firmwareNotice" class="muted"></div><div id="firmwareError" class="error"></div>
+  </section>
+
 <script>
 'use strict';
 const $=id=>document.getElementById(id);
@@ -81,7 +93,7 @@ async function refreshStatus(){
     $('nodes').textContent=`Nodes — 1: ${s.nodes['1']}, 3: ${s.nodes['3']}, 4: ${s.nodes['4']}, 5: ${s.nodes['5']}, 6: ${s.nodes['6']}`;
     const becameIdle=previousLoggerState!==null&&previousLoggerState!=='idle'&&s.logger_state==='idle';
     if(becameIdle)$('logName').value='';
-    previousLoggerState=s.logger_state;$('start').disabled=s.logger_state!=='idle'; $('stop').disabled=s.logger_state!=='running';$('logName').disabled=s.logger_state!=='idle';
+    previousLoggerState=s.logger_state;renderFirmware();$('start').disabled=s.logger_state!=='idle'; $('stop').disabled=s.logger_state!=='running';$('logName').disabled=s.logger_state!=='idle';
     $('liveEnable').disabled=s.logger_state!=='running'||token!==null||s.live_enabled;
     if(!token)$('liveState').textContent=s.live_enabled?'Another viewer active':'Disabled';
     if(token&&(!s.live_enabled||s.logger_state!=='running')) endLive(false,'Live data stopped with the recording.');
@@ -183,9 +195,48 @@ async function renameLog(oldName){
   try{$('error').textContent='';const newName=normalizeLogName(requested);if(newName===oldName)return;await json(`/api/logs/rename?name=${encodeURIComponent(oldName)}&new_name=${encodeURIComponent(newName)}`,{method:'POST'});await refreshLogs();await refreshStatus()}
   catch(e){$('error').textContent=e.message}
 }
+let firmwareState=null, firmwareTimer=null, firmwareBusy=false;
+function firmwareLock(){return firmwareBusy||(firmwareState&&firmwareState.updating)||loggerState!=='idle'}
+function renderFirmware(){
+  const f=firmwareState,box=$('firmware');box.replaceChildren();if(!f)return;
+  for(const id of Object.keys(f.slots)){
+    const s=f.slots[id],row=document.createElement('div');row.className='row';const label=document.createElement('span');
+    const status=f.updating&&f.target===Number(id)?`updating ${f.percent}%`:s.result||(!s.image?'no image':s.needs_update?'needs update':'current');
+    label.textContent=`${id==='0'?'Master':'Node '+id}: ${s.known?s.hash.slice(0,12):'not seen'}${s.on_trial?' (on trial)':''} - ${status}`;row.append(label);
+    if(s.image){const del=document.createElement('button');del.textContent='Delete image';del.disabled=firmwareLock();del.onclick=()=>deleteFirmware(id);row.append(del)}
+    box.append(row);
+  }
+  $('firmwareUpload').disabled=$('firmwareFiles').disabled=$('firmwareUpdate').disabled=firmwareLock();
+  $('firmwareNotice').textContent=loggerState!=='idle'?'Stop recording to change firmware.':f.updating?'Update running. Do not remove power.':'';
+}
+async function refreshFirmware(){
+  clearTimeout(firmwareTimer);
+  try{firmwareState=await json('/api/firmware',{cache:'no-store'});$('firmwareError').textContent='';renderFirmware()}
+  catch(e){if(firmwareState&&firmwareState.updating&&firmwareState.target===0){$('firmwareNotice').textContent='Master restarting...'}else $('firmwareError').textContent=e.message}
+  firmwareTimer=setTimeout(refreshFirmware,firmwareState&&firmwareState.updating?1000:5000);
+}
+async function uploadFirmware(){
+  const files=[...$('firmwareFiles').files];if(!files.length)return;
+  firmwareBusy=true;renderFirmware();$('firmwareError').textContent='';
+  for(const file of files){
+    $('firmwareNotice').textContent=`Uploading ${file.name}…`;
+    try{const r=await json('/api/firmware/upload',{method:'PUT',body:file});$('firmwareNotice').textContent=`Stored as ${r.stored}`}
+    catch(e){$('firmwareError').textContent=`${file.name}: ${e.message}`;break}
+  }
+  firmwareBusy=false;$('firmwareFiles').value='';refreshFirmware();
+}
+async function deleteFirmware(id){
+  try{$('firmwareError').textContent='';await json('/api/firmware/delete?node='+id,{method:'POST'})}catch(e){$('firmwareError').textContent=e.message}
+  refreshFirmware();
+}
+async function updateFirmware(){
+  try{$('firmwareError').textContent='';firmwareState=await json('/api/firmware/update',{method:'POST'});firmwareState.updating=true;renderFirmware()}catch(e){$('firmwareError').textContent=e.message}
+  refreshFirmware();
+}
+$('firmwareUpload').onclick=uploadFirmware;$('firmwareUpdate').onclick=updateFirmware;
 $('logName').value='';$('logFilter').onchange=renderLogs;$('start').onclick=()=>logging('start');$('stop').onclick=()=>logging('stop');$('liveEnable').onclick=enableLive;$('liveDisable').onclick=disableLive;$('rate').onchange=schedulePoll;$('window').onchange=()=>{for(const chart of charts.values()){trim(chart);draw(chart)}};
 window.addEventListener('resize',()=>{for(const chart of charts.values())draw(chart)});window.addEventListener('pagehide',()=>{if(token)fetch('/api/live/stop?token='+encodeURIComponent(token),{method:'POST',keepalive:true})});
-loadSignals();refreshStatus();refreshLogs();setInterval(refreshStatus,1000);
+loadSignals();refreshStatus();refreshLogs();refreshFirmware();setInterval(refreshStatus,1000);
 </script>
 </body>
 </html>

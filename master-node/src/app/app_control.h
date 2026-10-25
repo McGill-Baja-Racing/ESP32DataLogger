@@ -75,6 +75,12 @@ app_control_result_t app_control_stop_logging(void);
  *         the task could not start.
  */
 app_control_result_t app_control_update_firmware(void);
+bool app_control_firmware_busy(void);
+
+/**
+ * @brief Whether a firmware update is running.
+ */
+bool app_control_firmware_busy(void);
 
 /**
  * @brief Give one viewer the live data lease, only while logging.
