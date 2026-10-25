@@ -2,6 +2,7 @@
   "folders": [
     { "name": "master-node", "path": "master-node" },
     { "name": "sensor-node", "path": "sensor-node" },
+    { "name": "kernel", "path": "kernel" },
     { "name": "sim-engine-rpm", "path": "simulators/engine-rpm" },
     { "name": "sim-wheel-rpm", "path": "simulators/wheel-rpm" },
     { "name": "repo", "path": "." }
@@ -17,6 +18,8 @@
       { "text": "$(plug)", "tooltip": "PlatformIO: Serial Monitor", "commands": "platformio-ide.serialMonitor" },
       { "text": "$(terminal)", "tooltip": "PlatformIO: New Terminal", "commands": "platformio-ide.newTerminal" }
     ],
+    // clangd reads the compile commands of the last node build (sensor-node/.clangd).
+    "C_Cpp.intelliSenseEngine": "disabled",
     // The code has no formatter configuration: never reformat whole files.
     "editor.formatOnSave": false,
     "editor.formatOnPaste": false,
@@ -26,6 +29,7 @@
     "files.exclude": {
       "master-node": true,
       "sensor-node": true,
+      "kernel": true,
       "simulators": true,
       "**/.pio": true,
       "**/managed_components": true
@@ -40,13 +44,22 @@
         "command": "python3",
         "args": ["${workspaceFolder:master-node}/tools/decode_log.py", "${file}"],
         "problemMatcher": []
-      }
+      },
+      // Ctrl+Shift+B lists them: each builds a node's firmware, flashes it and opens the monitor.
+      { "label": "Flash NodeBrake", "type": "shell", "command": "cargo run --release --features brake", "options": { "cwd": "${workspaceFolder:kernel}" }, "group": "build", "problemMatcher": [] },
+      { "label": "Flash NodeMPU", "type": "shell", "command": "cargo run --release --features mpu", "options": { "cwd": "${workspaceFolder:kernel}" }, "group": "build", "problemMatcher": [] },
+      { "label": "Flash NodeEncoder", "type": "shell", "command": "cargo run --release --features encoder", "options": { "cwd": "${workspaceFolder:kernel}" }, "group": "build", "problemMatcher": [] },
+      { "label": "Flash NodeEngine", "type": "shell", "command": "cargo run --release --features engine", "options": { "cwd": "${workspaceFolder:kernel}" }, "group": "build", "problemMatcher": [] },
+      { "label": "Flash NodeEngineBench", "type": "shell", "command": "cargo run --release --features engine-bench", "options": { "cwd": "${workspaceFolder:kernel}" }, "group": "build", "problemMatcher": [] },
+      { "label": "Flash NodeADC", "type": "shell", "command": "cargo run --release --features adc", "options": { "cwd": "${workspaceFolder:kernel}" }, "group": "build", "problemMatcher": [] }
     ]
   },
   "extensions": {
     "recommendations": [
       "platformio.platformio-ide",
-      "Jason2866.esp-decoder"
+      "Jason2866.esp-decoder",
+      "rust-lang.rust-analyzer",
+      "llvm-vs-code-extensions.vscode-clangd"
     ],
     // These conflict with PlatformIO IDE or keep asking to configure CMake.
     "unwantedRecommendations": [
