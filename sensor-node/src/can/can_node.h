@@ -69,4 +69,7 @@ void can_node_error_counts(uint8_t *tx_errors, uint8_t *rx_errors);
  */
 void can_node_report_state(node_state_t state, node_state_reason_t reason);
 
+/**
+ * @brief The state last reported to the master.
+ */
 node_state_t can_node_state(void);
