@@ -69,7 +69,7 @@ typedef enum {
 
 typedef struct __attribute__((packed)) {
     uint8_t elf_sha256[NODE_IDENTITY_HASH_LENGTH];  /* start of esp_app_desc_t.app_elf_sha256 */
-    uint16_t protocol_hash;                         /* CAN_PROTOCOL_HASH, set by protocol/protocol_hash.py */
+    uint16_t protocol_hash;                         /* CAN_PROTOCOL_HASH, set by protocol/build_hooks.py */
     uint8_t flags;
 } node_identity_frame_t;
 
@@ -81,7 +81,8 @@ typedef struct __attribute__((packed)) {
 typedef struct __attribute__((packed)) {
     uint32_t magic;
     uint8_t node_id;            /* 0 for the master */
-    uint8_t serial_test;        /* prints to serial and never joins the bus */
+    uint8_t bench_only;         /* never joins the bus (serial-test node, CAN-less master),
+                                 * so an update never installs it */
     uint16_t protocol_hash;
 } firmware_identity_t;
 
@@ -115,7 +116,7 @@ typedef enum {
     UPDATE_ERROR_RECORDING,
     UPDATE_ERROR_TOO_LARGE,
     UPDATE_ERROR_ON_TRIAL,      /* the running image is not confirmed yet */
-    UPDATE_ERROR_WRONG_IMAGE,   /* identity is for another node, a serial-test build, or missing */
+    UPDATE_ERROR_WRONG_IMAGE,   /* identity is for another node, a bench-only build, or missing */
     UPDATE_ERROR_FLASH,
     UPDATE_ERROR_BAD_IMAGE,
     UPDATE_ERROR_TIMEOUT,
