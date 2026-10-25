@@ -109,11 +109,18 @@ fn esp_reset_reason() -> esp_reset_reason_t {
     critical_section::with(|cs| RESET_REASON.borrow(cs).get())
 }
 
-/// GCC calls this for C's `atomic_fetch_add` because the C3 has no atomic instructions.
+/// Clang calls this for C's `atomic_fetch_add` because the C3 has no atomic instructions.
 #[unsafe(no_mangle)]
 unsafe extern "C" fn __atomic_fetch_add_4(pointer: *mut u32, value: u32, _order: c_int) -> u32 {
     // SAFETY: C passes an aligned `atomic_uint` that it only accesses atomically.
     unsafe { AtomicU32::from_ptr(pointer) }.fetch_add(value, Ordering::SeqCst)
+}
+
+/// Clang calls this for C's `atomic_load` because the C3 has no atomic instructions.
+#[unsafe(no_mangle)]
+unsafe extern "C" fn __atomic_load_4(pointer: *mut u32, _order: c_int) -> u32 {
+    // SAFETY: C passes an aligned `atomic_uint` that it only accesses atomically.
+    unsafe { AtomicU32::from_ptr(pointer) }.load(Ordering::SeqCst)
 }
 
 /// `ESP_LOGx`'s C macros build the whole line's format and already drop levels above
