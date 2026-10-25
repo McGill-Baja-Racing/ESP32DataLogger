@@ -58,6 +58,15 @@ typedef struct {
     uint8_t hash[NODE_IDENTITY_HASH_LENGTH];
 } image_t;
 
+/* Scanned at boot and again by every update. */
+static image_t images[CAN_NODE_SLOT_COUNT];
+
+static bool needs_update(unsigned int id, const uint8_t *hash)
+{
+    return images[id].present && !images[id].duplicate &&
+           memcmp(hash, images[id].hash, NODE_IDENTITY_HASH_LENGTH) != 0;
+}
+
 static const char *const error_names[UPDATE_ERROR_COUNT] = {
     "none", "recording", "too large", "on trial", "wrong image", "flash", "bad image", "timeout",
 };
@@ -90,8 +99,11 @@ void firmware_update_handle_identity(const can_message_t *message)
                  frame.protocol_hash,
                  (frame.flags & NODE_IDENTITY_PENDING) ? " (on trial)" : "");
         if (frame.protocol_hash != CAN_PROTOCOL_HASH) {
-            ESP_LOGW(TAG, "Node %u protocol %04x, master %04x", id,
+            ESP_LOGE(TAG, "Node %u protocol %04x, master %04x", id,
                      frame.protocol_hash, CAN_PROTOCOL_HASH);
+        }
+        if (needs_update(id, frame.elf_sha256)) {
+            ESP_LOGW(TAG, "Node %u needs update: %s differs; run update", id, images[id].path);
         }
     }
     nodes[id].frame = frame;
@@ -114,11 +126,13 @@ static bool is_on_trial(void)
 
 void firmware_update_print_identity(void)
 {
-    char line[192];
+    char line[320];
     char hash[2 * NODE_IDENTITY_HASH_LENGTH + 1];
     format_hash(esp_app_get_description()->app_elf_sha256, hash);
-    int length = snprintf(line, sizeof(line), "master=%s%s", hash,
-                          is_on_trial() ? " (on trial)" : "");
+    int length = snprintf(line, sizeof(line), "master=%s%s%s", hash,
+                          is_on_trial() ? " (on trial)" : "",
+                          needs_update(0, esp_app_get_description()->app_elf_sha256)
+                              ? " (needs update)" : "");
     for (unsigned int id = 1;
          MASTER_CAN_ENABLED && id < CAN_NODE_SLOT_COUNT && length < (int)sizeof(line); id++) {
         if (!(CAN_NODE_ID_MASK & (1U << id))) {
@@ -129,16 +143,11 @@ void firmware_update_print_identity(void)
             continue;
         }
         format_hash(nodes[id].frame.elf_sha256, hash);
-        length += snprintf(line + length, sizeof(line) - length, " %u=%s%s", id, hash,
-                           (nodes[id].frame.flags & NODE_IDENTITY_PENDING) ? " (on trial)" : "");
+        length += snprintf(line + length, sizeof(line) - length, " %u=%s%s%s", id, hash,
+                           (nodes[id].frame.flags & NODE_IDENTITY_PENDING) ? " (on trial)" : "",
+                           needs_update(id, nodes[id].frame.elf_sha256) ? " (needs update)" : "");
     }
     ESP_LOGI(TAG, "firmware: %s", line);
-}
-
-esp_err_t firmware_update_init(void)
-{
-    reply_queue = xQueueCreate(16, sizeof(can_message_t));
-    return reply_queue ? ESP_OK : ESP_ERR_NO_MEM;
 }
 
 bool firmware_update_is_reply_frame(const can_message_t *message)
@@ -182,7 +191,7 @@ _Static_assert(offsetof(esp_app_desc_t, app_elf_sha256) == APP_DESC_ELF_SHA256_O
 _Static_assert(sizeof(esp_app_desc_t) + IMAGE_APP_DESC_OFFSET == FIRMWARE_IDENTITY_OFFSET,
                "identity must follow esp_app_desc_t");
 
-static void scan_images(image_t *images)
+static void scan_images(void)
 {
     DIR *directory = opendir(FIRMWARE_DIR);
     if (!directory) {
@@ -440,11 +449,23 @@ static bool update_master(const image_t *image, bool node_failed, char *result)
     return true;
 }
 
+esp_err_t firmware_update_init(void)
+{
+    reply_queue = xQueueCreate(16, sizeof(can_message_t));
+    if (!reply_queue) {
+        return ESP_ERR_NO_MEM;
+    }
+    scan_images();
+    if (needs_update(0, esp_app_get_description()->app_elf_sha256)) {
+        ESP_LOGW(TAG, "Master needs update: %s differs; run update", images[0].path);
+    }
+    return ESP_OK;
+}
+
 void firmware_update_run(void)
 {
-    static image_t images[CAN_NODE_SLOT_COUNT];
     memset(images, 0, sizeof(images));
-    scan_images(images);
+    scan_images();
 
     uint32_t reports[CAN_NODE_SLOT_COUNT];
     for (unsigned int id = 0; id < CAN_NODE_SLOT_COUNT; id++) {
