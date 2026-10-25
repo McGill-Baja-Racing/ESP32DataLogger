@@ -50,8 +50,6 @@
   </section>
   <div id="charts"></div>
 
-  <section class="card"><div class="logs-header"><h2>Completed logs</h2><label class="muted">Show <select id="logFilter"><option value="all" selected>All files</option><option value="date">Date names</option><option value="custom">Custom names</option><option value="number">Number names</option></select></label></div><div id="logs">Loading...</div></section>
-
   <section class="card">
     <h2>Firmware</h2>
     <div id="firmware">Loading...</div>
@@ -63,6 +61,8 @@
     <div class="muted">Update flashes every node whose image differs, one at a time, then the master, which restarts and the page reconnects.</div>
     <div id="firmwareNotice" class="muted"></div><div id="firmwareError" class="error"></div>
   </section>
+
+  <section class="card"><div class="logs-header"><h2>Completed logs</h2><label class="muted">Show <select id="logFilter"><option value="all" selected>All files</option><option value="date">Date names</option><option value="custom">Custom names</option><option value="number">Number names</option></select></label></div><div id="logs">Loading...</div></section>
 
 <script>
 'use strict';
