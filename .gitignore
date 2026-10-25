@@ -9,5 +9,8 @@ sdkconfig
 sdkconfig.*
 !sdkconfig.defaults
 
+# Images collected by protocol/build_hooks.py for the web page's firmware upload.
+/firmware/
+
 .DS_Store
 __pycache__/

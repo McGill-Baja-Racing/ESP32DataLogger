@@ -54,10 +54,10 @@
     <h2>Firmware</h2>
     <div id="firmware">Loading...</div>
     <div class="controls">
-      <input type="file" id="firmwareFiles" accept=".bin" multiple><button id="firmwareUpload">Upload</button>
+      <input type="file" id="firmwareFiles" webkitdirectory><button id="firmwareUpload">Upload</button>
       <button id="firmwareUpdate">Update firmware</button>
     </div>
-    <div class="muted">Pick the firmware.bin files from .pio/build/&lt;env&gt;/. The master files each image by the node it was built for.</div>
+    <div class="muted">Pick the firmware folder at the repo root: every build copies its image there. Bench-only builds are skipped.</div>
     <div class="muted">Update flashes every node whose image differs, one at a time, then the master, which restarts and the page reconnects.</div>
     <div id="firmwareNotice" class="muted"></div><div id="firmwareError" class="error"></div>
   </section>
@@ -215,8 +215,21 @@ async function refreshFirmware(){
   catch(e){if(firmwareState&&firmwareState.updating&&firmwareState.target===0){$('firmwareNotice').textContent='Master restarting...'}else $('firmwareError').textContent=e.message}
   firmwareTimer=setTimeout(refreshFirmware,firmwareState&&firmwareState.updating?1000:5000);
 }
+// Offsets follow firmware_identity_t in protocol/app_protocol.h.
+async function firmwareTarget(file){
+  const v=new DataView(await file.slice(0,296).arrayBuffer());
+  if(v.byteLength<296||v.getUint8(0)!==0xE9||v.getUint32(32,true)!==0xABCD5432||v.getUint32(288,true)!==0x42414A41||v.getUint8(293))return null;
+  return {node:v.getUint8(292),hash:[...new Uint8Array(v.buffer,176,5)].join()};
+}
 async function uploadFirmware(){
-  const files=[...$('firmwareFiles').files];if(!files.length)return;
+  const boards=new Map();
+  for(const file of $('firmwareFiles').files){
+    const target=file.name.endsWith('.bin')?await firmwareTarget(file):null;
+    if(target)boards.set(target.node,[...(boards.get(target.node)||[]),{file,hash:target.hash}]);
+  }
+  const clashes=[...boards.values()].filter(list=>list.some(i=>i.hash!==list[0].hash)).map(list=>list.map(i=>i.file.name).join(' and '));
+  if(clashes.length){$('firmwareError').textContent=`Two images for one board: ${clashes.join('; ')}. Delete the extra file and pick the folder again.`;return}
+  const files=[...boards.values()].map(list=>list[0].file);if(!files.length){$('firmwareError').textContent='No firmware images in that folder';return}
   firmwareBusy=true;renderFirmware();$('firmwareError').textContent='';
   for(const file of files){
     $('firmwareNotice').textContent=`Uploading ${file.name}…`;
