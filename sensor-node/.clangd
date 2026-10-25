@@ -1,0 +1,3 @@
+# The compile commands of the last `cargo build --features <node>` in kernel/.
+CompileFlags:
+  CompilationDatabase: ../kernel/target
