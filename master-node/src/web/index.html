@@ -227,15 +227,17 @@ async function uploadFirmware(){
     const target=file.name.endsWith('.bin')?await firmwareTarget(file):null;
     if(target)boards.set(target.node,[...(boards.get(target.node)||[]),{file,hash:target.hash}]);
   }
-  const clashes=[...boards.values()].filter(list=>list.some(i=>i.hash!==list[0].hash)).map(list=>list.map(i=>i.file.name).join(' and '));
-  if(clashes.length){$('firmwareError').textContent=`Two images for one board: ${clashes.join('; ')}. Delete the extra file and pick the folder again.`;return}
-  const files=[...boards.values()].map(list=>list[0].file);if(!files.length){$('firmwareError').textContent='No firmware images in that folder';return}
+  // Several builds for one board (Master and MasterStable, or a stale copy): the newest build wins.
+  const chosen=[...boards.values()].map(list=>list.sort((a,b)=>b.file.lastModified-a.file.lastModified));
+  const files=chosen.map(list=>list[0].file);if(!files.length){$('firmwareError').textContent='No firmware images in that folder';return}
+  const ignored=chosen.flatMap(list=>list.slice(1).filter(i=>i.hash!==list[0].hash).map(i=>i.file.name));
   firmwareBusy=true;renderFirmware();$('firmwareError').textContent='';
   for(const file of files){
     $('firmwareNotice').textContent=`Uploading ${file.name}…`;
     try{const r=await json('/api/firmware/upload',{method:'PUT',body:file});$('firmwareNotice').textContent=`Stored as ${r.stored}`}
     catch(e){$('firmwareError').textContent=`${file.name}: ${e.message}`;break}
   }
+  if(ignored.length)$('firmwareNotice').textContent+=` (older builds ignored: ${ignored.join(', ')})`;
   firmwareBusy=false;$('firmwareFiles').value='';refreshFirmware();
 }
 async function deleteFirmware(id){
