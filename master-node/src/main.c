@@ -129,4 +129,6 @@ void app_main(void)
         ESP_LOGE(TAG, "Wi-Fi controls unavailable: %s", esp_err_to_name(web_error));
     }
     ESP_LOGI(TAG, "Logger ready; node clocks synchronize every 100 ms");
+    /* A new image that fails any init step above reboots before this and rolls back. */
+    firmware_update_confirm();
 }

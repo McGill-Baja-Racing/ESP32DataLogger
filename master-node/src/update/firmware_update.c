@@ -11,6 +11,7 @@
 #include "esp_app_desc.h"
 #include "esp_log.h"
 #include "esp_ota_ops.h"
+#include "esp_system.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/task.h"
@@ -27,6 +28,7 @@
 #define UPDATE_CONFIRM_WAIT_MS    30000
 #define IDENTITY_WAIT_MS          500
 #define RESULT_LENGTH             48
+#define MASTER_WRITE_BYTES        4096
 
 static const char *TAG = "FirmwareUpdate";
 static QueueHandle_t reply_queue;
@@ -208,10 +210,9 @@ static void scan_images(image_t *images)
             ESP_LOGW(TAG, "Skipping %s: not a firmware image", path);
         } else if (identity.serial_test) {
             ESP_LOGW(TAG, "Skipping %s: serial-test image", path);
-        } else if (identity.node_id == 0) {
-            ESP_LOGW(TAG, "master image %s: self-update not supported yet", path);
-        } else if (identity.node_id >= CAN_NODE_SLOT_COUNT ||
-                   !(CAN_NODE_ID_MASK & (1U << identity.node_id))) {
+        } else if (identity.node_id != 0 &&
+                   (identity.node_id >= CAN_NODE_SLOT_COUNT ||
+                    !(CAN_NODE_ID_MASK & (1U << identity.node_id)))) {
             ESP_LOGW(TAG, "Skipping %s: unknown node %u", path, identity.node_id);
         } else if (images[identity.node_id].present) {
             images[identity.node_id].duplicate = true;
@@ -353,6 +354,88 @@ static void flash_node(unsigned int id, const image_t *image, char *result)
     snprintf(result, RESULT_LENGTH, "failed: new image not confirmed");
 }
 
+/* True once the new image is set to boot. */
+static bool update_master(const image_t *image, bool node_failed, char *result)
+{
+    if (!image->present) {
+        snprintf(result, RESULT_LENGTH, "no image");
+        return false;
+    }
+    if (image->duplicate) {
+        snprintf(result, RESULT_LENGTH, "two images, skipped");
+        return false;
+    }
+    if (node_failed) {
+        snprintf(result, RESULT_LENGTH, "skipped: a node update failed");
+        return false;
+    }
+    if (memcmp(esp_app_get_description()->app_elf_sha256, image->hash,
+               NODE_IDENTITY_HASH_LENGTH) == 0) {
+        snprintf(result, RESULT_LENGTH, "current");
+        return false;
+    }
+    const esp_partition_t *part = esp_ota_get_next_update_partition(NULL);
+    if (!part || image->size > part->size) {
+        snprintf(result, RESULT_LENGTH, "failed: image too large");
+        return false;
+    }
+    esp_ota_handle_t handle;
+    esp_err_t error = esp_ota_begin(part, image->size, &handle);
+    if (error != ESP_OK) {
+        snprintf(result, RESULT_LENGTH, error == ESP_ERR_OTA_ROLLBACK_INVALID_STATE
+                                            ? "failed: running image not confirmed"
+                                            : "failed: flash");
+        return false;
+    }
+    FILE *file = fopen(image->path, "rb");
+    if (!file) {
+        (void)esp_ota_abort(handle);
+        snprintf(result, RESULT_LENGTH, "failed: cannot open image");
+        return false;
+    }
+    ESP_LOGI(TAG, "Master: flashing %s", image->path);
+    static uint8_t buffer[MASTER_WRITE_BYTES];
+    uint32_t offset = 0;
+    unsigned int next_progress = 25;
+    while (offset < image->size) {
+        size_t length = image->size - offset;
+        if (length > sizeof(buffer)) {
+            length = sizeof(buffer);
+        }
+        if (fread(buffer, 1, length, file) != length) {
+            (void)esp_ota_abort(handle);
+            fclose(file);
+            snprintf(result, RESULT_LENGTH, "failed: SD read");
+            return false;
+        }
+        if (esp_ota_write(handle, buffer, length) != ESP_OK) {
+            (void)esp_ota_abort(handle);
+            fclose(file);
+            snprintf(result, RESULT_LENGTH, "failed: flash");
+            return false;
+        }
+        offset += length;
+        if ((uint64_t)offset * 100 >= (uint64_t)image->size * next_progress) {
+            ESP_LOGI(TAG, "Master: %u%%", next_progress);
+            next_progress += 25;
+        }
+    }
+    fclose(file);
+    error = esp_ota_end(handle);
+    if (error != ESP_OK) {
+        snprintf(result, RESULT_LENGTH, error == ESP_ERR_OTA_VALIDATE_FAILED
+                                            ? "failed: bad image"
+                                            : "failed: flash");
+        return false;
+    }
+    if (esp_ota_set_boot_partition(part) != ESP_OK) {
+        snprintf(result, RESULT_LENGTH, "failed: flash");
+        return false;
+    }
+    snprintf(result, RESULT_LENGTH, "updated; restarting");
+    return true;
+}
+
 void firmware_update_run(void)
 {
     static image_t images[CAN_NODE_SLOT_COUNT];
@@ -389,5 +472,32 @@ void firmware_update_run(void)
         if (CAN_NODE_ID_MASK & (1U << id)) {
             ESP_LOGI(TAG, "Node %u: %s", id, results[id]);
         }
+    }
+
+    bool node_failed = false;
+    for (unsigned int id = 1; id < CAN_NODE_SLOT_COUNT; id++) {
+        if ((CAN_NODE_ID_MASK & (1U << id)) && strncmp(results[id], "failed", 6) == 0) {
+            node_failed = true;
+        }
+    }
+    char master_result[RESULT_LENGTH];
+    bool restart = update_master(&images[0], node_failed, master_result);
+    ESP_LOGI(TAG, "Master: %s", master_result);
+    if (restart) {
+        vTaskDelay(pdMS_TO_TICKS(500));
+        esp_restart();
+    }
+}
+
+void firmware_update_confirm(void)
+{
+    if (!is_on_trial()) {
+        return;
+    }
+    esp_err_t error = esp_ota_mark_app_valid_cancel_rollback();
+    if (error == ESP_OK) {
+        ESP_LOGI(TAG, "New image confirmed");
+    } else {
+        ESP_LOGW(TAG, "Cannot confirm new image: %s", esp_err_to_name(error));
     }
 }
