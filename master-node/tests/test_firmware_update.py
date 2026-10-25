@@ -45,10 +45,10 @@ def build_image(node_id=4, serial_test=0, image_magic=0xE9, desc_magic=0xABCD543
     image = bytearray(length)
     image[0] = image_magic
     struct.pack_into("<I", image, 32, desc_magic)
-    for i in range(6):
+    for i in range(5):
         image[32 + 144 + i] = 0xA0 + i
     if length >= 288 + 8:
-        struct.pack_into("<IBBBB", image, 288, identity_magic, node_id, 1, serial_test, 0)
+        struct.pack_into("<IBBH", image, 288, identity_magic, node_id, serial_test, 0x1234)
     return bytes(image)
 
 
@@ -71,13 +71,13 @@ class ParseImageTests(unittest.TestCase):
         return subprocess.check_output([str(self.dir / "test"), str(path)], text=True).strip()
 
     def test_valid_image(self):
-        self.assertEqual(self.parse(build_image()), "4 0 a0 a1 a2 a3 a4 a5")
+        self.assertEqual(self.parse(build_image()), "4 0 a0 a1 a2 a3 a4")
 
     def test_serial_test_flag(self):
-        self.assertEqual(self.parse(build_image(node_id=5, serial_test=1)), "5 1 a0 a1 a2 a3 a4 a5")
+        self.assertEqual(self.parse(build_image(node_id=5, serial_test=1)), "5 1 a0 a1 a2 a3 a4")
 
     def test_master_node_id(self):
-        self.assertEqual(self.parse(build_image(node_id=0)), "0 0 a0 a1 a2 a3 a4 a5")
+        self.assertEqual(self.parse(build_image(node_id=0)), "0 0 a0 a1 a2 a3 a4")
 
     def test_bad_image_magic(self):
         self.assertEqual(self.parse(build_image(image_magic=0x00)), "rejected")
