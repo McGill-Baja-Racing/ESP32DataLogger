@@ -32,7 +32,7 @@ int main(int argc, char **argv)
         printf("rejected\n");
         return 0;
     }
-    printf("%u %u", identity.node_id, identity.serial_test);
+    printf("%u %u", identity.node_id, identity.bench_only);
     for (int i = 0; i < NODE_IDENTITY_HASH_LENGTH; i++) printf(" %02x", hash[i]);
     printf("\n");
     return 0;
@@ -40,7 +40,7 @@ int main(int argc, char **argv)
 '''
 
 
-def build_image(node_id=4, serial_test=0, image_magic=0xE9, desc_magic=0xABCD5432,
+def build_image(node_id=4, bench_only=0, image_magic=0xE9, desc_magic=0xABCD5432,
                 identity_magic=0x42414A41, length=300):
     image = bytearray(length)
     image[0] = image_magic
@@ -48,7 +48,7 @@ def build_image(node_id=4, serial_test=0, image_magic=0xE9, desc_magic=0xABCD543
     for i in range(5):
         image[32 + 144 + i] = 0xA0 + i
     if length >= 288 + 8:
-        struct.pack_into("<IBBH", image, 288, identity_magic, node_id, serial_test, 0x1234)
+        struct.pack_into("<IBBH", image, 288, identity_magic, node_id, bench_only, 0x1234)
     return bytes(image)
 
 
@@ -73,8 +73,8 @@ class ParseImageTests(unittest.TestCase):
     def test_valid_image(self):
         self.assertEqual(self.parse(build_image()), "4 0 a0 a1 a2 a3 a4")
 
-    def test_serial_test_flag(self):
-        self.assertEqual(self.parse(build_image(node_id=5, serial_test=1)), "5 1 a0 a1 a2 a3 a4")
+    def test_bench_only_flag(self):
+        self.assertEqual(self.parse(build_image(node_id=5, bench_only=1)), "5 1 a0 a1 a2 a3 a4")
 
     def test_master_node_id(self):
         self.assertEqual(self.parse(build_image(node_id=0)), "0 0 a0 a1 a2 a3 a4")

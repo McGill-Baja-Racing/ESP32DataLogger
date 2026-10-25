@@ -22,7 +22,7 @@
 #include "sdkconfig.h"
 
 #ifndef CAN_PROTOCOL_HASH
-#error "CAN_PROTOCOL_HASH comes from protocol/protocol_hash.py"
+#error "CAN_PROTOCOL_HASH comes from protocol/build_hooks.py"
 #endif
 
 /* sdkconfig.defaults only fills options a stale sdkconfig.<env> lacks. */
@@ -50,7 +50,7 @@ static char results[CAN_NODE_SLOT_COUNT][RESULT_LENGTH];
 const __attribute__((section(".rodata_custom_desc"))) firmware_identity_t firmware_identity = {
     .magic = FIRMWARE_IDENTITY_MAGIC,
     .node_id = 0,
-    .serial_test = 0,
+    .bench_only = !MASTER_CAN_ENABLED,
     .protocol_hash = CAN_PROTOCOL_HASH,
 };
 
@@ -229,8 +229,8 @@ static bool read_image(const char *path, firmware_identity_t *identity, uint8_t 
 
 static const char *reject_reason(const firmware_identity_t *identity)
 {
-    if (identity->serial_test) {
-        return "serial-test build";
+    if (identity->bench_only) {
+        return "bench-only build";
     }
     if (identity->node_id != 0 &&
         (identity->node_id >= CAN_NODE_SLOT_COUNT ||
