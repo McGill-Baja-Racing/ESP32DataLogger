@@ -18,7 +18,7 @@ Layer 2         system: errors, logging, clock, C library
 Layer 1         core: boot, memory, interrupts, scheduler, FreeRTOS
 ```
 
-- PlatformIO still builds the C, with the same `pio` commands.
+- cargo builds the C with clang and links it into the kernel; a cargo feature picks the node.
 - The C API matches ESP-IDF v5.5.5's headers exactly. Each chip's `sdkconfig.h` is ESP-IDF's
   generated one, trimmed to the options the headers and firmware read.
 - Only what the firmware links is implemented (about 130 functions). Anything missing is a link
@@ -84,8 +84,8 @@ Layer 1         core: boot, memory, interrupts, scheduler, FreeRTOS
 
 ## 3. Plan and testing
 
-This branch replaces the C core and stays off `main` until done. Each step converts its projects'
-`platformio.ini` in place and ends with real firmware working on the bench. Steps 4–6 need P4
+This branch replaces the C core and stays off `main` until done. Each step moves its projects to
+the cargo build and ends with real firmware working on the bench. Steps 4–6 need P4
 v3.x boards: `esp-hal` doesn't support our v1.3.
 
 | Step | Work                                                        | Done when                                           |
@@ -99,8 +99,8 @@ v3.x boards: `esp-hal` doesn't support our v1.3.
 
 Step 1 checks:
 
-- `pio` builds and flashes a C program through the cargo hook, and the C runs on the board.
-- `pio device monitor` reliably shows C and Rust log lines together.
+- `cargo run` builds and flashes a C program, and the C runs on the board.
+- espflash's monitor reliably shows C and Rust log lines together.
 - Every firmware is linked against the kernel; its missing symbols are the to-do list for
   steps 2–6.
 - The core test passes.
@@ -118,25 +118,28 @@ Tests:
 
 ## 4. Build, flash and logs
 
-- **Install:** PlatformIO, `rustup` and libclang. Rust 1.99.1 is pinned in
-  `kernel/rust-toolchain.toml` and every crate exactly; `cargo.py` builds the `espflash` version
-  set in `kernel.ini` on the first build.
-- **Build:** `pio run`. PlatformIO compiles the C into an archive, then `kernel/pio/cargo.py` has
-  cargo build the kernel and link the archive into it (`kernel/build.rs`). espflash makes
-  `firmware.bin` and `firmware.factory.bin` (bootloader, partition table and app, flashed at 0).
-  A project opts in by extending its chip's section of `kernel/pio/kernel.ini`.
-- **By hand:** set `BAJA_APP_ARCHIVE` to the archive, then `cargo build` (C3 by default) or
-  `cargo run` to flash and monitor.
-- **Upload:** `pio run -t upload` runs `espflash flash` with the board's flash settings.
-- **Logs:** `pio device monitor`. C and Rust logs are both colored by level; Rust logs through
-  the `log` crate and `esp-println`.
+- **Install:** `rustup`, git, LLVM (clang and libclang: `brew install llvm`, `winget install
+  LLVM.LLVM` or `apt install clang libclang-dev`) and `cargo install espflash@4.6.0 --locked`.
+  Rust 1.99.1 is pinned in `kernel/rust-toolchain.toml` and every crate exactly.
+- **Build:** in `kernel/`, `cargo build --release --features <node>`, with one of `brake`, `mpu`,
+  `encoder`, `engine`, `engine-bench` and `adc`. `kernel/build.rs` compiles `sensor-node/src`
+  with that node's defines and links it into the kernel. Without a node, only `cargo check` and
+  `cargo clippy` work.
+- **Headers:** on the first build, `kernel/sys/build.rs` fetches ESP-IDF v5.5.5's header folders
+  and Espressif's newlib headers with git into cargo's target folder. bindgen and clang read
+  them with the same arguments.
+- **Flash and logs:** `cargo run --release --features <node>` flashes with espflash and opens its
+  monitor. C and Rust logs are both colored by level; Rust logs through the `log` crate and
+  `esp-println`.
+- **Editor:** `baja-daq.code-workspace` has a build task per node that flashes it. clangd reads the
+  last build's `kernel/target/compile_commands.json` through `sensor-node/.clangd`.
 
 ```
 kernel/
-  Cargo.toml           bin crate; esp32c3 (default) and esp32p4 features; workspace root; lints
+  Cargo.toml           bin crate; chip and node features; workspace root; lints
   .cargo/config.toml   default target (C3), espflash runners
-  build.rs             links the firmware's C archive and esp-hal's linker script
-  no_c.x               the error a plain `cargo build` gives without the firmware's C
+  build.rs             compiles the node's C with clang; links it and esp-hal's linker script
+  no_c.x               the error a build without a node gives
   include/             each chip's sdkconfig.h; unsupported.h
   src/main.rs          boot, watchdog and panic
   src/rtos.rs          layer 1 (submodules in src/rtos/, enforced by mod_module_files)
@@ -144,9 +147,8 @@ kernel/
   src/<driver>.rs      layer 3, one file per ESP-IDF driver (adc.rs, twai.rs)
   src/services.rs      layer 4 (later)
   macros/              the #[export] macro
-  sys/                 bindgen, run at build time; no lints
+  sys/                 fetches the headers and runs bindgen at build time; no lints
   portable/            hardware-free code, tested on the laptop (later)
-  pio/                 cargo hook and per-chip PlatformIO settings
 ```
 
 ## Resources
@@ -158,4 +160,4 @@ kernel/
 - [Embassy](https://embassy.dev/book/) · [embassy-net](https://docs.rs/embassy-net) · [embassy-net-esp-hosted](https://docs.embassy.dev/embassy-net-esp-hosted/git/default/index.html) · [edge-http](https://docs.rs/edge-http) · [edge-dhcp](https://docs.rs/edge-dhcp) · [rust-fatfs](https://github.com/rafalh/rust-fatfs)
 - [bindgen](https://rust-lang.github.io/rust-bindgen/) · [critical-section](https://docs.rs/critical-section) · [printf-compat](https://github.com/lights0123/printf-compat) · [lwIP threading](https://www.nongnu.org/lwip/2_1_x/multithreading.html)
 - [log](https://docs.rs/log) · [esp-println](https://github.com/esp-rs/esp-hal/tree/main/esp-println) · [espflash](https://github.com/esp-rs/espflash) · [ESP-Hosted-MCU](https://github.com/espressif/esp-hosted-mcu)
-- [PlatformIO scripting](https://docs.platformio.org/en/latest/scripting/index.html) · [embuild `platformio.cargo.py`](https://github.com/esp-rs/embuild/blob/master/src/pio/resources/platformio.cargo.py.resource) · [`upload_command`](https://docs.platformio.org/en/latest/projectconf/sections/env/options/upload/upload_command.html) · [Cargo build scripts](https://doc.rust-lang.org/cargo/reference/build-scripts.html)
+- [Cargo build scripts](https://doc.rust-lang.org/cargo/reference/build-scripts.html) · [Clang command line](https://clang.llvm.org/docs/ClangCommandLineReference.html) · [clangd configuration](https://clangd.llvm.org/config)
