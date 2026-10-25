@@ -18,6 +18,10 @@
 #include "protocol/app_protocol.h"
 #include "sdkconfig.h"
 
+#ifndef CAN_PROTOCOL_HASH
+#error "CAN_PROTOCOL_HASH comes from protocol/protocol_hash.py"
+#endif
+
 /* sdkconfig.defaults only fills options a stale sdkconfig.<env> lacks. */
 #if !CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE
 #error "Rollback is off: delete sdkconfig.<env> and rebuild"
@@ -36,8 +40,8 @@ static QueueHandle_t reply_queue;
 const __attribute__((section(".rodata_custom_desc"))) firmware_identity_t firmware_identity = {
     .magic = FIRMWARE_IDENTITY_MAGIC,
     .node_id = 0,
-    .protocol_version = CAN_PROTOCOL_VERSION,
     .serial_test = 0,
+    .protocol_hash = CAN_PROTOCOL_HASH,
 };
 
 static struct {
@@ -82,12 +86,12 @@ void firmware_update_handle_identity(const can_message_t *message)
     if (!nodes[id].seen || memcmp(&nodes[id].frame, &frame, sizeof(frame)) != 0) {
         char hash[2 * NODE_IDENTITY_HASH_LENGTH + 1];
         format_hash(frame.elf_sha256, hash);
-        ESP_LOGI(TAG, "Node %u firmware %s protocol %u%s", id, hash,
-                 frame.protocol_version,
+        ESP_LOGI(TAG, "Node %u firmware %s protocol %04x%s", id, hash,
+                 frame.protocol_hash,
                  (frame.flags & NODE_IDENTITY_PENDING) ? " (on trial)" : "");
-        if (frame.protocol_version != CAN_PROTOCOL_VERSION) {
-            ESP_LOGW(TAG, "Node %u speaks protocol %u, master %u", id,
-                     frame.protocol_version, CAN_PROTOCOL_VERSION);
+        if (frame.protocol_hash != CAN_PROTOCOL_HASH) {
+            ESP_LOGW(TAG, "Node %u protocol %04x, master %04x", id,
+                     frame.protocol_hash, CAN_PROTOCOL_HASH);
         }
     }
     nodes[id].frame = frame;
