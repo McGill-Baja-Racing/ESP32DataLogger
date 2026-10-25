@@ -58,7 +58,7 @@
       <button id="firmwareUpdate">Update firmware</button>
     </div>
     <div class="muted">Pick the firmware folder at the repo root: every build copies its image there. Bench-only builds are skipped.</div>
-    <div class="muted">Update flashes every node whose image differs, one at a time, then the master, which restarts and the page reconnects.</div>
+    <div class="muted">Update flashes the nodes whose image differs one at a time (offline nodes, current nodes and images for another protocol are skipped), then the master if its image differs and every node succeeded. The master restarts: rejoin the BajaDAQ Wi-Fi if the page does not reconnect.</div>
     <div id="firmwareNotice" class="muted"></div><div id="firmwareError" class="error"></div>
   </section>
 
@@ -201,7 +201,7 @@ function renderFirmware(){
   const f=firmwareState,box=$('firmware');box.replaceChildren();if(!f)return;
   for(const id of Object.keys(f.slots)){
     const s=f.slots[id],row=document.createElement('div');row.className='row';const label=document.createElement('span');
-    const status=f.updating&&f.target===Number(id)?`updating ${f.percent}%`:s.result||(!s.image?'no image':s.needs_update?'needs update':'current');
+    const status=f.updating&&f.target===Number(id)?`updating ${f.percent}%`:s.result||(!s.image?'no image':!s.known?'not seen':s.needs_update?'needs update':'current');
     label.textContent=`${id==='0'?'Master':'Node '+id}: ${s.known?s.hash.slice(0,12):'not seen'}${s.on_trial?' (on trial)':''} - ${status}`;row.append(label);
     if(s.image){const del=document.createElement('button');del.textContent='Delete image';del.disabled=firmwareLock();del.onclick=()=>deleteFirmware(id);row.append(del)}
     box.append(row);
@@ -216,28 +216,30 @@ async function refreshFirmware(){
   firmwareTimer=setTimeout(refreshFirmware,firmwareState&&firmwareState.updating?1000:5000);
 }
 // Offsets follow firmware_identity_t in protocol/app_protocol.h.
-async function firmwareTarget(file){
+async function firmwareNode(file){
   const v=new DataView(await file.slice(0,296).arrayBuffer());
   if(v.byteLength<296||v.getUint8(0)!==0xE9||v.getUint32(32,true)!==0xABCD5432||v.getUint32(288,true)!==0x42414A41||v.getUint8(293))return null;
-  return {node:v.getUint8(292),hash:[...new Uint8Array(v.buffer,176,5)].join()};
+  return v.getUint8(292);
 }
 async function uploadFirmware(){
-  const boards=new Map();
-  for(const file of $('firmwareFiles').files){
-    const target=file.name.endsWith('.bin')?await firmwareTarget(file):null;
-    if(target)boards.set(target.node,[...(boards.get(target.node)||[]),{file,hash:target.hash}]);
-  }
   // Several builds for one board (Master and MasterStable, or a stale copy): the newest build wins.
-  const chosen=[...boards.values()].map(list=>list.sort((a,b)=>b.file.lastModified-a.file.lastModified));
-  const files=chosen.map(list=>list[0].file);if(!files.length){$('firmwareError').textContent='No firmware images in that folder';return}
-  const ignored=chosen.flatMap(list=>list.slice(1).filter(i=>i.hash!==list[0].hash).map(i=>i.file.name));
+  const newest=new Map(),older=[];
+  for(const file of $('firmwareFiles').files){
+    const node=/\.bin$/i.test(file.name)?await firmwareNode(file):null;
+    if(node===null)continue;
+    const kept=newest.get(node);
+    if(!kept||file.lastModified>kept.lastModified){newest.set(node,file);if(kept)older.push(kept.name)}else older.push(file.name);
+  }
+  if(!newest.size){$('firmwareError').textContent='No firmware images in that folder';return}
   firmwareBusy=true;renderFirmware();$('firmwareError').textContent='';
-  for(const file of files){
+  const errors=[];
+  for(const file of newest.values()){
     $('firmwareNotice').textContent=`Uploading ${file.name}…`;
     try{const r=await json('/api/firmware/upload',{method:'PUT',body:file});$('firmwareNotice').textContent=`Stored as ${r.stored}`}
-    catch(e){$('firmwareError').textContent=`${file.name}: ${e.message}`;break}
+    catch(e){errors.push(`${file.name}: ${e.message}`)}
   }
-  if(ignored.length)$('firmwareNotice').textContent+=` (older builds ignored: ${ignored.join(', ')})`;
+  $('firmwareError').textContent=errors.join('; ');
+  if(older.length)$('firmwareNotice').textContent+=` (older builds ignored: ${older.join(', ')})`;
   firmwareBusy=false;$('firmwareFiles').value='';refreshFirmware();
 }
 async function deleteFirmware(id){
@@ -245,7 +247,7 @@ async function deleteFirmware(id){
   refreshFirmware();
 }
 async function updateFirmware(){
-  try{$('firmwareError').textContent='';firmwareState=await json('/api/firmware/update',{method:'POST'});firmwareState.updating=true;renderFirmware()}catch(e){$('firmwareError').textContent=e.message}
+  try{$('firmwareError').textContent='';await json('/api/firmware/update',{method:'POST'})}catch(e){$('firmwareError').textContent=e.message}
   refreshFirmware();
 }
 $('firmwareUpload').onclick=uploadFirmware;$('firmwareUpdate').onclick=updateFirmware;

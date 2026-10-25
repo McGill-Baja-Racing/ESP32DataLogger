@@ -30,7 +30,6 @@
 #define AP_SSID "BajaDAQ"
 #define SD_ROOT "/sdcard"
 #define DOWNLOAD_CHUNK_SIZE 4096
-#define FIRMWARE_DIR SD_ROOT "/firmware"
 #define FIRMWARE_UPLOAD_PATH FIRMWARE_DIR "/upload.tmp"
 #define FIRMWARE_MAX_BYTES (4 * 1024 * 1024)
 
@@ -632,20 +631,18 @@ static esp_err_t firmware_status_handler(httpd_req_t *request)
     char body[2048];
     int length = snprintf(body, sizeof(body),
                           "{\"updating\":%s,\"target\":%d,\"percent\":%u,\"slots\":{",
-                          status.updating || app_control_firmware_busy() ? "true" : "false",
+                          app_control_firmware_busy() ? "true" : "false",
                           status.target, status.percent);
-    bool first = true;
     for (unsigned int id = 0; id < CAN_NODE_SLOT_COUNT; id++) {
-        if (id != 0 && !(CAN_NODE_ID_MASK & (1U << id))) continue;
+        if (!firmware_update_is_slot(id)) continue;
         const firmware_slot_status_t *slot = &status.slots[id];
         length += snprintf(body + length, sizeof(body) - length,
                            "%s\"%u\":{\"known\":%s,\"hash\":\"%s\",\"on_trial\":%s,"
                            "\"needs_update\":%s,\"image\":%s,\"result\":\"%s\"}",
-                           first ? "" : ",", id, slot->known ? "true" : "false", slot->hash,
+                           id == 0 ? "" : ",", id, slot->known ? "true" : "false", slot->hash,
                            slot->on_trial ? "true" : "false",
                            slot->needs_update ? "true" : "false",
-                           slot->image ? "true" : "false", slot->result);
-        first = false;
+                           slot->image ? "true" : "false", slot->result ? slot->result : "");
         if (length >= (int)sizeof(body)) {
             return send_json_error(request, "500 Internal Server Error",
                                    "Firmware status too large");
@@ -666,31 +663,21 @@ static bool firmware_files_locked(void)
     return data_logger_state() != LOGGER_IDLE || app_control_firmware_busy();
 }
 
-static esp_err_t firmware_upload_handler(httpd_req_t *request)
+static esp_err_t firmware_busy_error(httpd_req_t *request)
 {
-    if (firmware_files_locked()) {
-        return send_json_error(request, "409 Conflict",
-                               "Firmware files are locked while recording or updating");
-    }
-    if (request->content_len > FIRMWARE_MAX_BYTES) {
-        return send_json_error(request, "413 Content Too Large", "Image is larger than 4 MB");
-    }
-    if (xSemaphoreTake(download_mutex, 0) != pdTRUE) {
-        return send_json_error(request, "503 Service Unavailable",
-                               "Another log operation is already active");
-    }
+    return send_json_error(request, "409 Conflict", "Firmware update in progress");
+}
+
+static const char *receive_firmware(httpd_req_t *request)
+{
     if (mkdir(FIRMWARE_DIR, 0775) != 0 && errno != EEXIST) {
-        xSemaphoreGive(download_mutex);
-        return send_json_error(request, "500 Internal Server Error",
-                               "Unable to create the firmware folder");
+        return "Unable to create the firmware folder";
     }
     char *buffer = malloc(DOWNLOAD_CHUNK_SIZE);
     FILE *file = buffer ? fopen(FIRMWARE_UPLOAD_PATH, "wb") : NULL;
     if (!file) {
         free(buffer);
-        xSemaphoreGive(download_mutex);
-        return send_json_error(request, "500 Internal Server Error",
-                               "Unable to write the SD card");
+        return "Unable to write the SD card";
     }
     size_t remaining = request->content_len;
     const char *failure = NULL;
@@ -710,27 +697,35 @@ static esp_err_t firmware_upload_handler(httpd_req_t *request)
     free(buffer);
     bool closed = fclose(file) == 0;
     if (!failure && !closed) failure = "Unable to write the SD card";
-    if (failure) {
-        unlink(FIRMWARE_UPLOAD_PATH);
-        xSemaphoreGive(download_mutex);
-        return send_json_error(request, "500 Internal Server Error", failure);
+    if (failure) unlink(FIRMWARE_UPLOAD_PATH);
+    return failure;
+}
+
+static esp_err_t firmware_upload_handler(httpd_req_t *request)
+{
+    if (firmware_files_locked()) return firmware_busy_error(request);
+    if (request->content_len > FIRMWARE_MAX_BYTES) {
+        return send_json_error(request, "413 Content Too Large", "Image is larger than 4 MB");
     }
+    if (!firmware_update_lock_files()) return firmware_busy_error(request);
     char stored[24];
-    const char *reason = NULL;
-    esp_err_t result = firmware_update_store_image(FIRMWARE_UPLOAD_PATH, stored,
-                                                   sizeof(stored), &reason);
-    xSemaphoreGive(download_mutex);
+    const char *reason = receive_firmware(request);
+    esp_err_t result = ESP_FAIL;
+    if (!reason) {
+        result = firmware_update_store_image(FIRMWARE_UPLOAD_PATH, stored, sizeof(stored),
+                                             &reason);
+    }
+    firmware_update_unlock_files();
     if (result == ESP_ERR_INVALID_ARG) {
         return send_json_error(request, "400 Bad Request", reason);
     }
-    if (result != ESP_OK) {
+    if (reason || result != ESP_OK) {
         return send_json_error(request, "500 Internal Server Error",
-                               "Unable to store the image");
+                               reason ? reason : "Unable to store the image");
     }
     char body[48];
     snprintf(body, sizeof(body), "{\"stored\":\"%s\"}", stored);
     httpd_resp_set_type(request, "application/json");
-    httpd_resp_set_hdr(request, "Cache-Control", "no-store");
     return httpd_resp_sendstr(request, body);
 }
 
@@ -742,20 +737,14 @@ static esp_err_t firmware_delete_handler(httpd_req_t *request)
         return send_json_error(request, "400 Bad Request", "Missing node");
     }
     unsigned long node = strtoul(value, &end, 10);
-    if (*value == '\0' || *end != '\0' || node >= CAN_NODE_SLOT_COUNT ||
-        (node != 0 && !(CAN_NODE_ID_MASK & (1U << node)))) {
+    if (*value == '\0' || *end != '\0' || !firmware_update_is_slot(node)) {
         return send_json_error(request, "400 Bad Request", "Unknown node");
     }
-    if (firmware_files_locked()) {
-        return send_json_error(request, "409 Conflict",
-                               "Firmware files are locked while recording or updating");
-    }
-    if (xSemaphoreTake(download_mutex, 0) != pdTRUE) {
-        return send_json_error(request, "503 Service Unavailable",
-                               "Another log operation is already active");
+    if (firmware_files_locked() || !firmware_update_lock_files()) {
+        return firmware_busy_error(request);
     }
     esp_err_t result = firmware_update_delete_image(node);
-    xSemaphoreGive(download_mutex);
+    firmware_update_unlock_files();
     if (result != ESP_OK) {
         return send_json_error(request, "404 Not Found", "No image for this node");
     }
@@ -776,7 +765,8 @@ static esp_err_t firmware_update_handler(httpd_req_t *request)
         return send_json_error(request, "500 Internal Server Error", "Unable to start the update");
     }
     httpd_resp_set_status(request, "202 Accepted");
-    return firmware_status_handler(request);
+    httpd_resp_set_type(request, "application/json");
+    return httpd_resp_sendstr(request, "{}");
 }
 
 static esp_err_t start_http_server(void)
