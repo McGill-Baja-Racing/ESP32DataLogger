@@ -116,7 +116,7 @@ void firmware_update_handle_identity(const can_message_t *message)
                      frame.protocol_hash, CAN_PROTOCOL_HASH);
         }
         if (needs_update(id, frame.elf_sha256)) {
-            ESP_LOGW(TAG, "Node %u needs update: %s differs; run update", id, images[id].path);
+            ESP_LOGW(TAG, "Node %u needs update: %s differs", id, images[id].path);
         }
     }
     nodes[id].frame = frame;
@@ -621,7 +621,7 @@ esp_err_t firmware_update_init(void)
     }
     scan_images();
     if (needs_update(0, esp_app_get_description()->app_elf_sha256)) {
-        ESP_LOGW(TAG, "Master needs update: %s differs; run update", images[0].path);
+        ESP_LOGW(TAG, "Master needs update: %s differs", images[0].path);
     }
     return ESP_OK;
 }

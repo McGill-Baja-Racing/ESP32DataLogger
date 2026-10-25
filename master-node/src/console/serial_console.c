@@ -15,7 +15,7 @@ static void console_task(void *argument)
 {
     (void)argument;
     char line[32];
-    ESP_LOGI(TAG, "Commands: start, stop, status, update");
+    ESP_LOGI(TAG, "Commands: start, stop, status");
     while (true) {
         if (!fgets(line, sizeof(line), stdin)) {
             vTaskDelay(pdMS_TO_TICKS(50));
@@ -31,10 +31,8 @@ static void console_task(void *argument)
             (void)app_callbacks.stop();
         } else if (strcmp(line, "status") == 0) {
             app_callbacks.status();
-        } else if (strcmp(line, "update") == 0) {
-            (void)app_callbacks.update();
         } else if (line[0]) {
-            ESP_LOGW(TAG, "Commands: start, stop, status, update");
+            ESP_LOGW(TAG, "Commands: start, stop, status");
         }
     }
 }
@@ -42,7 +40,7 @@ static void console_task(void *argument)
 esp_err_t serial_console_start(const serial_console_callbacks_t *callbacks)
 {
     if (!callbacks || !callbacks->start || !callbacks->stop ||
-        !callbacks->status || !callbacks->update) {
+        !callbacks->status) {
         return ESP_ERR_INVALID_ARG;
     }
     app_callbacks = *callbacks;
