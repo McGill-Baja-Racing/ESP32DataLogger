@@ -15,6 +15,10 @@
 #include "protocol/app_protocol.h"
 #include "sdkconfig.h"
 
+#ifndef CAN_PROTOCOL_HASH
+#error "CAN_PROTOCOL_HASH comes from protocol/protocol_hash.py"
+#endif
+
 /* sdkconfig.defaults only fills options a stale sdkconfig.<env> lacks. */
 #if !CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE
 #error "Rollback is off: delete sdkconfig.<env> and rebuild"
@@ -53,8 +57,8 @@ static TickType_t requested_at;
 const __attribute__((section(".rodata_custom_desc"))) firmware_identity_t firmware_identity = {
     .magic = FIRMWARE_IDENTITY_MAGIC,
     .node_id = NODE_ID,
-    .protocol_version = CAN_PROTOCOL_VERSION,
     .serial_test = SENSOR_SERIAL_TEST,
+    .protocol_hash = CAN_PROTOCOL_HASH,
 };
 
 static bool running_image_on_trial(void)
@@ -67,7 +71,7 @@ static bool running_image_on_trial(void)
 void firmware_update_report_identity(void)
 {
     node_identity_frame_t frame = {
-        .protocol_version = CAN_PROTOCOL_VERSION,
+        .protocol_hash = CAN_PROTOCOL_HASH,
     };
     memcpy(frame.elf_sha256, esp_app_get_description()->app_elf_sha256,
            NODE_IDENTITY_HASH_LENGTH);
