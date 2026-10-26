@@ -11,10 +11,33 @@ use core::ffi::c_void;
 use esp_backtrace as _;
 use esp_hal::rtc_cntl::{Rtc, Rwdt, RwdtStage};
 
+#[cfg(feature = "esp32c3")]
 mod adc;
+#[cfg_attr(feature = "esp32c3", path = "chip/esp32c3.rs")]
+#[cfg_attr(feature = "esp32p4", path = "chip/esp32p4.rs")]
+mod chip;
+#[cfg(feature = "esp32p4")]
+mod files;
+#[cfg(feature = "esp32c3")]
+mod gpio;
+#[cfg(feature = "esp32c3")]
+mod gptimer;
+#[cfg(feature = "esp32p4")]
+mod http;
+#[cfg(feature = "esp32c3")]
+mod i2c;
+mod libc;
+#[cfg(feature = "esp32p4")]
+mod network;
 mod rtos;
+#[cfg(feature = "esp32p4")]
+mod sdmmc;
+#[cfg(feature = "esp32p4")]
+mod storage;
 mod system;
 mod twai;
+#[cfg(feature = "esp32p4")]
+mod uart;
 
 esp_bootloader_esp_idf::esp_app_desc!();
 
@@ -25,7 +48,6 @@ unsafe extern "C" {
 // esp-backtrace's `custom-halt` hook: reset after printing the panic, like ESP-IDF.
 #[unsafe(no_mangle)]
 extern "Rust" fn custom_halt() -> ! {
-    system::mark_panic();
     esp_hal::system::software_reset()
 }
 
@@ -44,13 +66,14 @@ fn main() -> ! {
     // ESP-IDF's default is the maximum clock; esp-hal's is lower.
     let config = esp_hal::Config::default().with_cpu_clock(esp_hal::clock::CpuClock::max());
     let peripherals = esp_hal::init(config);
-    esp_println::logger::init_logger(log::LevelFilter::Info);
-    esp_alloc::heap_allocator!(size: 64 * 1024);
+    esp_alloc::heap_allocator!(size: chip::HEAP);
     let timg0 = esp_hal::timer::timg::TimerGroup::new(peripherals.TIMG0);
     esp_rtos::start(timg0.timer0, peripherals.FROM_CPU_INTR0);
     system::init();
+    #[cfg(feature = "esp32p4")]
+    chip::init();
     let mut rwdt = Rtc::new(peripherals.RTC_TIMER).rwdt;
-    rwdt.set_timeout(RwdtStage::Stage0, esp_hal::time::Duration::from_secs(2));
+    rwdt.set_timeout(RwdtStage::Stage0, esp_hal::time::Duration::from_secs(5));
     rwdt.enable();
     let rwdt = Box::into_raw(Box::new(rwdt)).cast();
     // SAFETY: the task is the only user of `rwdt`.

@@ -9,3 +9,7 @@ runner = "espflash flash --monitor --chip esp32p4"
 target = "riscv32imc-unknown-none-elf"
 # esp-backtrace needs frame pointers to unwind on RISC-V.
 rustflags = ["-C", "force-frame-pointers"]
+
+[env]
+# The main stack holds what the heap leaves of the SRAM; the linker fails below this.
+ESP_HAL_CONFIG_ENSURE_MAIN_STACK_MINIMUM = "6144"

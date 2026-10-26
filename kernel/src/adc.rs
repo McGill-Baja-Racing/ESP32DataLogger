@@ -5,9 +5,7 @@
 //! conversions run through esp-hal's register access by channel number, the way ESP-IDF's HAL does.
 
 use alloc::boxed::Box;
-use core::{cell::Cell, ffi::c_int, mem::MaybeUninit};
-
-use critical_section::Mutex;
+use core::{ffi::c_int, mem::MaybeUninit};
 
 use esp_hal::{
     Blocking,
@@ -19,6 +17,7 @@ use esp_hal::{
     peripherals::ADC1,
 };
 use macros::export;
+use portable_atomic::{AtomicBool, Ordering};
 use sys::{
     ESP_ERR_INVALID_ARG, ESP_ERR_NOT_FOUND, ESP_ERR_NOT_SUPPORTED, adc_cali_curve_fitting_config_t,
     adc_channel_t, adc_oneshot_chan_cfg_t, adc_oneshot_unit_init_cfg_t, esp_err_t,
@@ -28,7 +27,7 @@ type Regs = ADC1<'static>;
 
 const ATTENUATION: Attenuation = Attenuation::_11dB;
 
-static TAKEN: Mutex<Cell<bool>> = Mutex::new(Cell::new(false));
+static TAKEN: AtomicBool = AtomicBool::new(false);
 
 struct Unit {
     /// Keeps the SAR ADC clocked; conversions bypass its typed API.
@@ -55,7 +54,7 @@ fn adc_oneshot_new_unit(
     _config: &adc_oneshot_unit_init_cfg_t,
     unit: &mut MaybeUninit<&'static Unit>,
 ) -> Result<(), esp_err_t> {
-    if critical_section::with(|cs| TAKEN.borrow(cs).replace(true)) {
+    if TAKEN.swap(true, Ordering::Relaxed) {
         return Err(ESP_ERR_NOT_FOUND);
     }
     // SAFETY: `TAKEN` lets this run once, and nothing else uses ADC1.
@@ -123,7 +122,10 @@ fn adc_cali_raw_to_voltage(
     raw: c_int,
     voltage: &mut MaybeUninit<c_int>,
 ) -> Result<(), esp_err_t> {
-    let reading = u16::try_from(raw).map_err(|_negative| ESP_ERR_INVALID_ARG)?;
+    let reading = u16::try_from(raw)
+        .ok()
+        .filter(|&reading| reading <= 0xfff)
+        .ok_or(ESP_ERR_INVALID_ARG)?;
     voltage.write(calibration.0.adc_val(reading).into());
     Ok(())
 }

@@ -1,5 +1,6 @@
 [workspace]
-members = ["sys", "macros"]
+members = ["sys", "macros", "esp-hosted"]
+exclude = ["vendor/edge-nal-embassy"]
 
 [package]
 name = "baja-kernel"
@@ -28,29 +29,58 @@ esp32p4 = [
     "esp-println/esp32p4",
     "esp-bootloader-esp-idf/esp32p4",
     "esp-backtrace/esp32p4",
+    "esp-rtos/embassy",
+    "dep:fatfs",
+    "dep:edge-dhcp",
+    "dep:edge-http",
+    "dep:edge-nal",
+    "dep:edge-nal-embassy",
+    "dep:embassy-executor",
+    "dep:embassy-futures",
+    "dep:embassy-net",
+    "dep:embassy-net-esp-hosted",
+    "dep:embassy-sync",
+    "dep:embassy-time",
+    "dep:embedded-io-async",
 ]
 
-# The sensor-node firmware to build; one at a time.
+# The firmware to build; one at a time.
 brake = ["esp32c3"]
 mpu = ["esp32c3"]
 encoder = ["esp32c3"]
 engine = ["esp32c3"]
 engine-bench = ["esp32c3"]
 adc = ["esp32c3"]
+engine-rpm-sim = ["esp32c3"]
+wheel-rpm-sim = ["esp32c3"]
+master = ["esp32p4"]
+master-no-can = ["esp32p4"]
 
 [dependencies]
 esp-hal = { version = "=1.2.2", features = ["unstable"] }
-esp-rtos = { version = "=0.4.0", features = ["esp-radio", "log-04"] }
+esp-rtos = { version = "=0.4.0", features = ["esp-radio"] }
 esp-alloc = "=0.11.0"
 esp-radio-rtos-driver = "=0.4.2"
 critical-section = "=1.2.0"
-portable-atomic = { version = "=1.15.0", default-features = false }
+portable-atomic = "=1.15.0"
 printf-compat = { version = "=0.5.0", default-features = false }
 # Without its `critical-section` feature, printing leaves interrupts on; `esp_log` locks lines.
-esp-println = { version = "=0.18.0", default-features = false, features = ["auto", "colors", "log-04"] }
-log = "=0.4.34"
+esp-println = { version = "=0.18.0", default-features = false, features = ["auto", "colors"] }
 esp-bootloader-esp-idf = "=0.6.0"
 esp-backtrace = { version = "=0.20.0", features = ["panic-handler", "println", "custom-halt"] }
+fatfs = { git = "https://github.com/rafalh/rust-fatfs", rev = "2aefc2a027ce94ed0671752814dac203f0450e11", default-features = false, features = ["alloc", "lfn"], optional = true }
+edge-dhcp = { version = "=0.8.0", default-features = false, features = ["io"], optional = true }
+edge-http = { version = "=0.8.0", default-features = false, features = ["io"], optional = true }
+edge-nal = { version = "=0.7.0", default-features = false, optional = true }
+# Vendored for one fix: its `accept` unwraps a connection that was reset after the handshake.
+edge-nal-embassy = { path = "vendor/edge-nal-embassy", default-features = false, features = ["proto-ipv4", "medium-ethernet", "tcp", "udp"], optional = true }
+embassy-executor = { version = "=0.10.0", optional = true }
+embassy-futures = { version = "=0.1.2", optional = true }
+embassy-net = { version = "=0.9.1", features = ["proto-ipv4", "medium-ethernet", "tcp", "udp"], optional = true }
+embassy-net-esp-hosted = { path = "esp-hosted", optional = true }
+embassy-sync = { version = "=0.8.0", optional = true }
+embassy-time = { version = "=0.5.1", optional = true }
+embedded-io-async = { version = "=0.7.0", optional = true }
 sys = { package = "baja-sys", path = "sys" }
 macros = { package = "baja-macros", path = "macros" }
 
@@ -83,4 +113,4 @@ opt-level = "s"
 codegen-units = 1
 debug = 2
 lto = "fat"
-opt-level = "s"
+opt-level = "z"
