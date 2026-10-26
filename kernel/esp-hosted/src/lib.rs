@@ -32,6 +32,8 @@ const MTU: usize = 1514;
 /// then little-endian length, offset (always `OFFSET`), checksum and sequence number, and 2 bytes
 /// of padding. A fragmented frame (flags bit 0) isn't reassembled.
 const OFFSET: u16 = 12;
+/// `CONFIG_ESP_HOSTED_SDIO_CHECKSUM`; must match the coprocessor. Off, the field is sent as 0.
+const CHECKSUM: bool = false;
 const HEADER: usize = OFFSET as usize;
 
 /// esp-hosted-mcu's interface types.
@@ -184,36 +186,34 @@ impl<B: MmcBus> Runner<'_, B> {
         }
     }
 
-    fn handle_rx(&mut self, frame: &[u8]) -> Result<(), Reset> {
-        let Some((header, rest)) = frame.split_first_chunk::<HEADER>() else {
-            return Ok(());
-        };
-        let [
-            if_type,
-            _flags,
-            len0,
-            len1,
-            offset0,
-            offset1,
-            sum0,
-            sum1,
-            ..,
-        ] = *header;
-        let len = usize::from(u16::from_le_bytes([len0, len1]));
-        let Some(payload) = rest.get(..len) else {
-            return Ok(());
-        };
-        if len == 0 || u16::from_le_bytes([offset0, offset1]) != OFFSET {
-            return Ok(());
+    /// Splits a read into its frames. A bad frame drops the rest, whose boundaries are lost.
+    fn handle_rx(&mut self, mut stream: &[u8]) -> Result<(), Reset> {
+        while let Some((header, rest)) = stream.split_first_chunk::<HEADER>() {
+            let [if_type, _, len0, len1, offset0, offset1, sum0, sum1, ..] = *header;
+            let len = usize::from(u16::from_le_bytes([len0, len1]));
+            let Some((payload, next)) = rest.split_at_checked(len) else {
+                return Ok(());
+            };
+            if len == 0 || u16::from_le_bytes([offset0, offset1]) != OFFSET {
+                return Ok(());
+            }
+            if CHECKSUM {
+                let mut zeroed = *header;
+                zeroed[6] = 0;
+                zeroed[7] = 0;
+                if checksum(&zeroed).wrapping_add(checksum(payload))
+                    != u16::from_le_bytes([sum0, sum1])
+                {
+                    return Ok(());
+                }
+            }
+            stream = next;
+            self.handle_frame(if_type, payload)?;
         }
+        Ok(())
+    }
 
-        let mut zeroed = *header;
-        zeroed[6] = 0;
-        zeroed[7] = 0;
-        if checksum(&zeroed).wrapping_add(checksum(payload)) != u16::from_le_bytes([sum0, sum1]) {
-            return Ok(());
-        }
-
+    fn handle_frame(&mut self, if_type: u8, payload: &[u8]) -> Result<(), Reset> {
         match if_type & 0x0f {
             IF_AP => {
                 if let Some(buf) = self.ch.try_rx_buf()
@@ -266,8 +266,10 @@ fn frame(buffer: &mut [u8], if_type: u8, seq: u16, parts: &[&[u8]]) -> Option<us
     bytes[2..4].copy_from_slice(&u16::try_from(len).ok()?.to_le_bytes());
     bytes[4..6].copy_from_slice(&OFFSET.to_le_bytes());
     bytes[8..10].copy_from_slice(&seq.to_le_bytes());
-    let sum = checksum(&bytes).wrapping_add(checksum(payload.get(..len)?));
-    bytes[6..8].copy_from_slice(&sum.to_le_bytes());
+    if CHECKSUM {
+        let sum = checksum(&bytes).wrapping_add(checksum(payload.get(..len)?));
+        bytes[6..8].copy_from_slice(&sum.to_le_bytes());
+    }
     header.copy_from_slice(&bytes);
     Some(HEADER + len)
 }
