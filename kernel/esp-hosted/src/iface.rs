@@ -1,17 +1,8 @@
 //! SDIO interface.
 //!
 //! Speaks the esp-hosted SDIO transport protocol on top of the [`sdio`] crate's
-//! [`SdioCard`].
-//!
-//! # Packet mode only
-//!
-//! The co-processor must run in *packet mode*, where each new-packet interrupt
-//! maps to a single packet that fits in one transfer buffer. SDIO *streaming mode*
-//! (the default) concatenates packets into one large transfer and is **not** supported
-//! here: disable `Enable SDIO Streaming Mode` on the co-processor.
-//!
-//! The co-processor must also keep the SDIO payload checksum enabled, as the transport layer
-//! always uses it.
+//! [`SdioCard`], in *streaming mode*: one read takes everything the co-processor has queued,
+//! several frames back to back.
 
 use ::sdio::sdio::SdioCard;
 use ::sdio::{MmcBus, MmcError};
@@ -214,16 +205,18 @@ impl<B: MmcBus> SdioInterface<B> {
     async fn read_packet(&mut self, buffer: &mut Aligned<A4, [u8]>) -> Result<usize, MmcError> {
         let (interrupts, raw) = self.read_status().await?;
 
-        if interrupts & NEW_PACKET_INT == 0 {
+        if interrupts != 0 {
+            self.write_reg32(REG_INT_CLR, interrupts).await?;
+        }
+        let raw = raw & ESP_LEN_MASK;
+        // All ones is a failed bus read, not a length.
+        if interrupts & NEW_PACKET_INT == 0 || raw == ESP_LEN_MASK {
             return Ok(0);
         }
-        self.write_reg32(REG_INT_CLR, interrupts).await?;
-
-        let raw = raw & ESP_LEN_MASK;
         let len = (raw.wrapping_sub(self.rx_byte_count) & ESP_LEN_MASK) as usize;
 
-        // A length beyond the buffer (several packets queued) is read and dropped, or the
-        // count would never catch up.
+        // Unlike esp-hosted's host, which grows its buffer to the whole read, a read beyond the
+        // buffer is drained and dropped, or the count would never catch up.
         let mut left = len;
         while left > 0 {
             let chunk = left.min(buffer.len());
