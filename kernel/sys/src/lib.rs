@@ -15,6 +15,14 @@
     clippy::useless_transmute,
     reason = "bindgen's output"
 )]
+#![cfg_attr(
+    esp32p4,
+    expect(
+        clippy::too_many_arguments,
+        unsafe_op_in_unsafe_fn,
+        reason = "bindgen's output"
+    )
+)]
 
 /// The C pointers that `&Self` and `&mut Self` stand for in an `#[export]`.
 pub trait CPointer {
@@ -28,17 +36,34 @@ impl<T: Copy> CPointer for T {
     type Unique = *mut T;
 }
 
-/// Makes `&$kernel` in an `#[export]` the C handle `$c`, which C shares between tasks.
+/// What C sees of a `FILE`, which the kernel's streams stand for.
+pub type FilePtr = *mut FILE;
+
+/// What C sees of a `DIR`, which the kernel's directory streams stand for.
+pub type DirPtr = *mut DIR;
+
+/// What C sees of an `esp_netif_t`, which the kernel's network interface stands for.
+#[cfg(esp32p4)]
+pub type NetifPtr = *mut esp_netif_t;
+
+/// Makes `&$kernel` in an `#[export]` the C handle `$c`, which C shares between tasks. With
+/// `owned`, `&mut` and `Box` stand for it too: C passes it back for the kernel to free or step.
 #[macro_export]
 macro_rules! c_handle {
-    ($kernel:ty, $c:ident) => {
+    (@ $kernel:ty, $shared:ty, $unique:ty) => {
         impl $crate::CPointer for $kernel
         where
             Self: Sync,
         {
-            type Shared = $crate::$c;
-            type Unique = $crate::$c;
+            type Shared = $shared;
+            type Unique = $unique;
         }
+    };
+    ($kernel:ty, $c:ident) => {
+        $crate::c_handle!(@ $kernel, $crate::$c, ());
+    };
+    ($kernel:ty, $c:ident, owned) => {
+        $crate::c_handle!(@ $kernel, $crate::$c, $crate::$c);
     };
 }
 

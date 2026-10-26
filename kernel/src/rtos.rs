@@ -1,7 +1,11 @@
 //! FreeRTOS's API on top of esp-rtos.
 
-use alloc::{boxed::Box, vec, vec::Vec};
-use core::{cell::Cell, ffi::c_void, mem::MaybeUninit};
+use alloc::{boxed::Box, vec::Vec};
+use core::{
+    cell::Cell,
+    ffi::{c_int, c_void},
+    mem::MaybeUninit,
+};
 
 use critical_section::{CriticalSection, Mutex, RestoreState};
 use esp_radio_rtos_driver::{
@@ -11,16 +15,39 @@ use esp_radio_rtos_driver::{
 };
 use macros::export;
 use sys::{
-    BaseType_t, TaskFunction_t, TaskHandle_t, TickType_t, UBaseType_t, configTICK_RATE_HZ,
-    errCOULD_NOT_ALLOCATE_REQUIRED_MEMORY, errQUEUE_FULL, pdFAIL, pdFALSE, pdPASS, pdTRUE,
+    BaseType_t, ESP_ERR_INVALID_ARG, SOC_GPIO_PIN_COUNT, TaskFunction_t, TaskHandle_t, TickType_t,
+    UBaseType_t, configTICK_RATE_HZ, errCOULD_NOT_ALLOCATE_REQUIRED_MEMORY, errQUEUE_FULL,
+    esp_err_t, pdFALSE, pdPASS, pdTRUE,
 };
 
 const TICK_US: u64 = 1_000_000 / configTICK_RATE_HZ.unsigned_abs() as u64;
 
+/// The pointer C registered with its callback.
+#[derive(Clone, Copy)]
+pub struct Context(pub *mut c_void);
+
+// SAFETY: the kernel never dereferences it; it only passes it back to C's callback.
+unsafe impl Send for Context {}
+
 /// When a wait of `ticks` ends, in esp-rtos time; `None` waits forever, like `portMAX_DELAY`.
 /// FreeRTOS counts from the last tick, so a periodic `vTaskDelay(1)` loop stays on the tick.
-fn deadline(ticks: TickType_t) -> Option<u64> {
+pub fn deadline(ticks: TickType_t) -> Option<u64> {
     (ticks != TickType_t::MAX).then(|| (rtos::now() / TICK_US + u64::from(ticks)) * TICK_US)
+}
+
+/// When a wait of `timeout_ms` ends, in esp-rtos time; `-1` waits forever, like ESP-IDF's drivers.
+pub fn deadline_ms(timeout_ms: c_int) -> Option<u64> {
+    u64::try_from(timeout_ms)
+        .ok()
+        .map(|ms| rtos::now() + ms * 1000)
+}
+
+/// The pin number if the chip has that GPIO, as the drivers' `GPIO_IS_VALID_GPIO` checks.
+pub fn gpio_number(gpio: c_int) -> Result<u8, esp_err_t> {
+    u8::try_from(gpio)
+        .ok()
+        .filter(|&number| i32::from(number) < SOC_GPIO_PIN_COUNT)
+        .ok_or(ESP_ERR_INVALID_ARG)
 }
 
 /// Whether the heap has a free block of `bytes`. esp-rtos panics when an allocation fails, where
@@ -29,9 +56,13 @@ fn fits(bytes: usize) -> bool {
     Vec::<u8>::new().try_reserve_exact(bytes).is_ok()
 }
 
-/// ESP-IDF gives the stack size in bytes, as esp-rtos takes it. A task that returns is deleted,
-/// where ESP-IDF aborts.
+/// What ESP-IDF's separate interrupt stack holds, which here lands on the interrupted task's
+/// stack; the firmware's stack sizes leave it out.
+pub const ISR_STACK: usize = 1536;
+
+/// ESP-IDF gives the stack size in bytes, as esp-rtos takes it.
 #[export]
+#[expect(clippy::panic, reason = "FreeRTOS faults on a NULL task function too")]
 unsafe fn xTaskCreatePinnedToCore(
     task_code: TaskFunction_t,
     name: &str,
@@ -42,10 +73,11 @@ unsafe fn xTaskCreatePinnedToCore(
     _core: BaseType_t,
 ) -> BaseType_t {
     let Some(function) = task_code else {
-        return pdFAIL;
+        panic!("NULL task_code");
     };
-    let stack_size = stack_depth as usize;
-    if !fits(stack_size) {
+    let stack_size = stack_depth as usize + ISR_STACK;
+    // The probe leaves room for what esp-rtos adds: its stack guard and the task's own record.
+    if !fits(stack_size + 512) {
         return errCOULD_NOT_ALLOCATE_REQUIRED_MEMORY;
     }
     // SAFETY: C asks for `function` to run with `param` in its own task.
@@ -65,6 +97,19 @@ unsafe fn xTaskCreatePinnedToCore(
 )]
 fn xTaskGetTickCount() -> TickType_t {
     (rtos::now() / TICK_US) as TickType_t
+}
+
+/// Only a task deleting itself; esp-rtos never returns from that.
+#[export]
+fn vTaskDelete(task: TaskHandle_t) {
+    assert!(
+        task.is_null(),
+        "the kernel supports only a task deleting itself"
+    );
+    crate::libc::forget_task();
+    // SAFETY: `None` is the current task. The firmware never calls this from `app_main`, and
+    // esp-rtos panics on deleting the main task.
+    unsafe { rtos::schedule_task_deletion(None) };
 }
 
 #[export]
@@ -149,7 +194,10 @@ unsafe fn xQueueGenericSend(
     _position: BaseType_t,
 ) -> BaseType_t {
     let sent = match queue {
-        Queue::Mutex(mutex) => mutex.give(),
+        Queue::Mutex(mutex) => {
+            assert!(mutex.give(), "gave a mutex its task doesn't hold");
+            true
+        }
         // SAFETY: `item` points to one item of the queue's item size.
         Queue::Items(items) => unsafe {
             items
@@ -201,15 +249,30 @@ unsafe fn xQueueReceive(queue: &Queue, buffer: *mut c_void, ticks: TickType_t) -
     reason = "at most the `UBaseType_t` length C created the queue with"
 )]
 fn uxQueueSpacesAvailable(queue: &Queue) -> UBaseType_t {
+    // Not atomic with a receive in flight: it can count one slot free early.
     let items = queue.items();
     items.length.saturating_sub(items.handle.messages_waiting()) as UBaseType_t
+}
+
+#[export]
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "at most the `UBaseType_t` length C created the queue with"
+)]
+fn uxQueueMessagesWaiting(queue: &Queue) -> UBaseType_t {
+    queue.items().handle.messages_waiting() as UBaseType_t
 }
 
 /// esp-rtos queues have no reset, so this drains `queue`.
 #[export]
 fn xQueueGenericReset(queue: &Queue, _new_queue: BaseType_t) -> BaseType_t {
     let items = queue.items();
-    let mut item = vec![0_u8; items.item_size];
+    // The largest item the firmware queues is 32 bytes.
+    let mut item = [0_u8; 32];
+    assert!(
+        items.item_size <= item.len(),
+        "queue items fit the reset buffer"
+    );
     // Never waits: the firmware resets queues inside portENTER_CRITICAL.
     // SAFETY: `item` holds one item.
     while unsafe { items.handle.try_receive_from_isr(item.as_mut_ptr(), None) } {}
