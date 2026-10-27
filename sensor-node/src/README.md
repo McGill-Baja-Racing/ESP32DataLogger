@@ -22,7 +22,7 @@ A slow read can delay other periodic sensors. Interrupt handlers must use interr
 | `sampler/sampler.*` | Start/stop, periodic schedules, engine event consumption, output queue |
 | `can/can_node.*` | TWAI tasks, command dispatch, state acknowledgements, recovery |
 | `time/time_sync.*` | Protected master-to-local clock offset |
-| `protocol/app_protocol.h` | Shared identifiers and encodings |
+| [`../../protocol/app_protocol.h`](../../protocol/app_protocol.h) | Shared identifiers and encodings |
 | `CMakeLists.txt` | Compiled source registration |
 | `../platformio.ini` | Board role, node ID, configuration flags, bench mode |
 

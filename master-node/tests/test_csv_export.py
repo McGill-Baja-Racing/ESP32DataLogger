@@ -47,7 +47,7 @@ int main(void) {
 '''
 with tempfile.TemporaryDirectory() as directory:
     temp=Path(directory);(temp/'test.c').write_text(harness)
-    subprocess.run(['cc','-std=c11','-Wall','-Wextra','-Werror','-I'+str(ROOT/'src'),str(temp/'test.c'),'-o',str(temp/'test')],check=True)
+    subprocess.run(['cc','-std=c11','-Wall','-Wextra','-Werror','-I'+str(ROOT/'src'),'-I'+str(ROOT.parent),str(temp/'test.c'),'-o',str(temp/'test')],check=True)
     full=subprocess.check_output([str(temp/'test')],text=True)
     assert full.splitlines()[0]=='sample_index,can_id,can_id_hex,signal,node,timestamp_ms,absolute_time_utc,value,units,raw_data'
     full_rows=list(csv.DictReader(io.StringIO(full)))

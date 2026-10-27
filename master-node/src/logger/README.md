@@ -20,7 +20,7 @@ UTC entries track successfully written complete binary records. Companion write/
 
 ## Making changes
 
-Preserve record/companion index alignment, asynchronous stop semantics, duplicate-name protection, and mutex ownership. Keep exporter rules in the web module and wire contracts in protocol headers. Review `data_logger.h` first, then start/enqueue/stop functions and the writer task.
+Preserve record/companion index alignment, asynchronous stop semantics, duplicate-name protection, and mutex ownership. Keep exporter rules in the web module and wire contracts in the shared protocol header. Review `data_logger.h` first, then start/enqueue/stop functions and the writer task.
 
 Build the master after changes. On hardware verify repeated start/stop, file integrity, name collisions, companion handling, and sustained collection using [Testing](../../../docs/TESTING.md). Export tests validate selected conversion functions, not this entire writer lifecycle.
 

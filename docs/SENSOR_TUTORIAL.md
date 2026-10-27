@@ -22,7 +22,7 @@ Before continuing, explain which file changes for a different pressure span, a d
 
 ## 2. Specify an illustrative scalar signal
 
-Suppose a future device should report an integer angle in milli-degrees at 50 Hz on an existing node. Specify the physical input, legal range, signedness, conversion, failure behavior, and test input before writing hardware code. Choose an unused signal ID only after checking both protocol headers and command/state ranges; `0x0BD` is an illustrative candidate, not a permanent reservation.
+Suppose a future device should report an integer angle in milli-degrees at 50 Hz on an existing node. Specify the physical input, legal range, signedness, conversion, failure behavior, and test input before writing hardware code. Choose an unused signal ID only after checking the shared protocol header and command/state ranges; `0x0BD` is an illustrative candidate, not a permanent reservation.
 
 A hardware-free practice stub could return a fixed known integer through a periodic `read` callback. Label its name and PR as a stub: it validates plumbing, not angle measurement or calibration. Do not claim that a constant value implements a sensor. Follow Workflow A in [Adding sensors and nodes](../sensor-node/docs/ADDING_SENSORS_AND_NODES.md#workflow-a-add-a-sensor-to-an-existing-configuration) for the descriptor skeleton and actual edits rather than copying a second implementation here.
 
@@ -32,7 +32,7 @@ A hardware-free practice stub could return a fixed known integer through a perio
 |---|---|
 | New driver and `sensor_registry.c` | Define the descriptor and select it for the intended build; use a positive 20,000 µs period and bounded `read` |
 | `sensor-node/src/CMakeLists.txt` | Add the new source to explicit `idf_component_register(SRCS ...)`; files are not automatically discovered here |
-| Both `src/protocol/app_protocol.h` files | Agree on ID, integer representation, accepted-ID predicate, and master source-node mapping |
+| Root `protocol/app_protocol.h` | Define the ID and source-node mapping once for both firmwares; acceptance follows the mapping |
 | `master-node/src/live/live_data.h` and `.c` | Expand `LIVE_DATA_SIGNAL_COUNT` and add names, units, nominal rate, and node metadata |
 | `master-node/tools/decode_log.py` | Add matching offline metadata |
 | Protocol, hardware, and affected profile documentation | Let the next contributor reproduce the meaning, wiring, and build |

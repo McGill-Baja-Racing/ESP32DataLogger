@@ -56,7 +56,7 @@ The branch isolates your work from the shared main branch. Keep unrelated change
 
 Keep hardware conversion in its sensor driver, sampling in the sampler, CAN transport in its CAN module, and master recording policy in `app_control`. `main.c` connects these modules. See the [master](master-node/src/README.md) and [sensor](sensor-node/src/README.md) source maps.
 
-The projects have separate copies of their protocol header. A protocol change must keep both compatible and update consumers, signal metadata, decoding, and documentation. Read [Protocol](docs/PROTOCOL.md) before allocating IDs or changing units.
+Both projects include the root-level `protocol/app_protocol.h`. Change that shared header once, then update consumers, signal metadata, decoding, and documentation. Read [Protocol](docs/PROTOCOL.md) before allocating IDs or changing units.
 
 Edit intentional SDK defaults/build flags rather than committing generated `sdkconfig.<environment>` files. Avoid build artifacts, local port settings, and unrelated dependency updates. Documentation changes should describe behavior that exists; label assumptions requiring hardware validation explicitly.
 

@@ -19,6 +19,8 @@ Most measurements are periodic: the scheduler reads them at a configured interva
 
 The bearing is inside the gearbox. Its raw RPM is recorded for later conversion to wheel and secondary RPM using the relevant drivetrain ratios; this firmware does not perform those conversions.
 
+Both firmwares use 1 Mbit/s CAN, configured by `CAN_BITRATE` in the [shared protocol header](../protocol/app_protocol.h).
+
 ## Normal and bench operation
 
 Vehicle profiles use `SENSOR_SERIAL_TEST=0`: initialize sensors, wait for master control, synchronize timestamps, then send samples over CAN. Repeated commands do not restart an already active sampler. A recording-state beacon lets a rebooted node rejoin.

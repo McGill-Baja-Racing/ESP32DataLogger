@@ -56,10 +56,9 @@ selected registry branch is never initialized, started, or read by the sampler.
 | `src/sensors/<sensor>.c` | Adding or changing hardware access and value conversion |
 | `src/sensors/sensor.h` | Changing the interface shared by every sensor; rarely necessary |
 | `src/sensors/sensor_registry.c` | Choosing which sensor descriptors belong to each build |
-| `src/protocol/app_protocol.h` | Assigning a new sensor CAN ID |
+| `../protocol/app_protocol.h` | Assigning a signal ID and source-node mapping shared by both firmwares |
 | `src/CMakeLists.txt` | Adding a new `.c` source file to the firmware build |
 | `platformio.ini` | Adding a build environment, node ID, configuration macro, or test mode |
-| `../master-node/src/protocol/app_protocol.h` | Allowing the Master to recognize the ID and map it to its node |
 | Master metadata and monitoring | See the exact integration checklist in Workflow A, step 5, and Workflow B, step 3 |
 
 Keep hardware access and conversion in drivers rather than `main.c` or the generic
@@ -74,13 +73,13 @@ measurement.
 
 ### 1. Choose a CAN ID and data representation
 
-Add a unique ID to `src/protocol/app_protocol.h`:
+Add a unique ID to the root-level `protocol/app_protocol.h` (`../protocol/app_protocol.h` from the sensor project):
 
 ```c
 #define CAN_ID_STEERING_ANGLE 0x0BD /* example: verify availability first */
 ```
 
-Before choosing it, check both Sensor Node and Master protocol headers for
+Before choosing it, check the shared protocol header and command/state ranges for
 collisions. Decide and document the returned value's unit and scale, for
 example degrees, millivolts, RPM, or milli-degrees.
 
@@ -215,9 +214,9 @@ physical node ID.
 
 ### 5. Update the Master
 
-Update `../master-node/src/protocol/app_protocol.h` with the matching ID. Add it
-to `protocol_is_sensor_id()` and map it to the correct `NODE_ID` in
-`protocol_sensor_node_id()`.
+In the shared `../protocol/app_protocol.h`, map the new signal ID to the correct
+`NODE_ID` in `protocol_sensor_node_id()`. `protocol_is_sensor_id()` derives
+acceptance from this mapping; there is no second firmware header to update.
 
 Complete this integration checklist; paths below are relative to the repository root:
 
@@ -335,18 +334,21 @@ Rules:
 
 ### 3. Update the Master mapping
 
-For every signal transmitted by this configuration, update the master's
+For every signal transmitted by this configuration, update the shared
 `protocol_sensor_node_id()` and its node metadata. Moving a signal retires its
 old concurrent deployment; a unique `NODE_ID` does not disambiguate duplicate
 signal IDs.
 
 **Node 7 is an extension example, not already supported monitoring capacity.**
-The current master has `NODE_SLOT_COUNT=7`, so only indices 0–6 exist. To add
+The shared header has `CAN_NODE_SLOT_COUNT=7`, so only indices 0–6 exist. To add
 node 7 and make its status visible, complete all of these changes:
 
-1. Increase `NODE_SLOT_COUNT` in `master-node/src/node_state/node_registry.c`
-   so index 7 exists. State-frame recognition and liveness bounds use it.
-2. Add bit 7 to `MASTER_EXPECTED_NODE_MASK` in the adjacent header when this
+1. Add bit 7 to `CAN_NODE_ID_MASK` in root `protocol/app_protocol.h` and
+   increase `CAN_NODE_SLOT_COUNT` to 8 so index 7 exists. Sensor builds require
+   their `NODE_ID` in this mask; the mask must fit the slot count. Master
+   state-frame recognition, registry storage, and liveness bounds use that count.
+2. Add bit 7 to `MASTER_EXPECTED_NODE_MASK` in
+   `master-node/src/node_state/node_registry.h` when this
    node is part of the intended vehicle configuration.
 3. Extend `app_status_t` in `master-node/src/app/app_control.h` and its
    population/serial status output in `app_control.c`.
@@ -368,8 +370,8 @@ This is Workflow A followed by Workflow B:
 3. Register its `.c` file in `src/CMakeLists.txt`.
 4. Add a new branch to `sensor_registry.c`.
 5. Add a PlatformIO environment with a unique `NODE_ID`.
-6. Add the matching ID, accepted-sensor entry, and sensor-to-node mapping on the
-   Master.
+6. Update the shared signal-to-node mapping, supported-node mask/capacity,
+   master metadata, monitoring, and status interfaces as described above.
 7. Update user-facing build, wiring, protocol, and signal documentation.
 8. Build and bench-test the new profile before enabling normal CAN operation.
 
@@ -491,9 +493,10 @@ With `SENSOR_SERIAL_TEST=0`, verify:
 - More than one configuration macro is set to `1`.
 - An ADC-based configuration does not initialize the shared ADC unit.
 - The same CAN ID or node ID is assigned twice.
-- The Sensor Node and Master use different protocol constants.
-- The Master does not include the new ID in `protocol_is_sensor_id()`.
-- The Master maps the sensor ID to the wrong physical node.
+- A source duplicates constants instead of including the shared protocol header.
+- The shared `protocol_sensor_node_id()` omits the new signal ID.
+- The shared mapping assigns the signal ID to the wrong physical node.
+- A new node is absent from `CAN_NODE_ID_MASK` or exceeds `CAN_NODE_SLOT_COUNT`.
 - The sampling-period number and its Hz comment disagree.
 - A `read` callback blocks long enough to delay every later sensor in the
   registry loop.

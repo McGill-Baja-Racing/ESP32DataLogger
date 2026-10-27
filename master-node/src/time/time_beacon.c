@@ -7,7 +7,6 @@
 #include "freertos/task.h"
 #include "protocol/app_protocol.h"
 
-#define TIME_BEACON_PERIOD_MS 100
 #define FAILURE_LOG_PERIOD_MS 5000
 
 static const char *TAG = "TimeBeacon";
@@ -44,7 +43,7 @@ static void beacon_task(void *argument)
             ESP_LOGI(TAG, "Beacon transmission recovered");
         }
         previous_error = error;
-        vTaskDelay(pdMS_TO_TICKS(TIME_BEACON_PERIOD_MS));
+        vTaskDelay(pdMS_TO_TICKS(CAN_MASTER_TIME_PERIOD_MS));
     }
 }
 

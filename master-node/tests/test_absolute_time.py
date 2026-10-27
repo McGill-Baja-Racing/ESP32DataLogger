@@ -28,7 +28,7 @@ class AbsoluteTimeTests(unittest.TestCase):
         cls.temp = tempfile.TemporaryDirectory()
         library = Path(cls.temp.name) / "gps.so"
         subprocess.run(["cc", "-std=c11", "-Wall", "-Wextra", "-Werror", "-shared", "-fPIC",
-                        "-I", str(ROOT / "src"), str(ROOT / "src/time/gps_time.c"), str(ROOT / "src/gps/rmc_parser.c"),
+                        "-I", str(ROOT / "src"), "-I", str(ROOT.parent), str(ROOT / "src/time/gps_time.c"), str(ROOT / "src/gps/rmc_parser.c"),
                         "-o", str(library)], check=True)
         cls.lib = ctypes.CDLL(str(library))
         cls.lib.gps_rmc_parse.argtypes = [ctypes.c_char_p, ctypes.POINTER(RmcFix)]
@@ -244,7 +244,7 @@ int main(void) {
         test.write_text(harness)
         binary = test.with_suffix("")
         subprocess.run(["cc", "-std=c11", "-Wall", "-Wextra", "-Werror",
-                        "-I", str(ROOT / "src"), str(test), str(ROOT / "src/time/gps_time.c"), str(ROOT / "src/gps/rmc_parser.c"),
+                        "-I", str(ROOT / "src"), "-I", str(ROOT.parent), str(test), str(ROOT / "src/time/gps_time.c"), str(ROOT / "src/gps/rmc_parser.c"),
                         "-o", str(binary)], check=True)
         subprocess.run([str(binary)], check=True)
 
@@ -300,7 +300,7 @@ int main(void) {
         test = Path(self.temp.name) / "csv_test.c"
         test.write_text(harness)
         binary = test.with_suffix("")
-        subprocess.run(["cc", "-std=c11", "-Wall", "-Wextra", "-Werror", "-I", str(ROOT / "src"), str(test), "-o", str(binary)], check=True)
+        subprocess.run(["cc", "-std=c11", "-Wall", "-Wextra", "-Werror", "-I", str(ROOT / "src"), "-I", str(ROOT.parent), str(test), "-o", str(binary)], check=True)
         subprocess.run([str(binary)], check=True)
 
 if __name__ == "__main__":

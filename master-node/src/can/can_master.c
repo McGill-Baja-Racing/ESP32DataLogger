@@ -16,9 +16,6 @@
 
 #define CAN_TX_GPIO             20
 #define CAN_RX_GPIO             21
-#ifndef MASTER_CAN_BITRATE
-#define MASTER_CAN_BITRATE      1000000
-#endif
 #define CAN_RX_QUEUE_LENGTH     256
 #define CAN_TX_QUEUE_DEPTH      5
 #define CAN_RECOVERY_POLL_MS    250
@@ -242,7 +239,7 @@ esp_err_t can_master_init(can_message_handler_t message_handler)
     }
     twai_onchip_node_config_t config = {
         .io_cfg = {.tx = CAN_TX_GPIO, .rx = CAN_RX_GPIO},
-        .bit_timing = {.bitrate = MASTER_CAN_BITRATE},
+        .bit_timing = {.bitrate = CAN_BITRATE},
         .tx_queue_depth = CAN_TX_QUEUE_DEPTH,
     };
     esp_err_t error = twai_new_node_onchip(&config, &can_handle);

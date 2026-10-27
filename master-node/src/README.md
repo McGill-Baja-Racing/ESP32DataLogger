@@ -29,7 +29,7 @@ An interrupt callback must do bounded work. Receiving a sample and finishing its
 | `console/serial_console.*` | Text command parsing | Serial commands |
 | `live/live_data.*` | Latest values and viewer lease | Live cache/rate policy |
 | `web/` | Embedded page, HTTP controls/downloads | [Browser work](web/README.md) |
-| `protocol/app_protocol.h` | Accepted IDs and node mappings | Shared [protocol](../../docs/PROTOCOL.md) |
+| [`../../protocol/app_protocol.h`](../../protocol/app_protocol.h) | Accepted IDs and node mappings | Shared [protocol](../../docs/PROTOCOL.md) |
 
 ## Data and control dependencies
 
