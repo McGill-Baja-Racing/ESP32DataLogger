@@ -1,0 +1,32 @@
+idf_component_register(
+    SRCS
+        "main.c"
+        "app/app_control.c"
+        "can/can_master.c"
+        "console/serial_console.c"
+        "gps/gps_receiver.c"
+        "gps/rmc_parser.c"
+        "logger/data_logger.c"
+        "live/live_data.c"
+        "node_state/node_registry.c"
+        "storage/sd_card.c"
+        "time/time_beacon.c"
+        "time/gps_time.c"
+        "time/absolute_clock.c"
+        "web/web_server.c"
+        "web/index_html.S"
+    INCLUDE_DIRS "." "../.."
+    REQUIRES
+        fatfs
+        sdmmc
+        esp_driver_sdmmc
+        esp_driver_twai
+        esp_driver_gpio
+        esp_driver_uart
+        esp_timer
+        esp_http_server
+        esp_netif
+        esp_event
+        nvs_flash
+        espressif__esp_hosted
+)
