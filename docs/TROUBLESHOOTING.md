@@ -12,6 +12,7 @@ Use this guide after [Getting started](GETTING_STARTED.md) or [Flashing](FLASHIN
 | Node sends no measurements | Confirm vehicle versus serial-test profile, active recording, correct node role, CAN transceiver/pins, common ground, bitrate, termination; inspect local sensor init errors | Node startup log, master status, error/drop counters |
 | RPM is zero or wrong | Confirm simulated/conditioned input, engine accepted interval range, bearing channel order/counts; check overflow reports | Known input speed, mode, wiring, output and counters |
 | GPS data/time absent | Confirm UART direction/pins/baud, power and reception; telemetry needs valid active RMC data; UTC also needs a valid date/time | Startup/parser messages and receiver conditions |
+| GPS at 1 Hz instead of 5 Hz | Look for `Receiver acknowledged N of 6 rate commands` at boot; check the master GPIO32 → receiver RX wire | Boot log and RMC times (should step by 0.2 s) |
 | SD mount fails | Check card presence, power and FAT formatting; current firmware does not auto-format on failure | Serial mount error, card/filesystem details |
 | Web interface unavailable | Connect to `BajaDAQ`, open `http://192.168.4.1`, inspect ESP-Hosted/C6 startup compatibility; keep serial collection status separate | Network startup error, profile, locked dependency information |
 | Live graphs unavailable | Ensure recording is active, explicitly enable live view, check whether another viewer owns the lease | Status, browser action, live endpoint response |

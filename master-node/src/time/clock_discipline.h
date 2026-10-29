@@ -19,7 +19,12 @@
 #define CLOCK_DISCIPLINE_CORRECTION_US          INT64_C(32000000)
 /* Errors larger than this are treated as a bad GPS sentence, not drift. */
 #define CLOCK_DISCIPLINE_MAX_ERROR_US           INT64_C(200000)
-/* After this many bad sentences in a row, trust GPS and jump to its time. */
+/* Once every observation has been rejected for this long, trust GPS and jump
+ * to its time. A duration, so it does not depend on the GPS update rate (5 Hz
+ * normally, 1 Hz if the receiver was not configured)... */
+#define CLOCK_DISCIPLINE_STEP_AFTER_US          INT64_C(5000000)
+/* ...and at least this many rejections, so two outliers either side of a GPS
+ * dropout cannot step the clock. */
 #define CLOCK_DISCIPLINE_STEP_AFTER_REJECTIONS  5
 
 typedef struct {
@@ -28,13 +33,14 @@ typedef struct {
     int64_t anchor_utc_us;       /* UTC estimate at that same moment. */
     int64_t correction_us;       /* Error still being added over the correction period. */
     uint8_t rejected_in_a_row;   /* Consecutive observations ignored as bad. */
+    int64_t rejecting_since_us;  /* Uptime of the first of those. */
 } clock_discipline_t;
 
 typedef enum {
     CLOCK_OBSERVATION_ANCHORED,  /* First observation: the clock now starts at GPS time. */
     CLOCK_OBSERVATION_CORRECTED, /* Error accepted and being corrected gradually. */
     CLOCK_OBSERVATION_REJECTED,  /* Error too large; observation ignored. */
-    CLOCK_OBSERVATION_STEPPED,   /* Too many rejections; clock jumped to GPS time. */
+    CLOCK_OBSERVATION_STEPPED,   /* Rejected for too long; clock jumped to GPS time. */
 } clock_observation_t;
 
 /* UTC in microseconds at the given ESP32 uptime, or zero until synchronized. */

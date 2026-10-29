@@ -20,7 +20,7 @@ class ClockDiscipline(ctypes.Structure):
     """Mirror of clock_discipline_t; field order must match the C struct."""
     _fields_ = [("synchronized", ctypes.c_bool), ("anchor_uptime_us", ctypes.c_int64),
                 ("anchor_utc_us", ctypes.c_int64), ("correction_us", ctypes.c_int64),
-                ("rejected_in_a_row", ctypes.c_uint8)]
+                ("rejected_in_a_row", ctypes.c_uint8), ("rejecting_since_us", ctypes.c_int64)]
 
 
 # clock_observation_t values, in declaration order.
@@ -42,7 +42,7 @@ class AbsoluteTimeTests(unittest.TestCase):
         library = Path(cls.temp.name) / "gps.so"
         subprocess.run(["cc", "-std=c11", "-Wall", "-Wextra", "-Werror", "-shared", "-fPIC",
                         "-I", str(ROOT / "src"), "-I", str(ROOT.parent), str(ROOT / "src/time/gps_time.c"), str(ROOT / "src/gps/rmc_parser.c"),
-                        str(ROOT / "src/time/clock_discipline.c"),
+                        str(ROOT / "src/time/clock_discipline.c"), str(ROOT / "src/gps/ubx_config.c"),
                         "-o", str(library)], check=True)
         cls.lib = ctypes.CDLL(str(library))
         cls.lib.gps_rmc_parse.argtypes = [ctypes.c_char_p, ctypes.POINTER(RmcFix)]
@@ -54,6 +54,10 @@ class AbsoluteTimeTests(unittest.TestCase):
         cls.lib.clock_discipline_observe.argtypes = [ctypes.POINTER(ClockDiscipline), ctypes.c_int64,
                                                      ctypes.c_int64, ctypes.POINTER(ctypes.c_int64)]
         cls.lib.clock_discipline_observe.restype = ctypes.c_int
+        cls.lib.ubx_rate_command.argtypes = [ctypes.c_uint, ctypes.c_char_p]
+        cls.lib.ubx_rate_command.restype = ctypes.c_size_t
+        cls.lib.ubx_expected_ack.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
+        cls.lib.ubx_expected_ack.restype = ctypes.c_size_t
 
     @classmethod
     def tearDownClass(cls):
@@ -183,23 +187,26 @@ class AbsoluteTimeTests(unittest.TestCase):
 
     def test_discipline_tracks_drift_and_jitter_without_going_backwards(self):
         rng = random.Random(104)
-        for drift_ppm, jitter_us in [(30, 0), (30, 20_000), (-20, 50_000)]:
-            clock = ClockDiscipline()
-            previous = 0
-            worst = 0
-            for second in range(1800):
-                uptime = 1_000_000 + second * 1_000_000
-                true_utc = UTC_US + round(second * 1_000_000 * (1 + drift_ppm * 1e-6))
-                result, _ = self.observe(clock, uptime, true_utc + rng.randint(-jitter_us, jitter_us))
-                self.assertIn(result, (ANCHORED, CORRECTED))
-                if second >= 300:
-                    worst = max(worst, abs(self.utc(clock, uptime) - true_utc))
-                # Sample finely across each re-anchor: UTC must never decrease.
-                for step in range(0, 1_000_000, 50_000):
-                    now = self.utc(clock, uptime + step)
-                    self.assertGreaterEqual(now, previous)
-                    previous = now
-            self.assertLess(worst, 15_000, (drift_ppm, jitter_us))
+        # 1 Hz if the receiver keeps its default, 5 Hz once configured.
+        for period_us in [1_000_000, 200_000]:
+            for drift_ppm, jitter_us in [(30, 0), (30, 20_000), (-20, 50_000)]:
+                clock = ClockDiscipline()
+                previous = 0
+                worst = 0
+                for n in range(1800 * 1_000_000 // period_us):
+                    uptime = 1_000_000 + n * period_us
+                    true_utc = UTC_US + round(n * period_us * (1 + drift_ppm * 1e-6))
+                    result, _ = self.observe(clock, uptime,
+                                             true_utc + rng.randint(-jitter_us, jitter_us))
+                    self.assertIn(result, (ANCHORED, CORRECTED))
+                    if n * period_us >= 300_000_000:
+                        worst = max(worst, abs(self.utc(clock, uptime) - true_utc))
+                    # Sample finely across each re-anchor: UTC must never decrease.
+                    for step in range(0, period_us, 50_000):
+                        now = self.utc(clock, uptime + step)
+                        self.assertGreaterEqual(now, previous)
+                        previous = now
+                self.assertLess(worst, 15_000, (period_us, drift_ppm, jitter_us))
 
     def test_discipline_rejects_outliers_then_steps(self):
         clock = ClockDiscipline()
@@ -208,13 +215,57 @@ class AbsoluteTimeTests(unittest.TestCase):
             self.assertEqual(self.observe(clock, n * 1_000_000, UTC_US + n * 1_000_000 + 900_000),
                              (REJECTED, 900_000))
             self.assertEqual(self.utc(clock, n * 1_000_000), UTC_US + n * 1_000_000)
-        # One good observation resets the count of rejections in a row.
+        # One good observation restarts the rejection timer.
         self.assertEqual(self.observe(clock, 5_000_000, UTC_US + 5_000_000)[0], CORRECTED)
-        for n in range(6, 10):
+        for n in range(6, 11):
             self.assertEqual(self.observe(clock, n * 1_000_000, UTC_US + n * 1_000_000 + 900_000)[0],
                              REJECTED)
-        self.assertEqual(self.observe(clock, 10_000_000, UTC_US + 10_900_000), (STEPPED, 900_000))
-        self.assertEqual(self.utc(clock, 10_000_000), UTC_US + 10_900_000)
+        # 5 s after the first rejection in a row, GPS wins.
+        self.assertEqual(self.observe(clock, 11_000_000, UTC_US + 11_900_000), (STEPPED, 900_000))
+        self.assertEqual(self.utc(clock, 11_000_000), UTC_US + 11_900_000)
+
+    def test_discipline_step_waits_the_same_time_at_5_hz(self):
+        clock = ClockDiscipline()
+        self.observe(clock, 0, UTC_US)
+        for n in range(1, 26):
+            uptime = n * 200_000
+            self.assertEqual(self.observe(clock, uptime, UTC_US + uptime + 900_000)[0], REJECTED, n)
+        self.assertEqual(self.observe(clock, 5_200_000, UTC_US + 6_100_000), (STEPPED, 900_000))
+
+    def test_discipline_two_outliers_around_a_dropout_do_not_step(self):
+        clock = ClockDiscipline()
+        self.observe(clock, 0, UTC_US)
+        self.assertEqual(self.observe(clock, 1_000_000, UTC_US + 1_900_000)[0], REJECTED)
+        # No fix for 10 s, then another outlier: still only two rejections.
+        self.assertEqual(self.observe(clock, 11_000_000, UTC_US + 11_900_000)[0], REJECTED)
+        self.assertEqual(self.utc(clock, 11_000_000), UTC_US + 11_000_000)
+
+    def ubx_commands(self):
+        commands = []
+        for index in range(7):
+            frame = ctypes.create_string_buffer(32)
+            length = self.lib.ubx_rate_command(index, frame)
+            commands.append(frame.raw[:length])
+        return commands
+
+    def test_ubx_rate_commands_match_u_blox_reference_frames(self):
+        # Published u-blox 6 frames: CFG-MSG turning off GGA, GLL, GSA, GSV and
+        # VTG on the current port, then CFG-RATE 200 ms (5 Hz), GPS time.
+        expected = [bytes.fromhex(frame) for frame in [
+            "B5 62 06 01 03 00 F0 00 00 FA 0F",
+            "B5 62 06 01 03 00 F0 01 00 FB 11",
+            "B5 62 06 01 03 00 F0 02 00 FC 13",
+            "B5 62 06 01 03 00 F0 03 00 FD 15",
+            "B5 62 06 01 03 00 F0 05 00 FF 19",
+            "B5 62 06 08 06 00 C8 00 01 00 01 00 DE 6A",
+        ]]
+        self.assertEqual(self.ubx_commands(), expected + [b""])
+
+    def test_ubx_expected_ack(self):
+        ack = ctypes.create_string_buffer(32)
+        rate = self.ubx_commands()[5]
+        length = self.lib.ubx_expected_ack(rate, ack)
+        self.assertEqual(ack.raw[:length], bytes.fromhex("B5 62 05 01 02 00 06 08 16 3F"))
 
 
     def test_shared_reader_emits_gps_samples_and_synchronizes_utc(self):
@@ -248,6 +299,9 @@ typedef int portMUX_TYPE;
 #define ESP_LOGI(...) ((void)0)
 #define ESP_LOGW(...) ((void)0)
 #define ESP_LOGD(...) ((void)0)
+#include "gps/ubx_config.h"
+static int uart_write_bytes(int uart, const void *data, size_t n) { (void)uart; (void)data; return (int)n; }
+static int uart_flush_input(int uart) { (void)uart; return 0; }
 #define settimeofday(tv, tz) ((void)(tv), (void)(tz), 0)
 #define UART_NUM_1 1
 #define GPIO_NUM_33 33
@@ -281,7 +335,7 @@ static void feed_bytes(const char *data, size_t length, unsigned expected_sample
     input = data; input_length = length; cursor = 0; samples = 0;
     discipline = (clock_discipline_t){0};
     expect_utc = valid_date; on_sample = capture;
-    if (!setjmp(finished)) gps_task(NULL);
+    if (!setjmp(finished)) read_sentences();
     assert(samples == expected_samples);
     assert(discipline.synchronized == valid_date);
 }
@@ -311,7 +365,7 @@ static void feed(const char *date, const char *speed, unsigned count, bool valid
     feed_bytes(overflow, n + 6, 0, false);
 }
 int main(void) {
-    (void)TAG; (void)gps_task_handle;
+    (void)TAG; (void)gps_task_handle; (void)gps_task;
     feed("100926", "10.0", 3, true);
     feed("100926", "NaN", 0, false);
     feed("100926", "1\r0", 0, false);
@@ -327,7 +381,7 @@ int main(void) {
         binary = test.with_suffix("")
         subprocess.run(["cc", "-std=c11", "-Wall", "-Wextra", "-Werror",
                         "-I", str(ROOT / "src"), "-I", str(ROOT.parent), str(test), str(ROOT / "src/time/gps_time.c"), str(ROOT / "src/gps/rmc_parser.c"),
-                        str(ROOT / "src/time/clock_discipline.c"),
+                        str(ROOT / "src/time/clock_discipline.c"), str(ROOT / "src/gps/ubx_config.c"),
                         "-o", str(binary)], check=True)
         subprocess.run([str(binary)], check=True)
 

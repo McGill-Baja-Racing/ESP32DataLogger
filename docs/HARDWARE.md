@@ -36,7 +36,7 @@ The current motion-sensor hardware target is the **MPU-6500**. For this breakout
 
 ## Master GPS and SD
 
-The GY-GPS6MV2 GPS uses UART1 at 9600 baud: receiver TX → master GPIO33, receiver RX → master GPIO32, common ground. Verify power requirements for your specific receiver breakout. Satellite reception is needed for a valid position fix.
+The GY-GPS6MV2 GPS (u-blox NEO-6M) uses UART1 at 9600 baud: receiver TX → master GPIO33, receiver RX → master GPIO32, common ground. The master→receiver wire is required for the 5 Hz update rate: at each boot the master sends commands on it, and without it the receiver stays at 1 Hz ([GPS update rate](../master-node/docs/GPS_UPDATE_RATE.md)). Verify power requirements for your specific receiver breakout. Satellite reception is needed for a valid position fix.
 
 The master uses four-bit SDMMC: CLK43, CMD44, D0=39, D1=40, D2=41, D3=42. Storage mounts at `/sdcard` as FAT. `SD_FORMAT_IF_MOUNT_FAILED=0` is the current default; a failed mount does not automatically erase the card. Setting it to `1` permits formatting on mount failure and can destroy existing data.
 

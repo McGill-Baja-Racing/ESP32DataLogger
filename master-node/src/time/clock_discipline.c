@@ -41,8 +41,10 @@ clock_observation_t clock_discipline_observe(clock_discipline_t *clock,
     *error_us = utc_us - estimate_us;
 
     if (llabs(*error_us) > CLOCK_DISCIPLINE_MAX_ERROR_US) {
-        clock->rejected_in_a_row++;
-        if (clock->rejected_in_a_row < CLOCK_DISCIPLINE_STEP_AFTER_REJECTIONS) {
+        if (clock->rejected_in_a_row == 0) clock->rejecting_since_us = uptime_us;
+        if (clock->rejected_in_a_row < UINT8_MAX) clock->rejected_in_a_row++;
+        if (clock->rejected_in_a_row < CLOCK_DISCIPLINE_STEP_AFTER_REJECTIONS ||
+            uptime_us - clock->rejecting_since_us < CLOCK_DISCIPLINE_STEP_AFTER_US) {
             return CLOCK_OBSERVATION_REJECTED;
         }
         jump_to(clock, uptime_us, utc_us);

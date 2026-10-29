@@ -69,7 +69,7 @@ void absolute_clock_observe_utc(int64_t utc_ms, int64_t uptime_us)
                      error_us);
             break;
         case CLOCK_OBSERVATION_STEPPED:
-            ESP_LOGW("AbsoluteClock", "UTC jumped %+" PRId64 " us after repeated "
+            ESP_LOGW("AbsoluteClock", "UTC jumped %+" PRId64 " us after lasting "
                      "disagreement with GPS", error_us);
             break;
     }

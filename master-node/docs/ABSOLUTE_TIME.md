@@ -13,9 +13,11 @@ sentence with a valid date (2020–2099) anchors UTC to the ESP32 monotonic cloc
 The receiver needs satellite reception. Verify its reported date against a known
 clock during commissioning; older receivers can report GPS week rollover dates.
 
-Each RMC UTC is paired with the time the first byte of that second's NMEA burst
-arrived (the first byte after at least 50 ms of silence), not the end of the RMC
-line: at 9600 baud a sentence takes about 70 ms to arrive. The UART delivers every
+At boot the master sets the receiver to send only RMC, five times a second (see
+[GPS update rate](GPS_UPDATE_RATE.md)). Each RMC UTC is paired with the time the
+first byte of that measurement's NMEA burst arrived (the first byte after at least
+50 ms of silence), not the end of the RMC line: at 9600 baud a sentence takes about
+75 ms to arrive. The UART delivers every
 byte immediately so the burst start is not held in the receive FIFO. Only the first
 valid RMC of a burst is used.
 
@@ -25,15 +27,19 @@ Later RMC sentences keep the clock disciplined (`time/clock_discipline.c`). Each
 error between GPS UTC and the current estimate is spread over the next 32 s
 instead of being applied at once, so absolute time never steps or runs backwards
 and receiver jitter is averaged. Errors above 200 ms are ignored as bad
-observations; after 5 in a row the clock is re-anchored (a logged step). If GPS
+observations; after 5 in a row spanning at least 5 s the clock is re-anchored (a
+logged step). The duration keeps this the same at 5 Hz and at the receiver's 1 Hz
+default. If GPS
 reception is lost, time keeps advancing at the ESP32 oscillator rate and drift
-accumulates until reception returns. The host tests simulate 30 ppm drift with
-±20 ms of jitter per sentence and check the estimate stays within 15 ms of the
-GPS reference.
+accumulates until reception returns. The correction time constant is also
+independent of the rate: at 5 Hz each sentence moves the clock five times less,
+but there are five times more. The host tests simulate 30 ppm drift with ±20 ms
+of jitter per sentence, at 1 Hz and 5 Hz, and check the estimate stays within
+15 ms of the GPS reference.
 
 ## Accuracy and clock limits
 
-The receiver still outputs a burst some time after the UTC second it describes.
+The receiver still outputs a burst some time after the measurement it describes.
 `GPS_UTC_OUTPUT_DELAY_US` in `gps/gps_receiver.c` (or a `-D` build flag) subtracts
 that delay; it is 0 until measured on the target receiver, so absolute time is
 currently late by that delay. Millisecond formatting is not millisecond UTC
