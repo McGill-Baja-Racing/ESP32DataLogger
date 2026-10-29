@@ -38,6 +38,7 @@ and store them safely on an SD card.
 | `storage/sd_card.c` | SDMMC hardware and FAT mount |
 | `node_state/node_registry.c` | Latest node state acknowledgements |
 | `time/time_beacon.c` | Periodic master-clock broadcast |
+| `time/absolute_clock.c` | GPS UTC clock, disciplined by `time/clock_discipline.c` |
 | `gps/gps_receiver.c` | GPS UART ownership, NMEA validation, and RMC parsing |
 | `console/serial_console.c` | Serial command parsing |
 | `app/app_control.c` | Serialized logging lifecycle shared by serial and HTTP |

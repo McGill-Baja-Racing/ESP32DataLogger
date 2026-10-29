@@ -15,6 +15,8 @@ src/
 ├── logger/data_logger.*      Log lifecycle, queue, blocks, and file writes
 ├── node_state/node_registry.* Latest state reported by each sensor node
 ├── storage/sd_card.*         ESP32-P4 SDMMC mount and pin configuration
+├── time/absolute_clock.*     GPS UTC clock shared by logging and file names
+├── time/clock_discipline.*   Gradual GPS UTC correction, no hardware calls
 └── time/time_beacon.*        Periodic master microsecond beacon
 ```
 

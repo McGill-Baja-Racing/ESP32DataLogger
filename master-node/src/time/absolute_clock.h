@@ -1,7 +1,9 @@
 #pragma once
 #include <stdint.h>
-/* Validated UTC from the shared RMC parser, before emitting GPS samples. */
-void absolute_clock_observe_utc(int64_t utc_ms);
+/* Validated UTC from the shared RMC parser, before emitting GPS samples.
+ * uptime_us is the esp_timer time at which that UTC second began. The first
+ * observation anchors the clock; later ones correct drift without stepping. */
+void absolute_clock_observe_utc(int64_t utc_ms, int64_t uptime_us);
 /* Zero until first valid GPS UTC. Resolution is ms, not guaranteed accuracy. */
 int64_t absolute_clock_sample_utc(uint32_t sample_ms);
 /* Current UTC in milliseconds, or zero until the GPS clock is synchronized.

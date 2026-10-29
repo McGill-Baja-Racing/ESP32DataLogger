@@ -13,6 +13,7 @@ idf_component_register(
         "time/time_beacon.c"
         "time/gps_time.c"
         "time/absolute_clock.c"
+        "time/clock_discipline.c"
         "web/web_server.c"
         "web/index_html.S"
     INCLUDE_DIRS "." "../.."

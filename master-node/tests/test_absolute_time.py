@@ -2,6 +2,7 @@
 import ctypes
 import datetime
 from pathlib import Path
+import random
 import subprocess
 import tempfile
 import unittest
@@ -13,6 +14,18 @@ class RmcFix(ctypes.Structure):
                 ("longitude_e7", ctypes.c_int32), ("speed_kph_x100", ctypes.c_uint16),
                 ("has_location", ctypes.c_bool), ("has_speed", ctypes.c_bool),
                 ("has_utc", ctypes.c_bool)]
+
+
+class ClockDiscipline(ctypes.Structure):
+    """Mirror of clock_discipline_t; field order must match the C struct."""
+    _fields_ = [("synchronized", ctypes.c_bool), ("anchor_uptime_us", ctypes.c_int64),
+                ("anchor_utc_us", ctypes.c_int64), ("correction_us", ctypes.c_int64),
+                ("rejected_in_a_row", ctypes.c_uint8)]
+
+
+# clock_observation_t values, in declaration order.
+ANCHORED, CORRECTED, REJECTED, STEPPED = range(4)
+UTC_US = 1789065723125000  # 2026-09-10T18:42:03.125Z in microseconds
 
 
 def sentence(payload):
@@ -29,12 +42,18 @@ class AbsoluteTimeTests(unittest.TestCase):
         library = Path(cls.temp.name) / "gps.so"
         subprocess.run(["cc", "-std=c11", "-Wall", "-Wextra", "-Werror", "-shared", "-fPIC",
                         "-I", str(ROOT / "src"), "-I", str(ROOT.parent), str(ROOT / "src/time/gps_time.c"), str(ROOT / "src/gps/rmc_parser.c"),
+                        str(ROOT / "src/time/clock_discipline.c"),
                         "-o", str(library)], check=True)
         cls.lib = ctypes.CDLL(str(library))
         cls.lib.gps_rmc_parse.argtypes = [ctypes.c_char_p, ctypes.POINTER(RmcFix)]
         cls.lib.gps_rmc_parse.restype = ctypes.c_bool
         cls.lib.gps_time_sample_utc.argtypes = [ctypes.c_int64, ctypes.c_uint64, ctypes.c_uint32]
         cls.lib.gps_time_sample_utc.restype = ctypes.c_int64
+        cls.lib.clock_discipline_utc_us.argtypes = [ctypes.POINTER(ClockDiscipline), ctypes.c_int64]
+        cls.lib.clock_discipline_utc_us.restype = ctypes.c_int64
+        cls.lib.clock_discipline_observe.argtypes = [ctypes.POINTER(ClockDiscipline), ctypes.c_int64,
+                                                     ctypes.c_int64, ctypes.POINTER(ctypes.c_int64)]
+        cls.lib.clock_discipline_observe.restype = ctypes.c_int
 
     @classmethod
     def tearDownClass(cls):
@@ -140,6 +159,63 @@ class AbsoluteTimeTests(unittest.TestCase):
         self.assertEqual(convert(1800000000000, 2**32 + 20, 2**32 - 10), 1799999999970)
         self.assertEqual(convert(1800000000000, 2**32 - 10, 20), 1800000000030)
 
+    def observe(self, clock, uptime_us, utc_us):
+        error = ctypes.c_int64()
+        result = self.lib.clock_discipline_observe(ctypes.byref(clock), uptime_us, utc_us,
+                                                   ctypes.byref(error))
+        return result, error.value
+
+    def utc(self, clock, uptime_us):
+        return self.lib.clock_discipline_utc_us(ctypes.byref(clock), uptime_us)
+
+    def test_discipline_anchor_and_holdover(self):
+        clock = ClockDiscipline()
+        self.assertEqual(self.utc(clock, 5_000_000), 0)
+        self.assertEqual(self.observe(clock, 1_000_000, UTC_US), (ANCHORED, 0))
+        self.assertEqual(self.utc(clock, 1_000_000), UTC_US)
+        self.assertEqual(self.utc(clock, 3_601_000_000), UTC_US + 3_600_000_000)
+        # A 10 ms error is added gradually over 32 s, then time runs 1:1 again.
+        self.assertEqual(self.observe(clock, 2_000_000, UTC_US + 1_010_000), (CORRECTED, 10_000))
+        self.assertEqual(self.utc(clock, 2_000_000), UTC_US + 1_000_000)
+        self.assertEqual(self.utc(clock, 18_000_000), UTC_US + 17_005_000)
+        self.assertEqual(self.utc(clock, 34_000_000), UTC_US + 33_010_000)
+        self.assertEqual(self.utc(clock, 100_000_000), UTC_US + 99_010_000)
+
+    def test_discipline_tracks_drift_and_jitter_without_going_backwards(self):
+        rng = random.Random(104)
+        for drift_ppm, jitter_us in [(30, 0), (30, 20_000), (-20, 50_000)]:
+            clock = ClockDiscipline()
+            previous = 0
+            worst = 0
+            for second in range(1800):
+                uptime = 1_000_000 + second * 1_000_000
+                true_utc = UTC_US + round(second * 1_000_000 * (1 + drift_ppm * 1e-6))
+                result, _ = self.observe(clock, uptime, true_utc + rng.randint(-jitter_us, jitter_us))
+                self.assertIn(result, (ANCHORED, CORRECTED))
+                if second >= 300:
+                    worst = max(worst, abs(self.utc(clock, uptime) - true_utc))
+                # Sample finely across each re-anchor: UTC must never decrease.
+                for step in range(0, 1_000_000, 50_000):
+                    now = self.utc(clock, uptime + step)
+                    self.assertGreaterEqual(now, previous)
+                    previous = now
+            self.assertLess(worst, 15_000, (drift_ppm, jitter_us))
+
+    def test_discipline_rejects_outliers_then_steps(self):
+        clock = ClockDiscipline()
+        self.observe(clock, 0, UTC_US)
+        for n in range(1, 5):
+            self.assertEqual(self.observe(clock, n * 1_000_000, UTC_US + n * 1_000_000 + 900_000),
+                             (REJECTED, 900_000))
+            self.assertEqual(self.utc(clock, n * 1_000_000), UTC_US + n * 1_000_000)
+        # One good observation resets the count of rejections in a row.
+        self.assertEqual(self.observe(clock, 5_000_000, UTC_US + 5_000_000)[0], CORRECTED)
+        for n in range(6, 10):
+            self.assertEqual(self.observe(clock, n * 1_000_000, UTC_US + n * 1_000_000 + 900_000)[0],
+                             REJECTED)
+        self.assertEqual(self.observe(clock, 10_000_000, UTC_US + 10_900_000), (STEPPED, 900_000))
+        self.assertEqual(self.utc(clock, 10_000_000), UTC_US + 10_900_000)
+
 
     def test_shared_reader_emits_gps_samples_and_synchronizes_utc(self):
         def without_includes(text):
@@ -161,6 +237,7 @@ class AbsoluteTimeTests(unittest.TestCase):
 #include "protocol/app_protocol.h"
 #include "time/gps_time.h"
 #include "gps/rmc_parser.h"
+#include "time/clock_discipline.h"
 typedef struct { uint32_t id; uint8_t dlc; uint64_t data; } can_message_t;
 typedef void (*gps_sample_handler_t)(const can_message_t *);
 typedef int TaskHandle_t;
@@ -170,14 +247,16 @@ typedef int portMUX_TYPE;
 #define portEXIT_CRITICAL(p) ((void)(p))
 #define ESP_LOGI(...) ((void)0)
 #define ESP_LOGW(...) ((void)0)
+#define ESP_LOGD(...) ((void)0)
 #define settimeofday(tv, tz) ((void)(tv), (void)(tz), 0)
 #define UART_NUM_1 1
 #define GPIO_NUM_33 33
 #define GPIO_NUM_32 32
 #define pdMS_TO_TICKS(x) (x)
-static int64_t esp_timer_get_time(void) { return 1000000; }
 static const char *input;
 static size_t cursor, input_length;
+/* Byte i of each input arrives at 1 s + i ms, so the burst starts at 1 s. */
+static int64_t esp_timer_get_time(void) { return 1000000 + 1000 * (int64_t)(cursor ? cursor - 1 : 0); }
 static jmp_buf finished;
 static int uart_read_bytes(int uart, uint8_t *out, unsigned n, unsigned timeout) {
     (void)uart; (void)n; (void)timeout;
@@ -190,18 +269,21 @@ static bool expect_utc;
 static void capture(const can_message_t *sample) {
     const uint32_t ids[] = {CAN_ID_GPS_SPEED, CAN_ID_GPS_LATITUDE, CAN_ID_GPS_LONGITUDE};
     assert(sample->id == ids[samples % 3]);
-    assert((sample->data >> 32) == 1000);
+    /* Samples are stamped at the end of the line... */
+    assert((sample->data >> 32) == 1000 + cursor - 1);
+    /* ...but UTC belongs to the burst start, not the line end. */
     if (expect_utc) assert(absolute_clock_sample_utc(1000) == INT64_C(1789065723125));
     else assert(absolute_clock_sample_utc(1000) == 0);
     ++samples;
 }
 static void feed_bytes(const char *data, size_t length, unsigned expected_samples,
                        bool valid_date) {
-    input = data; input_length = length; cursor = 0; samples = 0; synchronized = false;
+    input = data; input_length = length; cursor = 0; samples = 0;
+    discipline = (clock_discipline_t){0};
     expect_utc = valid_date; on_sample = capture;
     if (!setjmp(finished)) gps_task(NULL);
     assert(samples == expected_samples);
-    assert(synchronized == valid_date);
+    assert(discipline.synchronized == valid_date);
 }
 static void feed(const char *date, const char *speed, unsigned count, bool valid_date) {
     char payload[128], sentence[160];
@@ -211,8 +293,8 @@ static void feed(const char *date, const char *speed, unsigned count, bool valid
     snprintf(sentence, sizeof(sentence), "$%s*%02X\r\n", payload, checksum);
     feed_bytes(sentence, strlen(sentence), count, valid_date);
     if (valid_date) {
-        /* Later observations cannot move the first anchor. */
-        absolute_clock_observe_utc(INT64_C(1789069999999));
+        /* A single outlying observation cannot step the clock. */
+        absolute_clock_observe_utc(INT64_C(1789069999999), 1000000);
         assert(absolute_clock_sample_utc(1000) == INT64_C(1789065723125));
     }
     char overflow[512];
@@ -245,6 +327,7 @@ int main(void) {
         binary = test.with_suffix("")
         subprocess.run(["cc", "-std=c11", "-Wall", "-Wextra", "-Werror",
                         "-I", str(ROOT / "src"), "-I", str(ROOT.parent), str(test), str(ROOT / "src/time/gps_time.c"), str(ROOT / "src/gps/rmc_parser.c"),
+                        str(ROOT / "src/time/clock_discipline.c"),
                         "-o", str(binary)], check=True)
         subprocess.run([str(binary)], check=True)
 
