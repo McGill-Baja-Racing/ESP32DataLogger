@@ -6,6 +6,7 @@ use esp_hal::{
     peripherals::PSRAM,
     psram::{Psram, PsramConfig},
 };
+use macros::export;
 use sys::{
     ESP_ERR_ESP_NETIF_DHCP_ALREADY_STOPPED, ESP_ERR_ESP_NETIF_DHCP_NOT_STOPPED,
     ESP_ERR_HTTPD_HANDLER_EXISTS, ESP_ERR_HTTPD_HANDLERS_FULL, ESP_ERR_HTTPD_RESP_SEND,
@@ -41,4 +42,17 @@ pub fn init() {
             esp_println::println!("PSRAM is {size} bytes, not the master's {PSRAM_SIZE}");
         });
     }
+}
+
+/// The heap is all internal RAM, so every `caps` gets the internal answer.
+#[export]
+fn heap_caps_get_free_size(_caps: u32) -> usize {
+    esp_alloc::HEAP.free()
+}
+
+/// The least the heap has had free: its size less the most it has had in use.
+#[export]
+fn heap_caps_get_minimum_free_size(_caps: u32) -> usize {
+    let stats = esp_alloc::HEAP.stats();
+    stats.size.saturating_sub(stats.max_usage)
 }
