@@ -62,6 +62,7 @@ Every accepted CAN sensor frame has exactly eight bytes:
 | Node 6 | `0x0BA` | Voltage, mV | 100 Hz |
 | Node 5 | `0x0BB` | Engine RPM | Valid consecutive spark intervals; zero on stopped timeout |
 | Node 5 | `0x0BC` | Spark event, value `1` | Detected rising edges |
+| Node 2 | `0x0BD` | CVT belt temperature, °C | 10 Hz |
 | Master GPS | `0x700` | Speed, km/h × 100 | Valid GPS telemetry updates |
 | Master GPS | `0x701`, `0x702` | Latitude/longitude, degrees × 10⁷ | Valid GPS telemetry updates |
 
@@ -88,7 +89,7 @@ bytes `DC 05 00 00 E8 03 00 00`: little-endian 1500 followed by little-endian
 
 ## Changing this contract
 
-Both firmwares include the same [shared header](../protocol/app_protocol.h) at the repository root. It owns CAN bitrate (`CAN_BITRATE`), beacon period (`CAN_MASTER_TIME_PERIOD_MS`), command/signal IDs, state-report length, node mask/capacity, and sensor-to-node mappings. Both CMake components include the repository root; retain `#include "protocol/app_protocol.h"` in source files. Update `protocol_sensor_node_id()` for a new signal; `protocol_is_sensor_id()` derives acceptance from that mapping. Also update live/export metadata, offline decoding, and this table. IDs are occupied through `0x0BC`; choose a new ID only after checking the shared header and control/state ID ranges. Each concurrently deployed measurement source needs its own signal ID: distinct node IDs do not distinguish duplicated sensor IDs.
+Both firmwares include the same [shared header](../protocol/app_protocol.h) at the repository root. It owns CAN bitrate (`CAN_BITRATE`), beacon period (`CAN_MASTER_TIME_PERIOD_MS`), command/signal IDs, state-report length, node mask/capacity, and sensor-to-node mappings. Both CMake components include the repository root; retain `#include "protocol/app_protocol.h"` in source files. Update `protocol_sensor_node_id()` for a new signal; `protocol_is_sensor_id()` derives acceptance from that mapping. Also update live/export metadata, offline decoding, and this table. IDs are occupied through `0x0BD`; choose a new ID only after checking the shared header and control/state ID ranges. Each concurrently deployed measurement source needs its own signal ID: distinct node IDs do not distinguish duplicated sensor IDs.
 
 `CAN_NODE_ID_MASK` lists supported node IDs (currently 1, 3, 4, 5, and 6); `CAN_NODE_SLOT_COUNT` is 7, allowing indices 0–6. Sensor builds reject a `NODE_ID` absent from the mask. The mask must fit the slot count, and the master expected-node mask must be a subset of supported nodes. Supporting a node and enabling its monitoring are separate steps; see the extension guide for status/UI changes.
 

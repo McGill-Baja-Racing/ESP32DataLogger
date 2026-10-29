@@ -125,13 +125,13 @@ static esp_err_t status_handler(httpd_req_t *request)
              "\"can_rx_errors\":%" PRIu32 ",\"can_tx_errors\":%" PRIu32 ","
              "\"can_errors_available\":%s,"
              "\"live_enabled\":%s,"
-             "\"nodes\":{\"1\":\"%s\",\"3\":\"%s\",\"4\":\"%s\",\"5\":\"%s\","
+             "\"nodes\":{\"1\":\"%s\",\"2\":\"%s\",\"3\":\"%s\",\"4\":\"%s\",\"5\":\"%s\","
              "\"6\":\"%s\"}}",
              data_logger_state_name(), base_name(status.current_file),
              status.can_drops, status.log_drops,
              status.can_rx_errors, status.can_tx_errors,
              status.can_errors_available ? "true" : "false",
-             status.live_enabled ? "true" : "false", status.node_1, status.node_3, status.node_4,
+             status.live_enabled ? "true" : "false", status.node_1, status.node_2, status.node_3, status.node_4,
              status.node_5, status.node_6);
     httpd_resp_set_type(request, "application/json");
     httpd_resp_set_hdr(request, "Cache-Control", "no-store");

@@ -42,7 +42,7 @@ Expect successful results and zero exit status. These compile actual selected C 
 For broad build validation:
 
 ```bash
-pio run -d sensor-node -e NodeBrake -e NodeMPU -e NodeEncoder -e NodeEngine -e NodeADC -e NodeEngineBench -t buildprog
+pio run -d sensor-node -e NodeBrake -e NodeMPU -e NodeEncoder -e NodeEngine -e NodeADC -e NodeCVTTemp -e NodeEngineBench -t buildprog
 pio run -d master-node -e Master -e MasterStable -e MasterNoCAN -t buildprog
 pio run -d simulators/engine-rpm -e EngineRPMSimulator -t buildprog
 pio run -d simulators/wheel-rpm -e WheelRPM_SKF_Simulator -t buildprog
