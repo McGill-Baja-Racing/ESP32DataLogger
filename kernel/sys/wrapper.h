@@ -30,6 +30,7 @@
 #endif
 #if CONFIG_IDF_TARGET_ESP32P4
 #include "driver/uart.h"
+#include "esp_heap_caps.h"
 #include "driver/sdmmc_host.h"
 #include "esp_vfs_fat.h"
 #include "sd_pwr_ctrl_by_on_chip_ldo.h"
