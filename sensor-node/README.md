@@ -9,6 +9,7 @@ A PlatformIO environment selects a fixed set of sensor drivers when firmware is 
 | Environment | Node | Measurements |
 |---|---:|---|
 | `NodeBrake` | 1 | Front and rear brake pressure |
+| `NodeCVTTemp` | 2 | CVT belt temperature |
 | `NodeMPU` | 3 | Acceleration and angular velocity on three axes |
 | `NodeEncoder` | 4 | Signed gearbox bearing RPM |
 | `NodeEngine` | 5 | Engine RPM and spark events |
