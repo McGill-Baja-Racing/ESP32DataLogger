@@ -27,26 +27,40 @@ const DIVIDER: u16 = 80;
 type Callback =
     unsafe extern "C" fn(gptimer_handle_t, *const gptimer_alarm_event_data_t, *mut c_void) -> bool;
 
+#[derive(Clone, Copy, PartialEq)]
+enum Phase {
+    Free,
+    Created,
+    Enabled,
+    Running,
+}
+
 #[derive(Clone, Copy)]
 struct State {
     callback: Option<(Callback, Context)>,
     /// What the alarm event reports.
     alarm: u64,
-    created: bool,
-    enabled: bool,
-    running: bool,
+    phase: Phase,
+}
+
+impl State {
+    fn advance(&mut self, from: Phase, to: Phase) -> Result<(), esp_err_t> {
+        if self.phase != from {
+            return Err(ESP_ERR_INVALID_STATE);
+        }
+        self.phase = to;
+        Ok(())
+    }
 }
 
 struct Timer(Mutex<Cell<State>>);
 
-sys::c_handle!(Timer, gptimer_handle_t);
+sys::c_handle!(Timer, sys::gptimer_handle_t);
 
 static TIMER: Timer = Timer(Mutex::new(Cell::new(State {
     callback: None,
     alarm: 0,
-    created: false,
-    enabled: false,
-    running: false,
+    phase: Phase::Free,
 })));
 
 impl Timer {
@@ -65,7 +79,7 @@ fn count() -> u64 {
     let timer = TIMG1::regs().t(0);
     timer.update().write(|w| w.update().set_bit());
     while timer.update().read().update().bit_is_set() {}
-    u64::from(timer.hi().read().bits()) << 32 | u64::from(timer.lo().read().bits())
+    (u64::from(timer.hi().read().bits()) << 32) | u64::from(timer.lo().read().bits())
 }
 
 /// The hardware ends the alarm when it fires, so a callback that doesn't set another stops the
@@ -100,10 +114,10 @@ fn gptimer_new_timer(
             && config.clk_src == gptimer_clock_source_t::GPTIMER_CLK_SRC_DEFAULT,
         "the kernel supports only a 1 MHz timer counting up from the default clock"
     );
-    if TIMER.update(|state| core::mem::replace(&mut state.created, true)) {
-        return Err(ESP_ERR_NOT_FOUND);
-    }
-    // SAFETY: `created` lets this run once, so nothing else uses timer group 1.
+    TIMER
+        .update(|state| state.advance(Phase::Free, Phase::Created))
+        .map_err(|_taken| ESP_ERR_NOT_FOUND)?;
+    // SAFETY: leaving `Phase::Free` lets this run once, so nothing else uses timer group 1.
     let _ = TimerGroup::new(unsafe { TIMG1::steal() });
     let regs = TIMG1::regs().t(0);
     regs.config().write(|w| {
@@ -115,6 +129,7 @@ fn gptimer_new_timer(
         // SAFETY: the divider is a plain 16-bit field.
         unsafe { w.divider().bits(DIVIDER) }
     });
+    regs.config().modify(|_, w| w.divcnt_rst().set_bit());
     // SAFETY: both halves of the load value are plain registers.
     unsafe {
         regs.loadlo().write(|w| w.load_lo().bits(0));
@@ -133,7 +148,7 @@ fn gptimer_register_event_callbacks(
     user_data: *mut c_void,
 ) -> Result<(), esp_err_t> {
     timer.update(|state| {
-        if state.enabled {
+        if matches!(state.phase, Phase::Enabled | Phase::Running) {
             return Err(ESP_ERR_INVALID_STATE);
         }
         state.callback = callbacks
@@ -145,9 +160,7 @@ fn gptimer_register_event_callbacks(
 
 #[export]
 fn gptimer_enable(timer: &Timer) -> Result<(), esp_err_t> {
-    if timer.update(|state| core::mem::replace(&mut state.enabled, true)) {
-        return Err(ESP_ERR_INVALID_STATE);
-    }
+    timer.update(|state| state.advance(Phase::Created, Phase::Enabled))?;
     interrupt::bind_handler(Interrupt::TG1_T0_LEVEL, alarm);
     TIMG1::regs().int_ena().modify(|_, w| w.t(0).set_bit());
     Ok(())
@@ -178,9 +191,7 @@ fn gptimer_set_alarm_action(
 
 #[export]
 fn gptimer_start(timer: &Timer) -> Result<(), esp_err_t> {
-    if timer.update(|state| !state.enabled || core::mem::replace(&mut state.running, true)) {
-        return Err(ESP_ERR_INVALID_STATE);
-    }
+    timer.update(|state| state.advance(Phase::Enabled, Phase::Running))?;
     TIMG1::regs().t(0).config().modify(|_, w| w.en().set_bit());
     Ok(())
 }

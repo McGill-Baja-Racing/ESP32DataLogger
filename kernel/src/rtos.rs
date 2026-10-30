@@ -2,7 +2,7 @@
 
 use alloc::{boxed::Box, vec::Vec};
 use core::{
-    cell::Cell,
+    cell::{Cell, UnsafeCell},
     ffi::{c_int, c_void},
     mem::MaybeUninit,
 };
@@ -15,14 +15,12 @@ use esp_radio_rtos_driver::{
 };
 use macros::export;
 use sys::{
-    BaseType_t, ESP_ERR_INVALID_ARG, SOC_GPIO_PIN_COUNT, TaskFunction_t, TaskHandle_t, TickType_t,
-    UBaseType_t, configTICK_RATE_HZ, errCOULD_NOT_ALLOCATE_REQUIRED_MEMORY, errQUEUE_FULL,
-    esp_err_t, pdFALSE, pdPASS, pdTRUE,
+    BaseType_t, TaskFunction_t, TaskHandle_t, TickType_t, UBaseType_t, configTICK_RATE_HZ,
+    errCOULD_NOT_ALLOCATE_REQUIRED_MEMORY, pdFALSE, pdPASS, pdTRUE,
 };
 
 const TICK_US: u64 = 1_000_000 / configTICK_RATE_HZ.unsigned_abs() as u64;
 
-/// The pointer C registered with its callback.
 #[derive(Clone, Copy)]
 pub struct Context(pub *mut c_void);
 
@@ -42,18 +40,103 @@ pub fn deadline_ms(timeout_ms: c_int) -> Option<u64> {
         .map(|ms| rtos::now() + ms * 1000)
 }
 
-/// The pin number if the chip has that GPIO, as the drivers' `GPIO_IS_VALID_GPIO` checks.
-pub fn gpio_number(gpio: c_int) -> Result<u8, esp_err_t> {
-    u8::try_from(gpio)
-        .ok()
-        .filter(|&number| i32::from(number) < SOC_GPIO_PIN_COUNT)
-        .ok_or(ESP_ERR_INVALID_ARG)
+/// A semaphore that is given once and taken once.
+pub fn binary_semaphore() -> SemaphoreHandle {
+    SemaphoreHandle::new(SemaphoreKind::Counting { max: 1, initial: 0 })
 }
 
-/// Whether the heap has a free block of `bytes`. esp-rtos panics when an allocation fails, where
-/// FreeRTOS returns an error, so callers check first; its own small bookkeeping isn't counted.
+/// Data that tasks use only while holding its mutex, which can span slow I/O unlike a critical
+/// section.
+pub struct Locked<T> {
+    lock: SemaphoreHandle,
+    data: UnsafeCell<T>,
+}
+
+// SAFETY: `with` and `with_deadline` are the only access to `data`, and they hold `lock`, so
+// tasks take turns with a `T` they may move between them.
+unsafe impl<T: Send> Sync for Locked<T> {}
+
+/// Gives the lock back when dropped, so a panic or early return can't leak it.
+struct Held<'a>(&'a SemaphoreHandle);
+
+impl Drop for Held<'_> {
+    fn drop(&mut self) {
+        self.0.give();
+    }
+}
+
+impl<T> Locked<T> {
+    pub fn new(data: T) -> Self {
+        Self {
+            lock: SemaphoreHandle::new(SemaphoreKind::Mutex),
+            data: UnsafeCell::new(data),
+        }
+    }
+
+    /// Runs `f` on the data, waiting for the lock as long as it takes.
+    pub fn with<R>(&self, f: impl FnOnce(&mut T) -> R) -> R {
+        self.lock.take(None);
+        // SAFETY: the task holds `lock`.
+        unsafe { self.run(f) }
+    }
+
+    /// Like `with`, but gives up and returns `None` when the lock isn't free by `deadline`.
+    #[cfg_attr(
+        esp32p4,
+        expect(dead_code, reason = "only the C3's I2C driver waits for a deadline")
+    )]
+    pub fn with_deadline<R>(
+        &self,
+        deadline: Option<u64>,
+        f: impl FnOnce(&mut T) -> R,
+    ) -> Option<R> {
+        // SAFETY: the task holds `lock` once `take_with_deadline` succeeds.
+        self.lock
+            .take_with_deadline(deadline)
+            .then(|| unsafe { self.run(f) })
+    }
+
+    /// # Safety
+    ///
+    /// The calling task holds `lock`, which this gives back.
+    unsafe fn run<R>(&self, f: impl FnOnce(&mut T) -> R) -> R {
+        let _held = Held(&self.lock);
+        // SAFETY: the caller holds `lock`, so this is the only access to `data`.
+        f(unsafe { &mut *self.data.get() })
+    }
+}
+
+/// A `&'static T` that is set after start-up and then read from tasks and interrupts.
+pub struct Global<T: 'static>(Mutex<Cell<Option<&'static T>>>);
+
+impl<T> Global<T> {
+    pub const fn new() -> Self {
+        Self(Mutex::new(Cell::new(None)))
+    }
+
+    pub fn get(&self) -> Option<&'static T> {
+        critical_section::with(|cs| self.0.borrow(cs).get())
+    }
+
+    pub fn set(&self, value: &'static T) {
+        critical_section::with(|cs| self.0.borrow(cs).set(Some(value)));
+    }
+}
+
+/// What esp-rtos allocates besides the memory the caller asks for: a task's record and stack
+/// guard, or a queue's or mutex's semaphores and wait queues.
+const OVERHEAD: usize = 512;
+
+/// Whether the heap has a free block of `bytes` and room for esp-rtos's own. esp-rtos panics when
+/// an allocation fails, where FreeRTOS returns an error, so callers check first.
 fn fits(bytes: usize) -> bool {
-    Vec::<u8>::new().try_reserve_exact(bytes).is_ok()
+    bytes
+        .checked_add(OVERHEAD)
+        .is_some_and(|bytes| Vec::<u8>::new().try_reserve_exact(bytes).is_ok())
+}
+
+fn pd(ok: bool) -> BaseType_t {
+    if ok { pdTRUE } else { pdFALSE }
 }
 
 /// What ESP-IDF's separate interrupt stack holds, which here lands on the interrupted task's
@@ -76,8 +159,7 @@ unsafe fn xTaskCreatePinnedToCore(
         panic!("NULL task_code");
     };
     let stack_size = stack_depth as usize + ISR_STACK;
-    // The probe leaves room for what esp-rtos adds: its stack guard and the task's own record.
-    if !fits(stack_size + 512) {
+    if !fits(stack_size) {
         return errCOULD_NOT_ALLOCATE_REQUIRED_MEMORY;
     }
     // SAFETY: C asks for `function` to run with `param` in its own task.
@@ -129,13 +211,12 @@ enum Queue {
 
 struct Items {
     handle: QueueHandle,
-    /// For `xQueueGenericReset`.
     item_size: usize,
     /// esp-rtos queues report only how many items they hold.
     length: usize,
 }
 
-sys::c_handle!(Queue, QueueHandle_t);
+sys::c_handle!(Queue, sys::QueueHandle_t);
 
 impl Queue {
     #[expect(clippy::panic, reason = "a mutex used as a queue is a firmware bug")]
@@ -167,10 +248,11 @@ fn xQueueGenericCreate(
 
 /// `unsupported.h` rejects recursive mutexes, the other type.
 #[export]
-fn xQueueCreateMutex(_queue_type: u8) -> &'static Queue {
-    Box::leak(Box::new(Queue::Mutex(SemaphoreHandle::new(
-        SemaphoreKind::Mutex,
-    ))))
+fn xQueueCreateMutex(_queue_type: u8) -> Option<&'static Queue> {
+    fits(0).then(|| {
+        let mutex = Queue::Mutex(SemaphoreHandle::new(SemaphoreKind::Mutex));
+        &*Box::leak(Box::new(mutex))
+    })
 }
 
 #[export]
@@ -182,8 +264,7 @@ fn xQueueSemaphoreTake(queue: &Queue, ticks: TickType_t) -> BaseType_t {
     let Queue::Mutex(mutex) = queue else {
         panic!("the kernel supports only mutexes as semaphores");
     };
-    let taken = mutex.take_with_deadline(deadline(ticks));
-    if taken { pdTRUE } else { pdFALSE }
+    pd(mutex.take_with_deadline(deadline(ticks)))
 }
 
 #[export]
@@ -205,7 +286,7 @@ unsafe fn xQueueGenericSend(
                 .send_to_back_with_deadline(item.cast(), deadline(ticks))
         },
     };
-    if sent { pdPASS } else { errQUEUE_FULL }
+    pd(sent)
 }
 
 /// esp-rtos switches to a woken task when the interrupt returns, so `woken` stays unset.
@@ -223,7 +304,7 @@ unsafe fn xQueueGenericSendFromISR(
             .handle
             .try_send_to_back_from_isr(item.cast(), None)
     };
-    if sent { pdPASS } else { errQUEUE_FULL }
+    pd(sent)
 }
 
 #[export]
@@ -240,7 +321,7 @@ unsafe fn xQueueReceive(queue: &Queue, buffer: *mut c_void, ticks: TickType_t) -
             .handle
             .receive_with_deadline(buffer.cast(), deadline(ticks))
     };
-    if received { pdTRUE } else { pdFALSE }
+    pd(received)
 }
 
 #[export]
@@ -263,12 +344,14 @@ fn uxQueueMessagesWaiting(queue: &Queue) -> UBaseType_t {
     queue.items().handle.messages_waiting() as UBaseType_t
 }
 
+/// The largest item the firmware queues.
+const MAX_RESET_ITEM: usize = 32;
+
 /// esp-rtos queues have no reset, so this drains `queue`.
 #[export]
 fn xQueueGenericReset(queue: &Queue, _new_queue: BaseType_t) -> BaseType_t {
     let items = queue.items();
-    // The largest item the firmware queues is 32 bytes.
-    let mut item = [0_u8; 32];
+    let mut item = [0_u8; MAX_RESET_ITEM];
     assert!(
         items.item_size <= item.len(),
         "queue items fit the reset buffer"
@@ -281,8 +364,16 @@ fn xQueueGenericReset(queue: &Queue, _new_queue: BaseType_t) -> BaseType_t {
 
 /// How deep the open critical sections nest, and the interrupt state the outermost one restores.
 /// esp-hal's critical sections are reentrant, so only the outermost needs releasing.
-static NESTING: Mutex<Cell<(u32, RestoreState)>> =
-    Mutex::new(Cell::new((0, RestoreState::invalid())));
+#[derive(Clone, Copy)]
+struct Nesting {
+    depth: u32,
+    outer: RestoreState,
+}
+
+static NESTING: Mutex<Cell<Nesting>> = Mutex::new(Cell::new(Nesting {
+    depth: 0,
+    outer: RestoreState::invalid(),
+}));
 
 #[export]
 unsafe fn vPortEnterCritical() {
@@ -290,17 +381,23 @@ unsafe fn vPortEnterCritical() {
     let restore = unsafe { critical_section::acquire() };
     // SAFETY: interrupts stay off until the matching exit.
     let nesting = NESTING.borrow(unsafe { CriticalSection::new() });
-    let (depth, outer) = nesting.get();
-    nesting.set((depth + 1, if depth == 0 { restore } else { outer }));
+    let Nesting { depth, outer } = nesting.get();
+    nesting.set(Nesting {
+        depth: depth + 1,
+        outer: if depth == 0 { restore } else { outer },
+    });
 }
 
 #[export]
 unsafe fn vPortExitCritical() {
     // SAFETY: called inside the critical section its matching enter opened.
     let nesting = NESTING.borrow(unsafe { CriticalSection::new() });
-    let (depth, outer) = nesting.get();
+    let Nesting { depth, outer } = nesting.get();
     assert!(depth > 0, "vPortExitCritical without vPortEnterCritical");
-    nesting.set((depth - 1, outer));
+    nesting.set(Nesting {
+        depth: depth - 1,
+        outer,
+    });
     if depth == 1 {
         // SAFETY: `outer` came from the outermost `acquire`.
         unsafe { critical_section::release(outer) };

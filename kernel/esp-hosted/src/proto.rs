@@ -17,10 +17,10 @@ pub enum Value<'a> {
 
 fn varint(out: &mut Vec<u8>, mut value: u64) {
     while value >= 0x80 {
-        out.push(value.to_le_bytes()[0] | 0x80);
+        out.push((value & 0x7f) as u8 | 0x80);
         value >>= 7;
     }
-    out.push(value.to_le_bytes()[0]);
+    out.push((value & 0x7f) as u8);
 }
 
 pub fn number(out: &mut Vec<u8>, field: u32, value: u64) {
@@ -29,7 +29,7 @@ pub fn number(out: &mut Vec<u8>, field: u32, value: u64) {
 }
 
 pub fn bytes(out: &mut Vec<u8>, field: u32, value: &[u8]) {
-    varint(out, u64::from(field) << 3 | 2);
+    varint(out, (u64::from(field) << 3) | 2);
     varint(out, value.len() as u64);
     out.extend_from_slice(value);
 }

@@ -5,6 +5,7 @@ use alloc::sync::Arc;
 use core::{
     cell::RefCell,
     ffi::{c_int, c_void},
+    ops::BitOr,
 };
 
 use critical_section::Mutex;
@@ -23,7 +24,10 @@ use sys::{
     uart_word_length_t,
 };
 
-use crate::rtos;
+use crate::{
+    rtos,
+    system::{self, c_slice_mut},
+};
 
 struct Port {
     uart: Uart<'static, Blocking>,
@@ -33,6 +37,11 @@ struct Port {
 }
 
 static PORT: Mutex<RefCell<Option<Port>>> = Mutex::new(RefCell::new(None));
+
+/// The interrupts that report received bytes.
+fn rx_interrupts() -> <UartInterrupt as BitOr>::Output {
+    UartInterrupt::RxFifoFull | UartInterrupt::RxTimeout
+}
 
 /// Unlike ESP-IDF, which pauses reception until the reader catches up, drops bytes that don't fit.
 #[handler]
@@ -56,7 +65,7 @@ fn interrupt() {
                 Err(_overflow) => {}
             }
         }
-        uart.clear_interrupts(UartInterrupt::RxFifoFull | UartInterrupt::RxTimeout);
+        uart.clear_interrupts(rx_interrupts());
     });
 }
 
@@ -90,7 +99,7 @@ fn uart_driver_install(
         let mut uart = Uart::new(unsafe { UART1::steal() }, Config::default())
             .map_err(|_config| ESP_ERR_INVALID_ARG)?;
         uart.set_interrupt_handler(interrupt);
-        uart.listen(UartInterrupt::RxFifoFull | UartInterrupt::RxTimeout);
+        uart.listen(rx_interrupts());
         let queue = Arc::new(QueueHandle::new(capacity, 1));
         *port = Some(Port { uart, queue });
         Ok(())
@@ -129,7 +138,10 @@ fn uart_set_pin(
             && cts_io_num == UART_PIN_NO_CHANGE,
         "the kernel supports only UART1's TX and RX pins"
     );
-    let (tx, rx) = (rtos::gpio_number(tx_io_num)?, rtos::gpio_number(rx_io_num)?);
+    let (tx, rx) = (
+        system::gpio_number(tx_io_num)?,
+        system::gpio_number(rx_io_num)?,
+    );
     critical_section::with(|cs| {
         let mut port = PORT.borrow_ref_mut(cs);
         let Port { uart, queue } = port.take().ok_or(ESP_ERR_INVALID_STATE)?;
@@ -152,9 +164,10 @@ unsafe fn uart_read_bytes(
         uart_num == uart_port_t::UART_NUM_1,
         "the kernel supports only UART1"
     );
-    if buf.is_null() {
+    // SAFETY: C gives room for `length` bytes at `buf`.
+    let Some(buffer) = (unsafe { c_slice_mut(buf.cast::<u8>(), length as usize) }) else {
         return -1;
-    }
+    };
     let Some(queue) = critical_section::with(|cs| {
         PORT.borrow_ref(cs)
             .as_ref()
@@ -163,15 +176,11 @@ unsafe fn uart_read_bytes(
         return -1;
     };
     let deadline = rtos::deadline(ticks_to_wait);
-    let buffer = buf.cast::<u8>();
-    let mut count = 0;
-    while count < length {
-        // SAFETY: C gives room for `length` bytes at `buf`, and `count` is below it.
-        if !unsafe { queue.receive_with_deadline(buffer.add(count as usize), deadline) } {
-            break;
-        }
-        count += 1;
-    }
+    let count = buffer
+        .iter_mut()
+        // SAFETY: `byte` is one item of the queue's one-byte items.
+        .map_while(|byte| unsafe { queue.receive_with_deadline(byte, deadline) }.then_some(()))
+        .count();
     c_int::try_from(count).unwrap_or(c_int::MAX)
 }
 
@@ -184,10 +193,8 @@ fn uart_driver_delete(uart_num: uart_port_t) -> Result<(), esp_err_t> {
     // The interrupt is level-triggered, so it must be off before `PORT` is empty.
     critical_section::with(|cs| {
         if let Some(mut port) = PORT.borrow_ref_mut(cs).take() {
-            port.uart
-                .unlisten(UartInterrupt::RxFifoFull | UartInterrupt::RxTimeout);
-            port.uart
-                .clear_interrupts(UartInterrupt::RxFifoFull | UartInterrupt::RxTimeout);
+            port.uart.unlisten(rx_interrupts());
+            port.uart.clear_interrupts(rx_interrupts());
         }
     });
     Ok(())

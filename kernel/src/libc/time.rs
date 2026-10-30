@@ -5,19 +5,21 @@ use core::{
     ffi::{c_char, c_int},
     fmt::Write,
     mem::MaybeUninit,
-    slice,
 };
 
-use super::master::Truncated;
 use critical_section::Mutex;
 use esp_radio_rtos_driver as rtos;
 use macros::export;
 use sys::{time_t, timeval, timezone, tm};
 
+use super::string::Truncated;
+use crate::system::c_slice_mut;
+
 /// The microseconds to add to esp-rtos's time to get UTC.
 static OFFSET: Mutex<Cell<i64>> = Mutex::new(Cell::new(0));
 
 /// UTC in seconds, which counts from boot until `settimeofday`.
+#[cfg(esp32p4)]
 pub fn now() -> time_t {
     let offset = critical_section::with(|cs| OFFSET.borrow(cs).get());
     (rtos::now().cast_signed() + offset).div_euclid(1_000_000)
@@ -65,11 +67,10 @@ fn gmtime_r<'call>(time: &time_t, result: &'call mut MaybeUninit<tm>) -> Option<
 #[expect(clippy::panic, reason = "other conversions are a firmware bug")]
 unsafe fn strftime(buffer: *mut c_char, size: usize, format: &str, time: &tm) -> usize {
     // SAFETY: C gives room for `size` bytes at `buffer`.
-    let room = unsafe { slice::from_raw_parts_mut(buffer.cast::<u8>(), size) };
-    let mut out = Truncated {
-        buffer: room,
-        length: 0,
+    let Some(room) = (unsafe { c_slice_mut(buffer.cast::<u8>(), size) }) else {
+        return 0;
     };
+    let mut out = Truncated::new(room);
     let mut characters = format.chars();
     while let Some(character) = characters.next() {
         if character != '%' {
@@ -89,7 +90,7 @@ unsafe fn strftime(buffer: *mut c_char, size: usize, format: &str, time: &tm) ->
             }
             _ => panic!("the kernel supports only %Y %m %d %H %M %S and %%"),
         };
-        out.write_fmt(format_args!("{value:0width$}")).ok();
+        write!(out, "{value:0width$}").ok();
     }
     if out.length >= size {
         return 0;

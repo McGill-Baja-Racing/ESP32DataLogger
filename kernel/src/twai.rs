@@ -7,15 +7,15 @@
 
 use alloc::boxed::Box;
 use core::{
-    cell::{Cell, RefCell},
+    cell::RefCell,
     ffi::{c_int, c_void},
     mem::MaybeUninit,
-    ptr, slice,
+    ptr,
 };
 
 use critical_section::Mutex;
 use esp_hal::{handler, peripherals::TWAI0};
-use esp_radio_rtos_driver::semaphore::{SemaphoreHandle, SemaphoreKind};
+use esp_radio_rtos_driver::semaphore::SemaphoreHandle;
 use macros::export;
 use sys::{
     ESP_ERR_INVALID_ARG, ESP_ERR_INVALID_STATE, ESP_ERR_NOT_FOUND, ESP_ERR_TIMEOUT, esp_err_t,
@@ -24,11 +24,27 @@ use sys::{
     twai_state_change_event_data_t,
 };
 
-use crate::rtos::{self, Context};
+use crate::{
+    rtos::{self, Context, Global},
+    system::{self, c_slice, c_slice_mut},
+};
 
-#[cfg_attr(feature = "esp32c3", path = "twai/esp32c3.rs")]
-#[cfg_attr(feature = "esp32p4", path = "twai/esp32p4.rs")]
+#[cfg_attr(esp32c3, path = "twai/esp32c3.rs")]
+#[cfg_attr(esp32p4, path = "twai/esp32p4.rs")]
 mod chip;
+
+/// The bit position `ERR_CODE_CAP` reports for an error in the ACK slot.
+const ACK_SLOT: u8 = 25;
+
+/// An error counter at this count makes the node error-passive.
+const PASSIVE_LIMIT: u8 = 128;
+
+const MAX_STANDARD_ID: u16 = 0x7ff;
+
+/// The bits of the frame information byte.
+const EXTENDED: u8 = 0x80;
+const REMOTE: u8 = 0x40;
+const DLC: u8 = 0x0f;
 
 #[expect(
     clippy::struct_excessive_bools,
@@ -52,12 +68,11 @@ impl Frame {
         let mut bytes = [0; 13];
         let [info, high, low, data @ ..] = &mut bytes;
         *info = u8::try_from(payload.len()).ok().filter(|&dlc| dlc <= 8)?;
-        [*high, *low] = id.checked_mul(32)?.to_be_bytes();
+        [*high, *low] = (id <= MAX_STANDARD_ID).then_some(id << 5)?.to_be_bytes();
         data.get_mut(..payload.len())?.copy_from_slice(payload);
         Some(Self(bytes))
     }
 
-    /// The frame at the head of the receive FIFO.
     fn read() -> Self {
         Self(core::array::from_fn(|index| {
             TWAI0::regs().data(index).read().tx_byte().bits()
@@ -74,25 +89,24 @@ impl Frame {
     }
 
     fn is_extended(&self) -> bool {
-        self.0[0] & 0x80 != 0
+        self.0[0] & EXTENDED != 0
     }
 
-    /// The identifier, and whether it is an extended one.
-    fn id(&self) -> (u32, bool) {
+    fn id(&self) -> u32 {
         let [_, a, b, c, d, ..] = self.0.map(u32::from);
         if self.is_extended() {
-            (a << 21 | b << 13 | c << 5 | d >> 3, true)
+            (a << 21) | (b << 13) | (c << 5) | (d >> 3)
         } else {
-            (a << 3 | b >> 5, false)
+            (a << 3) | (b >> 5)
         }
     }
 
     fn dlc(&self) -> u16 {
-        u16::from(self.0[0] & 0x0f)
+        u16::from(self.0[0] & DLC)
     }
 
     fn is_remote(&self) -> bool {
-        self.0[0] & 0x40 != 0
+        self.0[0] & REMOTE != 0
     }
 
     fn data(&self) -> &[u8] {
@@ -120,7 +134,6 @@ struct Events {
 }
 
 struct Inner {
-    twai: chip::Controller,
     state: twai_error_state_t,
     bus_errors: u32,
     /// The frame `twai_node_receive_from_isr` reads, while `on_rx_done` runs.
@@ -134,15 +147,15 @@ struct Node {
     idle: SemaphoreHandle,
 }
 
-sys::c_handle!(Node, twai_node_handle_t);
+sys::c_handle!(Node, sys::twai_node_handle_t);
 
 /// The node, for the interrupt; it also keeps a second node from taking TWAI0.
-static NODE: Mutex<Cell<Option<&'static Node>>> = Mutex::new(Cell::new(None));
+static NODE: Global<Node> = Global::new();
 
-fn state(twai: &chip::Controller) -> twai_error_state_t {
-    if twai.is_bus_off() {
+fn state() -> twai_error_state_t {
+    if chip::status().bus_off {
         twai_error_state_t::TWAI_ERROR_BUS_OFF
-    } else if twai.tx_errors() >= 128 || twai.rx_errors() >= 128 {
+    } else if chip::tx_errors() >= PASSIVE_LIMIT || chip::rx_errors() >= PASSIVE_LIMIT {
         twai_error_state_t::TWAI_ERROR_PASSIVE
     } else if chip::warning() {
         twai_error_state_t::TWAI_ERROR_WARNING
@@ -184,12 +197,11 @@ impl Node {
     /// so the controller would retry a frame nobody acknowledges forever; this gives up on it.
     fn bus_error(&self, events: &Events) {
         let unacknowledged = events.bus_error && chip::ack_error();
-        let passive = critical_section::with(|cs| {
+        critical_section::with(|cs| {
             let mut inner = self.inner.borrow_ref_mut(cs);
             inner.bus_errors = inner.bus_errors.wrapping_add(1);
-            inner.twai.tx_errors() >= 128
         });
-        if passive && unacknowledged {
+        if unacknowledged && chip::tx_errors() >= PASSIVE_LIMIT {
             self.abort_transmission();
         }
     }
@@ -197,7 +209,7 @@ impl Node {
     fn state_change(&self) {
         let changed = critical_section::with(|cs| {
             let mut inner = self.inner.borrow_ref_mut(cs);
-            let new_sta = state(&inner.twai);
+            let new_sta = state();
             let old_sta = core::mem::replace(&mut inner.state, new_sta);
             let event = twai_state_change_event_data_t { old_sta, new_sta };
             (old_sta != new_sta).then_some((event, inner.callbacks))
@@ -254,7 +266,7 @@ fn next_frame() -> Option<Frame> {
 
 #[handler]
 fn interrupt() {
-    let Some(node) = critical_section::with(|cs| NODE.borrow(cs).get()) else {
+    let Some(node) = NODE.get() else {
         return;
     };
     let events = chip::events();
@@ -287,28 +299,26 @@ fn twai_new_node_onchip(
         return Err(ESP_ERR_INVALID_ARG);
     }
     let (tx, rx) = (
-        rtos::gpio_number(config.io_cfg.tx.0)?,
-        rtos::gpio_number(config.io_cfg.rx.0)?,
+        system::gpio_number(config.io_cfg.tx.0)?,
+        system::gpio_number(config.io_cfg.rx.0)?,
     );
-    critical_section::with(|cs| {
-        let slot = NODE.borrow(cs);
-        if slot.get().is_some() {
+    critical_section::with(|_| {
+        if NODE.get().is_some() {
             return Err(ESP_ERR_NOT_FOUND);
         }
         // SAFETY: `NODE` lets this run once, and nothing else uses TWAI0. C assigns pins, as in
         // ESP-IDF; the firmware gives each GPIO to one driver.
-        let twai = unsafe { chip::Controller::start(tx, rx, interrupt) };
+        unsafe { chip::start(tx, rx, interrupt) };
         let new = Box::leak(Box::new(Node {
             inner: Mutex::new(RefCell::new(Inner {
-                twai,
                 state: twai_error_state_t::TWAI_ERROR_ACTIVE,
                 bus_errors: 0,
                 rx: None,
                 callbacks: None,
             })),
-            idle: SemaphoreHandle::new(SemaphoreKind::Counting { max: 1, initial: 0 }),
+            idle: rtos::binary_semaphore(),
         }));
-        slot.set(Some(new));
+        NODE.set(new);
         node.write(new);
         Ok(())
     })
@@ -326,10 +336,11 @@ fn twai_node_register_event_callbacks(
     Ok(())
 }
 
-/// The interrupt, and so every callback, starts here.
+/// The node stays in reset until here, as in ESP-IDF, so it neither acknowledges nor sends error
+/// frames before C is ready. The interrupt, and so every callback, starts here.
 #[export]
 fn twai_node_enable(_node: &Node) -> Result<(), esp_err_t> {
-    chip::enable_interrupts();
+    chip::enable();
     Ok(())
 }
 
@@ -345,13 +356,11 @@ fn twai_node_transmit(
         "the kernel supports only standard data frames sized by `buffer_len`"
     );
     let payload = match frame.buffer_len {
-        0 => &[],
-        1..=8 if !frame.buffer.is_null() => {
-            // SAFETY: C passes `buffer_len` bytes at `buffer`.
-            unsafe { slice::from_raw_parts(frame.buffer, frame.buffer_len) }
-        }
-        _ => return Err(ESP_ERR_INVALID_ARG),
-    };
+        // SAFETY: C passes `buffer_len` bytes at `buffer`.
+        0..=8 => unsafe { c_slice(frame.buffer, frame.buffer_len) },
+        _ => None,
+    }
+    .ok_or(ESP_ERR_INVALID_ARG)?;
     let frame = u16::try_from(frame.header.id)
         .ok()
         .and_then(|id| Frame::standard(id, payload))
@@ -376,28 +385,24 @@ fn twai_node_transmit_wait_all_done(node: &Node, timeout_ms: c_int) -> Result<()
 /// Only valid in `on_rx_done`, as in ESP-IDF.
 #[export]
 fn twai_node_receive_from_isr(node: &Node, frame: &mut twai_frame_t) -> Result<(), esp_err_t> {
-    let buffer = if frame.buffer_len == 0 {
-        &mut []
-    } else if frame.buffer.is_null() {
-        return Err(ESP_ERR_INVALID_ARG);
-    } else {
-        // SAFETY: C gives room for `buffer_len` bytes at `buffer`.
-        unsafe { slice::from_raw_parts_mut(frame.buffer, frame.buffer_len) }
-    };
+    // SAFETY: C gives room for `buffer_len` bytes at `buffer`.
+    let buffer =
+        unsafe { c_slice_mut(frame.buffer, frame.buffer_len) }.ok_or(ESP_ERR_INVALID_ARG)?;
     let received =
         critical_section::with(|cs| node.inner.borrow_ref(cs).rx).ok_or(ESP_ERR_INVALID_STATE)?;
-    let (id, extended) = received.id();
-    frame.header.id = id;
+    frame.header.id = received.id();
     frame.header.dlc = received.dlc();
-    frame.header.__bindgen_anon_1.set_ide(extended.into());
+    frame
+        .header
+        .__bindgen_anon_1
+        .set_ide(received.is_extended().into());
     frame
         .header
         .__bindgen_anon_1
         .set_rtr(received.is_remote().into());
-    buffer
-        .iter_mut()
-        .zip(received.data())
-        .for_each(|(to, from)| *to = *from);
+    for (to, from) in buffer.iter_mut().zip(received.data()) {
+        *to = *from;
+    }
     Ok(())
 }
 
@@ -412,8 +417,8 @@ fn twai_node_get_info(
         if let Some(status) = status {
             status.write(twai_node_status_t {
                 state: inner.state,
-                tx_error_count: inner.twai.tx_errors().into(),
-                rx_error_count: inner.twai.rx_errors().into(),
+                tx_error_count: chip::tx_errors().into(),
+                rx_error_count: chip::rx_errors().into(),
                 tx_queue_remaining: chip::status().tx_free.into(),
             });
         }
@@ -430,12 +435,11 @@ fn twai_node_get_info(
 #[export]
 fn twai_node_recover(node: &Node) -> Result<(), esp_err_t> {
     critical_section::with(|cs| {
-        let mut inner = node.inner.borrow_ref_mut(cs);
-        if !inner.twai.is_bus_off() {
+        if !chip::status().bus_off {
             return Err(ESP_ERR_INVALID_STATE);
         }
-        inner.twai.initiate_recovery();
-        inner.bus_errors = 0;
+        chip::recover();
+        node.inner.borrow_ref_mut(cs).bus_errors = 0;
         Ok(())
     })
 }

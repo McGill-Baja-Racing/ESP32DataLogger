@@ -460,8 +460,7 @@ dependencies = [
 [[package]]
 name = "edge-http"
 version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2e8d05b815a091dc636cc1d62374cf1b96b763117291242882f9741dd4e251ed"
+source = "git+https://github.com/sysgrok/edge-net?rev=2b12b3b1900287a7b0f1f95f5fd66be6672621f9#2b12b3b1900287a7b0f1f95f5fd66be6672621f9"
 dependencies = [
  "base64",
  "edge-nal",
@@ -476,8 +475,7 @@ dependencies = [
 [[package]]
 name = "edge-nal"
 version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "590182a48668fa4988cd97b9b500bcc9a213e9b122b4e0008e934b3916c64031"
+source = "git+https://github.com/sysgrok/edge-net?rev=2b12b3b1900287a7b0f1f95f5fd66be6672621f9#2b12b3b1900287a7b0f1f95f5fd66be6672621f9"
 dependencies = [
  "embassy-time",
  "embedded-io-async 0.7.0",
@@ -490,6 +488,7 @@ dependencies = [
  "edge-nal",
  "embassy-futures",
  "embassy-net",
+ "embassy-time",
  "embedded-io-async 0.7.0",
 ]
 

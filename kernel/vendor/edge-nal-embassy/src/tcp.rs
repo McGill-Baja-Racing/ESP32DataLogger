@@ -5,19 +5,21 @@ use core::pin::pin;
 use core::ptr::NonNull;
 use core::task::Poll;
 
-use edge_nal::{Close, Readable, TcpBind, TcpConnect, TcpShutdown, TcpSplit};
+use edge_nal::{Close, Readable, TcpBind, TcpShutdown, TcpSplit};
 
 use embassy_futures::join::join;
 
-use embassy_net::tcp::{AcceptError, ConnectError, Error, TcpReader, TcpWriter};
+use embassy_net::tcp::{AcceptError, Error, TcpReader, TcpWriter};
 use embassy_net::Stack;
+
+use embassy_time::Duration;
 
 use embedded_io_async::{ErrorKind, ErrorType, Read, Write};
 
 use crate::sealed::SealedDynPool;
-use crate::{to_emb_bind_socket, to_emb_socket, to_net_socket, DynPool, Pool};
+use crate::{to_emb_bind_socket, to_net_socket, DynPool, Pool};
 
-/// A type that implements the `TcpConnect` and `TcpBind` factory traits from `edge-nal`
+/// A type that implements the `TcpBind` factory trait from `edge-nal`
 /// Uses the provided Embassy networking stack and TCP buffers pool to create TCP sockets.
 ///
 /// The type is `Copy` and `Clone`, so it can be easily passed around.
@@ -40,26 +42,6 @@ impl<'d> Tcp<'d> {
     ///   `adding a socket to a full SocketSet`.
     pub fn new(stack: Stack<'d>, buffers: &'d dyn DynPool<TcpSocketBuffers>) -> Self {
         Self { stack, buffers }
-    }
-}
-
-impl TcpConnect for Tcp<'_> {
-    type Error = TcpError;
-
-    type Socket<'a>
-        = TcpSocket<'a>
-    where
-        Self: 'a;
-
-    async fn connect(&self, remote: SocketAddr) -> Result<Self::Socket<'_>, Self::Error> {
-        let mut socket = TcpSocket::new(self.stack, self.buffers)?;
-
-        socket
-            .socket
-            .connect(to_emb_socket(remote).ok_or(TcpError::UnsupportedProto)?)
-            .await?;
-
-        Ok(socket)
     }
 }
 
@@ -98,15 +80,13 @@ impl edge_nal::TcpAccept for TcpAccept<'_> {
         Self: 'a;
 
     async fn accept(&self) -> Result<(SocketAddr, Self::Socket<'_>), Self::Error> {
+        let local = to_emb_bind_socket(self.local).ok_or(TcpError::UnsupportedProto)?;
         // Changed from upstream, which unwraps `local_endpoint`: a connection reset right after
         // the handshake has none, and a peer could panic the firmware with it.
         loop {
             let mut socket = TcpSocket::new(self.stack.stack, self.stack.buffers)?;
 
-            socket
-                .socket
-                .accept(to_emb_bind_socket(self.local).ok_or(TcpError::UnsupportedProto)?)
-                .await?;
+            socket.socket.accept(local).await?;
 
             if let Some(local_endpoint) = socket.socket.local_endpoint() {
                 return Ok((to_net_socket(local_endpoint), socket));
@@ -131,24 +111,31 @@ impl<'d> TcpSocket<'d> {
         stack: Stack<'d>,
         stack_buffers: &'d dyn DynPool<TcpSocketBuffers>,
     ) -> Result<Self, TcpError> {
-        let mut socket_buffers = stack_buffers.alloc().ok_or(TcpError::NoBuffers)?;
+        let socket_buffers = stack_buffers.alloc().ok_or(TcpError::NoBuffers)?;
+
+        // SAFETY: The buffers are exclusively owned by this socket until `free` is called from
+        // `Drop`, and the slices are built from the raw pointers (rather than from `&mut u8`
+        // references to their first byte) so that they cover the whole buffers.
+        let mut socket = embassy_net::tcp::TcpSocket::new(
+            stack,
+            unsafe {
+                core::slice::from_raw_parts_mut(
+                    socket_buffers.rx_buf.as_ptr(),
+                    socket_buffers.rx_buf_len,
+                )
+            },
+            unsafe {
+                core::slice::from_raw_parts_mut(
+                    socket_buffers.tx_buf.as_ptr(),
+                    socket_buffers.tx_buf_len,
+                )
+            },
+        );
+        // Added to upstream: without it, a peer that vanished mid-response holds the socket forever.
+        socket.set_timeout(Some(Duration::from_secs(10)));
 
         Ok(Self {
-            socket: embassy_net::tcp::TcpSocket::new(
-                stack,
-                unsafe {
-                    core::slice::from_raw_parts_mut(
-                        socket_buffers.rx_buf.as_mut(),
-                        socket_buffers.rx_buf_len,
-                    )
-                },
-                unsafe {
-                    core::slice::from_raw_parts_mut(
-                        socket_buffers.tx_buf.as_mut(),
-                        socket_buffers.tx_buf_len,
-                    )
-                },
-            ),
+            socket,
             stack_buffers,
             buffer_token: socket_buffers.token,
         })
@@ -340,12 +327,9 @@ impl TcpSplit for TcpSocket<'_> {
 
 /// A shared error type that is used by the TCP factory traits implementation as well as the TCP socket.
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum TcpError {
     /// A general TCP error.
     General(Error),
-    /// An error that occurred while connecting.
-    Connect(ConnectError),
     /// An error that occurred while accepting a connection.
     Accept(AcceptError),
     /// No TCP socket buffers available.
@@ -360,12 +344,6 @@ impl From<Error> for TcpError {
     }
 }
 
-impl From<ConnectError> for TcpError {
-    fn from(e: ConnectError) -> Self {
-        TcpError::Connect(e)
-    }
-}
-
 impl From<AcceptError> for TcpError {
     fn from(e: AcceptError) -> Self {
         TcpError::Accept(e)
@@ -376,7 +354,6 @@ impl Display for TcpError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             TcpError::General(e) => write!(f, "TCP general error: {:?}", e),
-            TcpError::Connect(e) => write!(f, "TCP connect error: {:?}", e),
             TcpError::Accept(e) => write!(f, "TCP accept error: {:?}", e),
             TcpError::NoBuffers => write!(f, "TCP no buffers available"),
             TcpError::UnsupportedProto => write!(f, "TCP unsupported protocol"),
@@ -390,7 +367,6 @@ impl embedded_io_async::Error for TcpError {
     fn kind(&self) -> ErrorKind {
         match self {
             TcpError::General(_) => ErrorKind::Other,
-            TcpError::Connect(_) => ErrorKind::Other,
             TcpError::Accept(_) => ErrorKind::Other,
             TcpError::NoBuffers => ErrorKind::OutOfMemory,
             TcpError::UnsupportedProto => ErrorKind::InvalidInput,
@@ -400,7 +376,6 @@ impl embedded_io_async::Error for TcpError {
 
 /// A type that holds the TCP socket buffers.
 #[derive(Debug)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct TcpSocketBuffers {
     /// A token used to identify the buffer in the pool.
     token: NonNull<u8>,
@@ -422,17 +397,28 @@ impl<const N: usize, const TX_SZ: usize, const RX_SZ: usize> SealedDynPool<TcpSo
     for TcpBuffers<N, TX_SZ, RX_SZ>
 {
     fn alloc(&self) -> Option<TcpSocketBuffers> {
-        let mut socket_buffers = Pool::alloc(self)?;
+        let socket_buffers = Pool::alloc(self)?;
 
-        let rx_buf = unsafe { &mut socket_buffers.as_mut().1 };
-        let tx_buf = unsafe { &mut socket_buffers.as_mut().0 };
+        // The buffers are addressed via raw pointers projected from the pool slot rather than via
+        // references to the slot as a whole: a reference to the whole slot would alias - and under
+        // the aliasing rules invalidate - the other buffer handed out from the same slot.
+        //
+        // SAFETY: `socket_buffers` points to a live slot of the pool.
+        let (tx_buf, rx_buf) = unsafe {
+            let slot = socket_buffers.as_ptr();
+
+            (
+                core::ptr::addr_of_mut!((*slot).0) as *mut u8,
+                core::ptr::addr_of_mut!((*slot).1) as *mut u8,
+            )
+        };
 
         Some(TcpSocketBuffers {
             token: socket_buffers.cast::<u8>(),
-            rx_buf: unwrap!(NonNull::new(rx_buf.as_mut_ptr())),
-            tx_buf: unwrap!(NonNull::new(tx_buf.as_mut_ptr())),
-            rx_buf_len: rx_buf.len(),
-            tx_buf_len: tx_buf.len(),
+            rx_buf: NonNull::new(rx_buf)?,
+            tx_buf: NonNull::new(tx_buf)?,
+            rx_buf_len: RX_SZ,
+            tx_buf_len: TX_SZ,
         })
     }
 

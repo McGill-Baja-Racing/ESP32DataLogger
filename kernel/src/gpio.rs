@@ -4,7 +4,7 @@
 //! A configured pin keeps its `Flex` for good: `Flex::new` resets the pad.
 
 use core::{
-    cell::{Cell, RefCell},
+    cell::RefCell,
     ffi::{c_int, c_void},
 };
 
@@ -15,12 +15,13 @@ use esp_hal::{
     peripherals::IO_MUX,
 };
 use macros::export;
+use portable_atomic::{AtomicBool, Ordering};
 use sys::{
     ESP_ERR_INVALID_ARG, ESP_ERR_INVALID_STATE, SOC_GPIO_PIN_COUNT, esp_err_t, gpio_config_t,
     gpio_int_type_t, gpio_isr_t, gpio_mode_t, gpio_num_t, gpio_pullup_t,
 };
 
-use crate::rtos::{self, Context};
+use crate::{rtos::Context, system};
 
 struct Pin {
     flex: Flex<'static>,
@@ -46,9 +47,8 @@ const PIN_COUNT: u8 = SOC_GPIO_PIN_COUNT as u8;
 static PINS: Mutex<RefCell<[Option<Pin>; PIN_COUNT as usize]>> =
     Mutex::new(RefCell::new([const { None }; PIN_COUNT as usize]));
 
-static INSTALLED: Mutex<Cell<bool>> = Mutex::new(Cell::new(false));
+static INSTALLED: AtomicBool = AtomicBool::new(false);
 
-/// Runs `f` on a pin `gpio_config` or `gpio_reset_pin` has set up.
 #[expect(clippy::panic, reason = "an unconfigured pin is a firmware bug")]
 fn with_pin<T>(gpio_num: gpio_num_t, f: impl FnOnce(&mut Pin) -> T) -> T {
     critical_section::with(|cs| {
@@ -91,7 +91,7 @@ fn gpio_config(config: &gpio_config_t) -> Result<(), esp_err_t> {
     } else {
         Pull::None
     };
-    for number in (0..PIN_COUNT).filter(|number| mask >> number & 1 != 0) {
+    for number in (0..PIN_COUNT).filter(|number| (mask >> number) & 1 != 0) {
         // SAFETY: C assigns pins, as in ESP-IDF; the firmware gives each GPIO to one driver.
         let mut flex = Flex::new(unsafe { AnyPin::steal(number) });
         if output {
@@ -110,7 +110,7 @@ fn gpio_config(config: &gpio_config_t) -> Result<(), esp_err_t> {
 /// Leaves the pad as ESP-IDF does: input and output off, pull-up on, no interrupt.
 #[export]
 fn gpio_reset_pin(gpio_num: gpio_num_t) -> Result<(), esp_err_t> {
-    let number = rtos::gpio_number(gpio_num.0)?;
+    let number = system::gpio_number(gpio_num.0)?;
     // SAFETY: as in `gpio_config`.
     let mut flex = Flex::new(unsafe { AnyPin::steal(number) });
     flex.apply_input_config(&InputConfig::default().with_pull(Pull::Up));
@@ -141,7 +141,7 @@ fn gpio_install_isr_service(flags: c_int) -> Result<(), esp_err_t> {
         flags == 0,
         "the kernel supports only default interrupt flags"
     );
-    if critical_section::with(|cs| INSTALLED.borrow(cs).replace(true)) {
+    if INSTALLED.swap(true, Ordering::Relaxed) {
         return Err(ESP_ERR_INVALID_STATE);
     }
     // SAFETY: `INSTALLED` lets this run once, and nothing else uses the IO MUX interrupt.
@@ -156,7 +156,7 @@ fn gpio_isr_handler_add(
     args: *mut c_void,
 ) -> Result<(), esp_err_t> {
     let handler = isr_handler.ok_or(ESP_ERR_INVALID_ARG)?;
-    if !critical_section::with(|cs| INSTALLED.borrow(cs).get()) {
+    if !INSTALLED.load(Ordering::Relaxed) {
         return Err(ESP_ERR_INVALID_STATE);
     }
     with_pin(gpio_num, |pin| {

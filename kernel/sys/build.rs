@@ -76,48 +76,6 @@ const HOSTED: (&str, &str) = (
     "da7412f9b5a31b54bd57acb140247e95d54c7eed",
 );
 
-/// The C library functions the kernel implements; newlib's other declarations are the compiler's
-/// or ROM's to define.
-const LIBC_FUNCTIONS: [&str; 35] = [
-    "__errno",
-    "__getreent",
-    "clearerr",
-    "close",
-    "closedir",
-    "fclose",
-    "fdopen",
-    "ferror",
-    "fgets",
-    "fflush",
-    "fopen",
-    "fputs",
-    "fread",
-    "fwrite",
-    "gmtime_r",
-    "open",
-    "opendir",
-    "printf",
-    "putchar",
-    "puts",
-    "qsort",
-    "readdir",
-    "rename",
-    "settimeofday",
-    "snprintf",
-    "stat",
-    "strchr",
-    "strcspn",
-    "strftime",
-    "strrchr",
-    "strtod",
-    "strtok_r",
-    "strtol",
-    "strtoul",
-    "unlink",
-];
-/// The C library constants the kernel uses.
-const LIBC_CONSTANTS: &str = "_ctype_|E(BADF|EXIST|IO|NFILE|NOENT|NOSPC|RANGE)|O_(CREAT|EXCL|WRONLY)|S_IF(DIR|REG)|DT_(DIR|REG)";
-
 /// In the order newlib's install overlays them.
 const NEWLIB_INCLUDES: [&str; 3] = [
     "newlib/libc/sys/esp/include",
@@ -161,17 +119,14 @@ fn main() {
         .ancestors()
         .nth(5)
         .expect("OUT_DIR is in the target folder");
-    let idf_name = format!("esp-idf-{}", &IDF_COMMIT[..8]);
     let idf = fetch(
         target_dir,
-        &idf_name,
         "https://github.com/espressif/esp-idf.git",
         IDF_COMMIT,
         &IDF_INCLUDES.map(|(_, dir)| dir),
     );
     let newlib = fetch(
         target_dir,
-        &format!("newlib-{}", &NEWLIB_COMMIT[..8]),
         "https://github.com/espressif/newlib-esp32.git",
         NEWLIB_COMMIT,
         &NEWLIB_INCLUDES,
@@ -210,20 +165,8 @@ fn main() {
         }
     }
     if chip == "esp32p4" {
-        let lwip = fetch(
-            target_dir,
-            &format!("esp-lwip-{}", &LWIP.1[..8]),
-            LWIP.0,
-            LWIP.1,
-            &["src/include"],
-        );
-        let hosted = fetch(
-            target_dir,
-            &format!("esp-hosted-{}", &HOSTED.1[..8]),
-            HOSTED.0,
-            HOSTED.1,
-            &["host/api/include"],
-        );
+        let lwip = fetch(target_dir, LWIP.0, LWIP.1, &["src/include"]);
+        let hosted = fetch(target_dir, HOSTED.0, HOSTED.1, &["host/api/include"]);
         args.push(format!("-I{}", lwip.join("src/include").display()));
         args.push(format!("-I{}", hosted.join("host").display()));
         args.push(format!("-I{}", hosted.join("host/api/include").display()));
@@ -235,6 +178,8 @@ fn main() {
     for dir in NEWLIB_INCLUDES {
         args.push(format!("-idirafter{}", newlib.join(dir).display()));
     }
+    println!("cargo::metadata=chip={chip}");
+    println!("cargo::metadata=target_dir={}", target_dir.display());
     // A path list, so one metadata line carries every argument.
     let joined = env::join_paths(&args).expect("no argument contains the path separator");
     println!("cargo::metadata=args={}", joined.display());
@@ -244,12 +189,13 @@ fn main() {
         .clang_args(&args)
         .use_core()
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
-        .allowlist_file(format!(".*{idf_name}.*"))
-        .allowlist_function(LIBC_FUNCTIONS.join("|"))
+        .allowlist_file(format!(".*/esp-idf-{}/.*", &IDF_COMMIT[..8]))
+        .allowlist_file(".*/newlib-esp32-.*")
+        // The compiler or ROM defines these.
+        .blocklist_function("bcmp|memcmp|memcpy|memmove|memset|strlen")
         .allowlist_function("esp_hosted_init")
         .blocklist_type("flags|http_errno")
         .blocklist_function("http_.*")
-        .allowlist_var(LIBC_CONSTANTS)
         .clang_macro_fallback()
         .clang_macro_fallback_build_dir(&out)
         .default_macro_constant_type(bindgen::MacroTypeVariation::Signed)
@@ -263,8 +209,11 @@ fn main() {
         .expect("OUT_DIR is writable");
 }
 
-/// Checks out only `paths` of `commit` into `cache/name`: a shallow, partial, sparse clone.
-fn fetch(cache: &Path, name: &str, url: &str, commit: &str, paths: &[&str]) -> PathBuf {
+/// Checks out only `paths` of `commit` into a folder of `cache` named by `url` and `commit`: a
+/// shallow, partial, sparse clone.
+fn fetch(cache: &Path, url: &str, commit: &str, paths: &[&str]) -> PathBuf {
+    let repo = url.rsplit('/').next().unwrap_or(url);
+    let name = format!("{}-{}", repo.trim_end_matches(".git"), &commit[..8]);
     let dir = cache.join(name);
     if dir.exists() {
         // `paths` may have grown since the clone.
@@ -272,9 +221,10 @@ fn fetch(cache: &Path, name: &str, url: &str, commit: &str, paths: &[&str]) -> P
             git(&dir, &[&["sparse-checkout", "set"], paths].concat());
         }
     } else {
-        let tmp = cache.join(format!("{name}.tmp"));
+        let tmp = dir.with_extension("tmp");
         fs::remove_dir_all(&tmp).ok();
-        git(cache, &["init", &format!("{name}.tmp")]);
+        fs::create_dir_all(&tmp).expect("the target folder is writable");
+        git(&tmp, &["init"]);
         let shallow = ["fetch", "--depth=1", "--filter=blob:none", url, commit];
         git(&tmp, &shallow);
         git(&tmp, &[&["sparse-checkout", "set"], paths].concat());
@@ -284,7 +234,7 @@ fn fetch(cache: &Path, name: &str, url: &str, commit: &str, paths: &[&str]) -> P
     dir
 }
 
-fn git(dir: &Path, args: &[&str]) -> String {
+fn git(dir: &Path, args: &[&str]) {
     let output = Command::new("git")
         .current_dir(dir)
         .args(args)
@@ -296,5 +246,4 @@ fn git(dir: &Path, args: &[&str]) -> String {
         args.join(" "),
         String::from_utf8_lossy(&output.stderr)
     );
-    String::from_utf8(output.stdout).expect("git prints UTF-8")
 }

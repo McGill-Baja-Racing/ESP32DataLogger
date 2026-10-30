@@ -19,7 +19,6 @@ pub const HEAP: usize = 372 * 1024;
 /// The master board's PSRAM. esp-hal reports a missing or unrecognised one only in a log line.
 const PSRAM_SIZE: usize = 32 * 1024 * 1024;
 
-/// The network and HTTP codes the master returns.
 pub fn error_name(code: esp_err_t) -> Option<&'static CStr> {
     Some(match code {
         ESP_ERR_ESP_NETIF_DHCP_ALREADY_STOPPED => c"ESP_ERR_ESP_NETIF_DHCP_ALREADY_STOPPED",
@@ -50,7 +49,6 @@ fn heap_caps_get_free_size(_caps: u32) -> usize {
     esp_alloc::HEAP.free()
 }
 
-/// The least the heap has had free: its size less the most it has had in use.
 #[export]
 fn heap_caps_get_minimum_free_size(_caps: u32) -> usize {
     let stats = esp_alloc::HEAP.stats();

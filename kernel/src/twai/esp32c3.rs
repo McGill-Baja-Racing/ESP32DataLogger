@@ -1,57 +1,50 @@
 //! The C3's TWAI controller, on esp-hal's `twai` and its registers.
 
 use esp_hal::{
-    Blocking,
     gpio::{AnyPin, Flex, InputConfig, Pull},
     interrupt::InterruptHandler,
     peripherals::TWAI0,
-    twai::{BaudRate, Twai, TwaiConfiguration, TwaiMode},
+    twai::{BaudRate, TwaiConfiguration, TwaiMode},
 };
 
-use super::{Events, Status};
+use super::{ACK_SLOT, Events, Status};
 
-/// The bit position `ERR_CODE_CAP` reports for an error in the ACK slot.
-const ACK_SLOT: u8 = 25;
+/// Leaves the node in reset mode until `enable`.
+///
+/// # Safety
+///
+/// Nothing else may use TWAI0 or the pins.
+pub unsafe fn start(tx: u8, rx: u8, handler: InterruptHandler) {
+    // SAFETY: the caller has TWAI0 and the pins to itself.
+    let (twai, rx_pin, tx_pin) = unsafe { (TWAI0::steal(), AnyPin::steal(rx), AnyPin::steal(tx)) };
+    let mut setup =
+        TwaiConfiguration::new(twai, rx_pin, tx_pin, BaudRate::B1000K, TwaiMode::Normal);
+    setup.set_interrupt_handler(handler);
+    // esp-hal's `start` also sets the acceptance filter and mode, which only reset mode allows; the
+    // driver stays alive for good to keep the peripheral's clock on.
+    core::mem::forget(setup.start());
+    TWAI0::regs().mode().modify(|_, w| w.reset_mode().set_bit());
+    // esp-hal leaves RX floating, where ESP-IDF pulls it up against an unplugged transceiver.
+    // SAFETY: as above.
+    let mut rx = Flex::new(unsafe { AnyPin::steal(rx) });
+    rx.apply_input_config(&InputConfig::default().with_pull(Pull::Up));
+    rx.set_input_enable(true);
+}
 
-pub struct Controller(Twai<'static, Blocking>);
+pub fn tx_errors() -> u8 {
+    TWAI0::regs().tx_err_cnt().read().tx_err_cnt().bits()
+}
 
-impl Controller {
-    /// Starts the node at 1 Mbit/s on the given pins, with `handler` for its interrupt.
-    ///
-    /// # Safety
-    ///
-    /// Nothing else may use TWAI0 or the pins.
-    pub unsafe fn start(tx: u8, rx: u8, handler: InterruptHandler) -> Self {
-        // SAFETY: the caller has TWAI0 and the pins to itself.
-        let (twai, rx_pin, tx_pin) =
-            unsafe { (TWAI0::steal(), AnyPin::steal(rx), AnyPin::steal(tx)) };
-        let mut setup =
-            TwaiConfiguration::new(twai, rx_pin, tx_pin, BaudRate::B1000K, TwaiMode::Normal);
-        setup.set_interrupt_handler(handler);
-        let twai = setup.start();
-        // esp-hal leaves RX floating, where ESP-IDF pulls it up against an unplugged transceiver.
-        // SAFETY: as above.
-        let mut rx = Flex::new(unsafe { AnyPin::steal(rx) });
-        rx.apply_input_config(&InputConfig::default().with_pull(Pull::Up));
-        rx.set_input_enable(true);
-        Self(twai)
-    }
+pub fn rx_errors() -> u8 {
+    TWAI0::regs().rx_err_cnt().read().rx_err_cnt().bits()
+}
 
-    pub fn is_bus_off(&self) -> bool {
-        self.0.is_bus_off()
-    }
-
-    pub fn tx_errors(&self) -> u8 {
-        self.0.transmit_error_count()
-    }
-
-    pub fn rx_errors(&self) -> u8 {
-        self.0.receive_error_count()
-    }
-
-    pub fn initiate_recovery(&mut self) {
-        self.0.initiate_recovery();
-    }
+/// The controller recovers once it has seen 128 sequences of 11 idle bits.
+pub fn recover() {
+    // Bus-off leaves it in reset mode; leaving that mode starts the recovery.
+    let mode = TWAI0::regs().mode();
+    mode.modify(|_, w| w.reset_mode().set_bit());
+    mode.modify(|_, w| w.reset_mode().clear_bit());
 }
 
 pub fn status() -> Status {
@@ -106,8 +99,12 @@ pub fn events() -> Events {
     }
 }
 
-pub fn enable_interrupts() {
-    TWAI0::regs().int_ena().write(|w| {
+/// Leaves reset mode, with the interrupts on.
+pub fn enable() {
+    let twai = TWAI0::regs();
+    // Reading clears the flags.
+    let _ = twai.int_raw().read();
+    twai.int_ena().write(|w| {
         w.rx_int_ena().set_bit();
         w.tx_int_ena().set_bit();
         w.err_warn_int_ena().set_bit();
@@ -115,4 +112,5 @@ pub fn enable_interrupts() {
         w.arb_lost_int_ena().set_bit();
         w.bus_err_int_ena().set_bit()
     });
+    twai.mode().modify(|_, w| w.reset_mode().clear_bit());
 }
