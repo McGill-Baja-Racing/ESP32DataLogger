@@ -104,8 +104,10 @@ void sampler_discard_pending(void)
 #if NODE_FIXED_ENGINE_CONFIG
     engine_rpm_discard_pending();
 #endif
-    node_health_count(HEALTH_SAMPLES_DROPPED, uxQueueMessagesWaiting(sample_queue),
-                      0, ESP_OK);
+    sample_t discarded;
+    while (xQueueReceive(sample_queue, &discarded, 0) == pdTRUE) {
+        node_health_count(HEALTH_SAMPLES_DROPPED, 1, discarded.can_id, ESP_OK);
+    }
     xQueueReset(sample_queue);
 }
 
@@ -151,7 +153,14 @@ static void enqueue_engine_event(const engine_event_t *event)
      * queue pressure cannot split a spark from its RPM measurement. */
     if (uxQueueSpacesAvailable(sample_queue) < count) {
         ESP_LOGW(TAG, "Spark/RPM output queue full; event lost");
-        node_health_count(HEALTH_SAMPLES_DROPPED, count, CAN_ID_ENGINE_RPM, ESP_OK);
+        if (event->spark) {
+            node_health_count(HEALTH_SAMPLES_DROPPED, 1,
+                              CAN_ID_ENGINE_SPARK, ESP_OK);
+        }
+        if (has_rpm) {
+            node_health_count(HEALTH_SAMPLES_DROPPED, 1,
+                              CAN_ID_ENGINE_RPM, ESP_OK);
+        }
         return;
     }
     if (event->spark) {

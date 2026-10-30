@@ -105,8 +105,10 @@ static bool receive_callback(twai_node_handle_t node,
     return task_woken == pdTRUE;
 }
 
-static esp_err_t transmit(uint32_t id, const uint8_t *payload, uint8_t length)
+static esp_err_t transmit(uint32_t id, const uint8_t *payload, uint8_t length,
+                          bool *queued)
 {
+    *queued = false;
     if (length > 8 || (length > 0 && !payload)) {
         return ESP_ERR_INVALID_ARG;
     }
@@ -133,6 +135,7 @@ static esp_err_t transmit(uint32_t id, const uint8_t *payload, uint8_t length)
     };
     error = twai_node_transmit(can_handle, &tx_frame, CAN_TX_WAIT_MS);
     if (error == ESP_OK) {
+        *queued = true;
         tx_pending = true;
         error = twai_node_transmit_wait_all_done(can_handle, CAN_TX_WAIT_MS);
         if (error == ESP_OK) {
@@ -145,8 +148,11 @@ static esp_err_t transmit(uint32_t id, const uint8_t *payload, uint8_t length)
 
 esp_err_t can_master_send(uint32_t id, const uint8_t *payload, uint8_t length)
 {
-    esp_err_t error = transmit(id, payload, length);
-    if (error != ESP_OK) {
+    bool queued;
+    esp_err_t error = transmit(id, payload, length, &queued);
+    /* A wait timeout after enqueue leaves the frame pending; its completion
+     * callback records a failure only if transmission actually aborts. */
+    if (error != ESP_OK && !queued) {
         node_health_count(HEALTH_CAN_TX, 1, id, error);
     }
     return error;
