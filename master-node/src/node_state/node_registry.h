@@ -13,4 +13,5 @@ bool node_registry_is_state_frame(const can_message_t *message);
 void node_registry_update(const can_message_t *message);
 void node_registry_set_monitoring(bool enabled);
 void node_registry_record_sensor_frame(const can_message_t *message);
+void node_registry_record_health_frame(uint8_t node_id);
 const char *node_registry_state_name(uint8_t node_id);

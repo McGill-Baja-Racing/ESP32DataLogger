@@ -8,6 +8,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "gps/gps_receiver.h"
+#include "health/node_health.h"
 #include "logger/data_logger.h"
 #include "live/live_data.h"
 #include "node_state/node_registry.h"
@@ -40,6 +41,9 @@ static void handle_can_message(const can_message_t *message)
 {
     if (node_registry_is_state_frame(message)) {
         node_registry_update(message);
+    } else if (node_health_is_frame(message)) {
+        node_registry_record_health_frame(node_health_node_id(message));
+        node_health_handle_frame(message);
     } else if (protocol_is_sensor_id(message->id) && message->dlc == 8) {
         uint32_t timestamp_ms = (uint32_t)(message->data >> 32);
         if ((message->id == CAN_ID_ENGINE_SPARK ||
@@ -48,6 +52,7 @@ static void handle_can_message(const can_message_t *message)
             ESP_LOGW(TAG, "Dropping engine frame 0x%03" PRIX32
                      " with invalid timestamp %" PRIu32,
                      message->id, timestamp_ms);
+            node_health_count(HEALTH_BAD_TIMESTAMP, 1, message->id, ESP_OK);
             return;
         }
         node_registry_record_sensor_frame(message);
@@ -75,6 +80,7 @@ void app_main(void)
 {
     ESP_ERROR_CHECK(sd_card_mount());
     ESP_ERROR_CHECK(data_logger_init());
+    ESP_ERROR_CHECK(node_health_init());
     ESP_ERROR_CHECK(live_data_init());
     ESP_ERROR_CHECK(node_registry_init());
 #if MASTER_CAN_ENABLED

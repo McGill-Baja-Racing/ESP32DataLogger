@@ -170,6 +170,7 @@ typedef int portMUX_TYPE;
 #define portEXIT_CRITICAL(p) ((void)(p))
 #define ESP_LOGI(...) ((void)0)
 #define ESP_LOGW(...) ((void)0)
+static void node_health_set(health_code_t fault, bool active) { (void)fault; (void)active; }
 #define settimeofday(tv, tz) ((void)(tv), (void)(tz), 0)
 #define UART_NUM_1 1
 #define GPIO_NUM_33 33
@@ -271,6 +272,10 @@ typedef int httpd_req_t;
 #define ESP_FAIL -1
 typedef struct { const char *signal, *node, *units; } live_signal_metadata_t;
 static const live_signal_metadata_t *metadata_for(uint32_t id) { (void)id; return NULL; }
+#define NODE_HEALTH_TEXT_MAX 320
+static const char *node_health_describe(uint32_t id, uint64_t data, const char **node, char *text, size_t size) {
+    (void)id; (void)data; (void)node; (void)text; (void)size; return NULL;
+}
 static char output[4096];
 static esp_err_t httpd_resp_send_chunk(httpd_req_t *req, const char *data, size_t n) {
     (void)req; if (data) strncat(output, data, n); return ESP_OK;

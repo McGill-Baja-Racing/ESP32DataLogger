@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import ctypes
 import struct
 import sys
 from pathlib import Path
@@ -34,6 +35,121 @@ SIGNAL_METADATA = {
     0x701: ("gps_latitude", "master_gps", "deg_e7"),
     0x702: ("gps_longitude", "master_gps", "deg_e7"),
 }
+
+# Health frames, matching health_code_t, health_error_t and node_health_t in app_protocol.h.
+NODE_STATUS_BASE = 0x0D0
+NODE_EVENT_BASE = 0x0E0
+NODE_DIAGNOSTICS_BASE = 0x0F0
+NODE_SLOT_COUNT = 7
+HEALTH_FAULT_COUNT = 17
+HEALTH_STATUS_FAULT_BITS = 24
+# The 8-bit event subject holds the master-only GPS IDs 0x700-0x702 as 0x70-0x72.
+HEALTH_SUBJECT_GPS_BASE = 0x70
+HEALTH_EVENT_COUNT_MAX = 0x1FF
+HEALTH_CODE_NAMES = [
+    "sensor_init", "sensor_read", "sensor_dead", "samples_missed", "samples_dropped",
+    "bad_timestamp", "no_time_sync", "can_tx", "can_rx_overflow", "can_no_ack",
+    "can_bus_error", "can_passive", "can_bus_off", "sd_write", "gps_no_data",
+    "gps_no_fix", "event_lost", "boot", "adc_uncalibrated", "node_offline",
+]
+HEALTH_ERROR_NAMES = [
+    "ESP_OK", "ESP_FAIL", "ESP_ERR_NO_MEM", "ESP_ERR_INVALID_ARG", "ESP_ERR_INVALID_STATE",
+    "ESP_ERR_NOT_FOUND", "ESP_ERR_TIMEOUT", "ESP_ERR_INVALID_RESPONSE", "other error",
+]
+HEALTH_NAMES = ["ok", "warning", "error", "critical"]
+# Indexed by esp_reset_reason_t.
+RESET_NAMES = [
+    "unknown", "power_on", "external", "software", "panic", "interrupt_watchdog",
+    "task_watchdog", "watchdog", "deep_sleep", "brownout", "sdio", "usb", "jtag",
+    "efuse", "power_glitch", "cpu_lockup",
+]
+NODE_NAMES = [
+    "master", "brake_node_1", "node_2", "mpu_node_3", "encoder_node_4", "engine_node_5",
+    "adc_node_6",
+]
+
+
+# Payloads of node_status_frame_t, health_event_frame_t and node_diagnostics_frame_t in app_protocol.h.
+class NodeStatus(ctypes.LittleEndianStructure):
+    _fields_ = [
+        ("faults", ctypes.c_uint32, HEALTH_STATUS_FAULT_BITS),
+        ("health", ctypes.c_uint32, 2),
+        ("mode", ctypes.c_uint32, 1),
+    ]
+
+
+class HealthEvent(ctypes.LittleEndianStructure):
+    _fields_ = [
+        ("code", ctypes.c_uint32, 5),
+        ("error", ctypes.c_uint32, 4),
+        ("subject", ctypes.c_uint32, 8),
+        ("sequence", ctypes.c_uint32, 6),
+        ("count", ctypes.c_uint32, 9),
+    ]
+
+
+class NodeDiagnostics(ctypes.LittleEndianStructure):
+    _fields_ = [
+        ("tx_errors", ctypes.c_uint8),
+        ("rx_errors", ctypes.c_uint8),
+        ("resets", ctypes.c_uint8),
+        ("reset_reason", ctypes.c_uint8),
+    ]
+
+
+def name_or_unknown(names: list[str], index: int) -> str:
+    return names[index] if index < len(names) else "unknown"
+
+
+def describe_subject(code: int, subject: int) -> str:
+    if code == HEALTH_CODE_NAMES.index("boot"):
+        return f"reset {name_or_unknown(RESET_NAMES, subject)}"
+    if code == HEALTH_CODE_NAMES.index("adc_uncalibrated"):
+        return f"gpio {subject}"
+    if code == HEALTH_CODE_NAMES.index("event_lost"):
+        return f"node {name_or_unknown(NODE_NAMES, subject)}"
+    if HEALTH_SUBJECT_GPS_BASE <= subject <= HEALTH_SUBJECT_GPS_BASE + 2:
+        subject = 0x700 + (subject - HEALTH_SUBJECT_GPS_BASE)
+    return f"subject 0x{subject:02X}"
+
+
+def describe_health(can_id: int, packed: int) -> tuple[str, str, str] | None:
+    """Return (signal, node, detail) for a status, event or diagnostics frame, else None."""
+    payload = (packed & 0xFFFFFFFF).to_bytes(4, "little")
+    if NODE_STATUS_BASE <= can_id < NODE_STATUS_BASE + NODE_SLOT_COUNT:
+        node_id = can_id - NODE_STATUS_BASE
+        status = NodeStatus.from_buffer_copy(payload)
+        words = [HEALTH_NAMES[status.health], "recording" if status.mode else "idle"]
+        # Faults newer than this decoder still show, by number.
+        for f in range(HEALTH_STATUS_FAULT_BITS):
+            if status.faults >> f & 1:
+                words.append(HEALTH_CODE_NAMES[f] if f < HEALTH_FAULT_COUNT else f"fault_{f}")
+        signal = "node_status"
+    elif NODE_EVENT_BASE <= can_id < NODE_EVENT_BASE + NODE_SLOT_COUNT:
+        node_id = can_id - NODE_EVENT_BASE
+        event = HealthEvent.from_buffer_copy(payload)
+        if event.code == HEALTH_CODE_NAMES.index("node_offline"):
+            words = ["node_offline"] + [NODE_NAMES[n] for n in range(NODE_SLOT_COUNT) if event.subject >> n & 1]
+        else:
+            words = [
+                name_or_unknown(HEALTH_CODE_NAMES, event.code),
+                describe_subject(event.code, event.subject),
+                f"count {event.count}{'+' if event.count == HEALTH_EVENT_COUNT_MAX else ''}",
+                name_or_unknown(HEALTH_ERROR_NAMES, event.error),
+            ]
+        signal = "health_event"
+    elif NODE_DIAGNOSTICS_BASE <= can_id < NODE_DIAGNOSTICS_BASE + NODE_SLOT_COUNT:
+        node_id = can_id - NODE_DIAGNOSTICS_BASE
+        diagnostics = NodeDiagnostics.from_buffer_copy(payload)
+        words = [
+            f"tx_errors {diagnostics.tx_errors}", f"rx_errors {diagnostics.rx_errors}",
+            f"resets {diagnostics.resets}",
+            f"last_reset {name_or_unknown(RESET_NAMES, diagnostics.reset_reason)}",
+        ]
+        signal = "node_diagnostics"
+    else:
+        return None
+    return signal, NODE_NAMES[node_id], " ".join(words)
 
 
 def parse_args() -> argparse.Namespace:
@@ -78,6 +194,7 @@ def decode_log(input_path: Path, output_path: Path) -> list[str]:
                 "value",
                 "units",
                 "raw_data",
+                "detail",
             ]
         )
 
@@ -89,6 +206,11 @@ def decode_log(input_path: Path, output_path: Path) -> list[str]:
             value = signed_u32(packed)
             timestamp_ms = (packed >> 32) & 0xFFFFFFFF
             signal, node, units = SIGNAL_METADATA.get(can_id, ("", "", "raw"))
+            detail = ""
+            health = describe_health(can_id, packed)
+            if health:
+                signal, node, detail = health
+                units = ""
             counts_by_id[can_id] = counts_by_id.get(can_id, 0) + 1
 
             writer.writerow(
@@ -102,6 +224,7 @@ def decode_log(input_path: Path, output_path: Path) -> list[str]:
                     f"{value / 100:.2f}" if can_id == 0x700 else value,
                     units,
                     packed,
+                    detail,
                 ]
             )
 

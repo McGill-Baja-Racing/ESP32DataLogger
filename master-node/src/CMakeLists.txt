@@ -6,6 +6,7 @@ idf_component_register(
         "console/serial_console.c"
         "gps/gps_receiver.c"
         "gps/rmc_parser.c"
+        "health/node_health.c"
         "logger/data_logger.c"
         "live/live_data.c"
         "node_state/node_registry.c"

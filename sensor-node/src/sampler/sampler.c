@@ -10,6 +10,7 @@
 #include "freertos/task.h"
 
 #include "can/can_node.h"
+#include "health/node_health.h"
 #include "sensors/adc_input.h"
 #include "sensors/sensor.h"
 #include "sensors/engine_rpm.h"
@@ -41,6 +42,8 @@ static const char *TAG = "Sampler";
 static QueueHandle_t sample_queue;
 static sensor_t *sensors;
 static size_t sensor_count;
+/* Sensors whose init failed stay registered for health reports but are never sampled. */
+static bool sensor_ready[MAX_SENSORS];
 static volatile bool active;
 
 static void arm_schedule(void)
@@ -51,6 +54,23 @@ static void arm_schedule(void)
     }
 }
 
+/* A failed sensor is reported by node health; the others keep working. */
+static void init_sensor(size_t i)
+{
+    esp_err_t error = ESP_OK;
+#if NODE_FIXED_BRAKE_CONFIG || NODE_FIXED_ADC_CONFIG
+    error = adc_input_init();
+#endif
+    if (error == ESP_OK && sensors[i].init) {
+        error = sensors[i].init(&sensors[i]);
+    }
+    sensor_ready[i] = error == ESP_OK;
+    node_health_sensor_init(i, sensors[i].can_id, error);
+    ESP_LOGI(TAG, "%s: CAN=0x%03" PRIX32 " period=%" PRIu32 "us init=%s",
+             sensors[i].name, sensors[i].can_id, sensors[i].period_us,
+             esp_err_to_name(error));
+}
+
 void sampler_start(void)
 {
     if (active) {
@@ -58,7 +78,11 @@ void sampler_start(void)
     }
     xQueueReset(sample_queue);
     for (size_t i = 0; i < sensor_count; i++) {
-        if (sensors[i].start) {
+        /* Retry failed inits so a glitch at boot does not last the whole session. */
+        if (!sensor_ready[i]) {
+            init_sensor(i);
+        }
+        if (sensor_ready[i] && sensors[i].start) {
             sensors[i].start(&sensors[i]);
         }
     }
@@ -80,6 +104,10 @@ void sampler_discard_pending(void)
 #if NODE_FIXED_ENGINE_CONFIG
     engine_rpm_discard_pending();
 #endif
+    sample_t discarded;
+    while (xQueueReceive(sample_queue, &discarded, 0) == pdTRUE) {
+        node_health_count(HEALTH_SAMPLES_DROPPED, 1, discarded.can_id, ESP_OK);
+    }
     xQueueReset(sample_queue);
 }
 
@@ -95,7 +123,9 @@ static void enqueue_latest(sample_t *sample)
     }
     /* Prefer current measurements when the queue cannot keep up. */
     sample_t discarded;
-    (void)xQueueReceive(sample_queue, &discarded, 0);
+    if (xQueueReceive(sample_queue, &discarded, 0) == pdTRUE) {
+        node_health_count(HEALTH_SAMPLES_DROPPED, 1, discarded.can_id, ESP_OK);
+    }
     (void)xQueueSend(sample_queue, sample, 0);
 }
 
@@ -108,6 +138,9 @@ static void enqueue_engine_event(const engine_event_t *event)
         .timestamp_ms = time_sync_timestamp_ms_at(event->timestamp_us),
         .value = event->engine_rpm,
     };
+    if (sample.timestamp_ms < 0) {
+        node_health_count(HEALTH_BAD_TIMESTAMP, 1, CAN_ID_ENGINE_RPM, ESP_OK);
+    }
     bool has_rpm = !event->spark || event->engine_rpm > 0;
 #if SENSOR_SERIAL_TEST
     /* Bench output uses the same value and throttling as every sensor. */
@@ -120,6 +153,14 @@ static void enqueue_engine_event(const engine_event_t *event)
      * queue pressure cannot split a spark from its RPM measurement. */
     if (uxQueueSpacesAvailable(sample_queue) < count) {
         ESP_LOGW(TAG, "Spark/RPM output queue full; event lost");
+        if (event->spark) {
+            node_health_count(HEALTH_SAMPLES_DROPPED, 1,
+                              CAN_ID_ENGINE_SPARK, ESP_OK);
+        }
+        if (has_rpm) {
+            node_health_count(HEALTH_SAMPLES_DROPPED, 1,
+                              CAN_ID_ENGINE_RPM, ESP_OK);
+        }
         return;
     }
     if (event->spark) {
@@ -148,6 +189,10 @@ static void sample_task(void *argument)
         }
 
 #if NODE_FIXED_ENGINE_CONFIG
+        if (!sensor_ready[0]) {
+            vTaskDelay(pdMS_TO_TICKS(20));
+            continue;
+        }
         engine_event_t event;
         if (engine_rpm_next_event(&event) && active) {
             enqueue_engine_event(&event);
@@ -155,6 +200,7 @@ static void sample_task(void *argument)
         uint32_t dropped = engine_rpm_dropped_events();
         if (dropped) {
             ESP_LOGW(TAG, "Spark capture overflow: %" PRIu32 " events lost", dropped);
+            node_health_count(HEALTH_SAMPLES_DROPPED, dropped, CAN_ID_ENGINE_SPARK, ESP_OK);
         }
         continue;
 #endif
@@ -162,6 +208,9 @@ static void sample_task(void *argument)
         int64_t next_due = now + 1000000;
         for (size_t i = 0; i < sensor_count; i++) {
             sensor_t *sensor = &sensors[i];
+            if (!sensor_ready[i]) {
+                continue;
+            }
             if (now >= sensor->next_sample_us) {
                 /* Hardware-specific work is confined to the sensor callback. */
                 sample_t sample = {
@@ -170,8 +219,17 @@ static void sample_task(void *argument)
                     .timestamp_ms = time_sync_timestamp_ms(),
                 };
                 esp_err_t error = sensor->read(sensor, &sample.value);
+                node_health_sensor_read(i, error);
+                if (sample.timestamp_ms < 0) {
+                    node_health_count(HEALTH_BAD_TIMESTAMP, 1, sensor->can_id, ESP_OK);
+                }
+                uint32_t periods = 0;
                 while (sensor->next_sample_us <= now) {
                     sensor->next_sample_us += sensor->period_us;
+                    periods++;
+                }
+                if (periods > 1) {
+                    node_health_count(HEALTH_SAMPLES_MISSED, periods - 1, sensor->can_id, ESP_OK);
                 }
                 if (error == ESP_OK) {
                     enqueue_latest(&sample);
@@ -250,21 +308,11 @@ static void send_task(void *argument)
 esp_err_t sampler_init(void)
 {
     sensors = sensor_registry(&sensor_count);
-#if NODE_FIXED_BRAKE_CONFIG || NODE_FIXED_ADC_CONFIG
-    esp_err_t error = adc_input_init();
-    if (error != ESP_OK) {
-        return error;
+    if (sensor_count > MAX_SENSORS) {
+        return ESP_ERR_INVALID_SIZE;
     }
-#endif
     for (size_t i = 0; i < sensor_count; i++) {
-        if (sensors[i].init) {
-            esp_err_t error = sensors[i].init(&sensors[i]);
-            if (error != ESP_OK) {
-                return error;
-            }
-        }
-        ESP_LOGI(TAG, "%s: CAN=0x%03" PRIX32 " period=%" PRIu32 "us",
-                 sensors[i].name, sensors[i].can_id, sensors[i].period_us);
+        init_sensor(i);
     }
 
     sample_queue = xQueueCreate(SAMPLE_QUEUE_LENGTH, sizeof(sample_t));
