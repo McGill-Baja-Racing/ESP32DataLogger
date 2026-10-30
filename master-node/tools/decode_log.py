@@ -42,6 +42,7 @@ NODE_EVENT_BASE = 0x0E0
 NODE_DIAGNOSTICS_BASE = 0x0F0
 NODE_SLOT_COUNT = 7
 HEALTH_FAULT_COUNT = 17
+HEALTH_STATUS_FAULT_BITS = 24
 # The 8-bit event subject holds the master-only GPS IDs 0x700-0x702 as 0x70-0x72.
 HEALTH_SUBJECT_GPS_BASE = 0x70
 HEALTH_EVENT_COUNT_MAX = 0x1FF
@@ -71,7 +72,7 @@ NODE_NAMES = [
 # Payloads of node_status_frame_t, health_event_frame_t and node_diagnostics_frame_t in app_protocol.h.
 class NodeStatus(ctypes.LittleEndianStructure):
     _fields_ = [
-        ("faults", ctypes.c_uint32, 24),
+        ("faults", ctypes.c_uint32, HEALTH_STATUS_FAULT_BITS),
         ("health", ctypes.c_uint32, 2),
         ("mode", ctypes.c_uint32, 1),
     ]
@@ -100,10 +101,16 @@ def name_or_unknown(names: list[str], index: int) -> str:
     return names[index] if index < len(names) else "unknown"
 
 
-def subject_can_id(subject: int) -> int:
+def describe_subject(code: int, subject: int) -> str:
+    if code == HEALTH_CODE_NAMES.index("boot"):
+        return f"reset {name_or_unknown(RESET_NAMES, subject)}"
+    if code == HEALTH_CODE_NAMES.index("adc_uncalibrated"):
+        return f"gpio {subject}"
+    if code == HEALTH_CODE_NAMES.index("event_lost"):
+        return f"node {name_or_unknown(NODE_NAMES, subject)}"
     if HEALTH_SUBJECT_GPS_BASE <= subject <= HEALTH_SUBJECT_GPS_BASE + 2:
-        return 0x700 + (subject - HEALTH_SUBJECT_GPS_BASE)
-    return subject
+        subject = 0x700 + (subject - HEALTH_SUBJECT_GPS_BASE)
+    return f"subject 0x{subject:02X}"
 
 
 def describe_health(can_id: int, packed: int) -> tuple[str, str, str] | None:
@@ -113,7 +120,10 @@ def describe_health(can_id: int, packed: int) -> tuple[str, str, str] | None:
         node_id = can_id - NODE_STATUS_BASE
         status = NodeStatus.from_buffer_copy(payload)
         words = [HEALTH_NAMES[status.health], "recording" if status.mode else "idle"]
-        words += [HEALTH_CODE_NAMES[f] for f in range(HEALTH_FAULT_COUNT) if status.faults >> f & 1]
+        # Faults newer than this decoder still show, by number.
+        for f in range(HEALTH_STATUS_FAULT_BITS):
+            if status.faults >> f & 1:
+                words.append(HEALTH_CODE_NAMES[f] if f < HEALTH_FAULT_COUNT else f"fault_{f}")
         signal = "node_status"
     elif NODE_EVENT_BASE <= can_id < NODE_EVENT_BASE + NODE_SLOT_COUNT:
         node_id = can_id - NODE_EVENT_BASE
@@ -123,7 +133,7 @@ def describe_health(can_id: int, packed: int) -> tuple[str, str, str] | None:
         else:
             words = [
                 name_or_unknown(HEALTH_CODE_NAMES, event.code),
-                f"subject 0x{subject_can_id(event.subject):02X}",
+                describe_subject(event.code, event.subject),
                 f"count {event.count}{'+' if event.count == HEALTH_EVENT_COUNT_MAX else ''}",
                 name_or_unknown(HEALTH_ERROR_NAMES, event.error),
             ]
