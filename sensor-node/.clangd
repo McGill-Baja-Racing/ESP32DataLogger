@@ -1,0 +1,3 @@
+# The brake node's defines.
+CompileFlags:
+  CompilationDatabase: ../target/sensor-node

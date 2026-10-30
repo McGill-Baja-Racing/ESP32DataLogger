@@ -1,0 +1,58 @@
+[package]
+name = "baja-kernel"
+edition = "2024"
+
+# The `test` crate does not exist for bare-metal targets.
+[lib]
+test = false
+doctest = false
+bench = false
+
+[dependencies]
+esp-hal = { version = "=1.2.2", features = ["unstable"] }
+esp-rtos = { version = "=0.4.0", features = ["esp-radio"] }
+esp-alloc = "=0.11.0"
+esp-radio-rtos-driver = "=0.4.2"
+critical-section = "=1.2.0"
+portable-atomic = "=1.15.0"
+printf-compat = { version = "=0.5.0", default-features = false }
+# Without its `critical-section` feature, printing leaves interrupts on; `esp_log` locks lines.
+esp-println = { version = "=0.18.0", default-features = false, features = ["auto", "colors"] }
+esp-bootloader-esp-idf = "=0.6.0"
+esp-backtrace = { version = "=0.20.0", features = ["panic-handler", "println", "custom-halt"] }
+sys = { package = "baja-sys", path = "sys" }
+macros = { package = "baja-macros", path = "macros" }
+
+[target.riscv32imc-unknown-none-elf.dependencies]
+esp-hal = { version = "=1.2.2", features = ["esp32c3"] }
+esp-rtos = { version = "=0.4.0", features = ["esp32c3"] }
+esp-alloc = { version = "=0.11.0", features = ["esp32c3"] }
+esp-println = { version = "=0.18.0", default-features = false, features = ["esp32c3"] }
+esp-bootloader-esp-idf = { version = "=0.6.0", features = ["esp32c3"] }
+esp-backtrace = { version = "=0.20.0", features = ["esp32c3"] }
+
+[target.riscv32imafc-unknown-none-elf.dependencies]
+esp-hal = { version = "=1.2.2", features = ["esp32p4"] }
+esp-rtos = { version = "=0.4.0", features = ["esp32p4", "embassy"] }
+esp-alloc = { version = "=0.11.0", features = ["esp32p4", "internal-heap-stats"] }
+esp-println = { version = "=0.18.0", default-features = false, features = ["esp32p4"] }
+esp-bootloader-esp-idf = { version = "=0.6.0", features = ["esp32p4"] }
+esp-backtrace = { version = "=0.20.0", features = ["esp32p4"] }
+fatfs = { git = "https://github.com/rafalh/rust-fatfs", rev = "2aefc2a027ce94ed0671752814dac203f0450e11", default-features = false, features = ["alloc", "lfn"] }
+edge-dhcp = { version = "=0.8.0", default-features = false, features = ["io"] }
+edge-http = { version = "=0.8.0", default-features = false, features = ["io"] }
+edge-nal = { version = "=0.7.0", default-features = false }
+# Vendored and cut to TCP. Changed from upstream: `accept` no longer unwraps a connection reset
+# after the handshake, sockets time out after 10 s, and the buffer pool's aliasing is fixed as in
+# upstream's c8f017c.
+edge-nal-embassy = { path = "vendor/edge-nal-embassy" }
+embassy-executor = "=0.10.0"
+embassy-futures = "=0.1.2"
+embassy-net = { version = "=0.9.1", features = ["proto-ipv4", "medium-ethernet", "tcp", "udp"] }
+embassy-net-esp-hosted = { path = "esp-hosted" }
+embassy-sync = "=0.8.0"
+embassy-time = "=0.5.1"
+embedded-io-async = "=0.7.0"
+
+[lints]
+workspace = true
