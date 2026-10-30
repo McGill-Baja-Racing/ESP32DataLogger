@@ -202,10 +202,15 @@ const char *node_health_describe(uint32_t id, uint64_t data, const char **node,
         size_t length = (size_t)snprintf(text, size, "%s %s",
             status.health <= NODE_HEALTH_CRITICAL ? health_names[status.health] : "unknown",
             status.mode == NODE_MODE_RECORDING ? "recording" : "idle");
-        for (int fault = 0; fault < HEALTH_FAULT_COUNT && length < size; fault++) {
-            if (status.faults & HEALTH_BIT(fault)) {
-                length += (size_t)snprintf(text + length, size - length, " %s",
-                                           code_names[fault]);
+        /* Faults newer than this build still show, by number. */
+        for (int fault = 0; fault < HEALTH_STATUS_FAULT_BITS && length < size; fault++) {
+            if (!(status.faults & HEALTH_BIT(fault))) {
+                continue;
+            }
+            if (fault < HEALTH_FAULT_COUNT) {
+                length += (size_t)snprintf(text + length, size - length, " %s", code_names[fault]);
+            } else {
+                length += (size_t)snprintf(text + length, size - length, " fault_%d", fault);
             }
         }
         return "node_status";
@@ -224,9 +229,23 @@ const char *node_health_describe(uint32_t id, uint64_t data, const char **node,
             }
             return "health_event";
         }
-        snprintf(text, size, "%s subject 0x%02X count %u%s %s",
+        char subject[32];
+        if (event.code == HEALTH_BOOT) {
+            size_t reason_count = sizeof(reset_names) / sizeof(reset_names[0]);
+            snprintf(subject, sizeof(subject), "reset %s",
+                     event.subject < reason_count ? reset_names[event.subject] : "unknown");
+        } else if (event.code == HEALTH_ADC_UNCALIBRATED) {
+            snprintf(subject, sizeof(subject), "gpio %u", (unsigned)event.subject);
+        } else if (event.code == HEALTH_EVENT_LOST) {
+            snprintf(subject, sizeof(subject), "node %s",
+                     event.subject < CAN_NODE_SLOT_COUNT ? node_names[event.subject] : "unknown");
+        } else {
+            snprintf(subject, sizeof(subject), "subject 0x%02X",
+                     (unsigned)protocol_health_subject_id(event.subject));
+        }
+        snprintf(text, size, "%s %s count %u%s %s",
                  event.code < HEALTH_CODE_COUNT ? code_names[event.code] : "unknown",
-                 (unsigned)protocol_health_subject_id(event.subject), event.count,
+                 subject, event.count,
                  event.count == HEALTH_EVENT_COUNT_MAX ? "+" : "",
                  event.error <= HEALTH_ERROR_OTHER ? error_names[event.error] : "unknown");
         return "health_event";

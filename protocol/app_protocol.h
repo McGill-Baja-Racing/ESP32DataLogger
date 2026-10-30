@@ -117,7 +117,9 @@ typedef enum {
 
 #define HEALTH_BIT(code) (1U << (code))
 
-_Static_assert(HEALTH_FAULT_COUNT <= 24, "faults must fit the 24 status bits");
+#define HEALTH_STATUS_FAULT_BITS 24
+
+_Static_assert(HEALTH_FAULT_COUNT <= HEALTH_STATUS_FAULT_BITS, "faults must fit the status bits");
 _Static_assert(HEALTH_CODE_COUNT <= 32, "codes must fit the 5 event bits");
 
 /* An event's error: one entry per esp_err_t the firmware returns. */
@@ -138,7 +140,7 @@ _Static_assert(HEALTH_ERROR_COUNT <= 16, "errors must fit the 4 event bits");
 
 /* Faults are bits 0-23, health bits 24-25 and mode bit 26. */
 typedef struct __attribute__((packed)) {
-    uint32_t faults : 24;   /* HEALTH_BIT() of each fault */
+    uint32_t faults : HEALTH_STATUS_FAULT_BITS;   /* HEALTH_BIT() of each fault */
     uint32_t health : 2;    /* node_health_t */
     uint32_t mode : 1;      /* node_mode_t */
     uint32_t : 5;
