@@ -1,5 +1,15 @@
 [workspace]
-members = ["kernel", "kernel/sys", "kernel/macros", "kernel/esp-hosted"]
+members = [
+    "kernel",
+    "kernel/esp-hosted",
+    "kernel/macros",
+    "kernel/sys",
+    "master-node",
+    "sensor-node",
+    "simulators/engine-rpm",
+    "simulators/wheel-rpm",
+]
+# A firmware builds inside its folder; at the root, cargo builds and checks the kernel for the C3.
 default-members = ["kernel"]
 resolver = "3"
 

@@ -3,23 +3,10 @@ name = "baja-kernel"
 edition = "2024"
 
 # The `test` crate does not exist for bare-metal targets.
-[[bin]]
-name = "baja-kernel"
+[lib]
 test = false
+doctest = false
 bench = false
-
-[features]
-# The firmware to build; one at a time.
-brake = []
-mpu = []
-encoder = []
-engine = []
-engine-bench = []
-adc = []
-engine-rpm-sim = []
-wheel-rpm-sim = []
-master = []
-master-no-can = []
 
 [dependencies]
 esp-hal = { version = "=1.2.2", features = ["unstable"] }

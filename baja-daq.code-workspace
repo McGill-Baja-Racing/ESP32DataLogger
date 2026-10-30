@@ -18,7 +18,7 @@
       { "text": "$(plug)", "tooltip": "PlatformIO: Serial Monitor", "commands": "platformio-ide.serialMonitor" },
       { "text": "$(terminal)", "tooltip": "PlatformIO: New Terminal", "commands": "platformio-ide.newTerminal" }
     ],
-    // clangd reads the compile commands of the last node build (sensor-node/.clangd).
+    // clangd reads the compile commands in target/<package> (each folder's .clangd).
     "C_Cpp.intelliSenseEngine": "disabled",
     // The code has no formatter configuration: never reformat whole files.
     "editor.formatOnSave": false,
@@ -45,14 +45,17 @@
         "args": ["${workspaceFolder:master-node}/tools/decode_log.py", "${file}"],
         "problemMatcher": []
       },
-      // Ctrl+Shift+B lists them: each builds a node's firmware, flashes it and opens the monitor.
-      { "label": "Flash NodeBrake", "type": "shell", "command": "cargo run --release --features brake", "options": { "cwd": "${workspaceFolder:sensor-node}" }, "group": "build", "problemMatcher": [] },
-      { "label": "Flash NodeMPU", "type": "shell", "command": "cargo run --release --features mpu", "options": { "cwd": "${workspaceFolder:sensor-node}" }, "group": "build", "problemMatcher": [] },
-      { "label": "Flash NodeEncoder", "type": "shell", "command": "cargo run --release --features encoder", "options": { "cwd": "${workspaceFolder:sensor-node}" }, "group": "build", "problemMatcher": [] },
-      { "label": "Flash NodeEngine", "type": "shell", "command": "cargo run --release --features engine", "options": { "cwd": "${workspaceFolder:sensor-node}" }, "group": "build", "problemMatcher": [] },
-      { "label": "Flash NodeEngineBench", "type": "shell", "command": "cargo run --release --features engine-bench", "options": { "cwd": "${workspaceFolder:sensor-node}" }, "group": "build", "problemMatcher": [] },
-      { "label": "Flash NodeADC", "type": "shell", "command": "cargo run --release --features adc", "options": { "cwd": "${workspaceFolder:sensor-node}" }, "group": "build", "problemMatcher": [] },
-      { "label": "Flash Master", "type": "shell", "command": "cargo run --release --features master", "options": { "cwd": "${workspaceFolder:master-node}" }, "group": "build", "problemMatcher": [] }
+      // Ctrl+Shift+B lists them: each builds a firmware, flashes it and opens the monitor.
+      { "label": "Flash NodeBrake", "type": "shell", "command": "cargo run --release --bin brake", "options": { "cwd": "${workspaceFolder:sensor-node}" }, "group": "build", "problemMatcher": [] },
+      { "label": "Flash NodeMPU", "type": "shell", "command": "cargo run --release --bin mpu", "options": { "cwd": "${workspaceFolder:sensor-node}" }, "group": "build", "problemMatcher": [] },
+      { "label": "Flash NodeEncoder", "type": "shell", "command": "cargo run --release --bin encoder", "options": { "cwd": "${workspaceFolder:sensor-node}" }, "group": "build", "problemMatcher": [] },
+      { "label": "Flash NodeEngine", "type": "shell", "command": "cargo run --release --bin engine", "options": { "cwd": "${workspaceFolder:sensor-node}" }, "group": "build", "problemMatcher": [] },
+      { "label": "Flash NodeEngineBench", "type": "shell", "command": "cargo run --release --bin engine-bench", "options": { "cwd": "${workspaceFolder:sensor-node}" }, "group": "build", "problemMatcher": [] },
+      { "label": "Flash NodeADC", "type": "shell", "command": "cargo run --release --bin adc", "options": { "cwd": "${workspaceFolder:sensor-node}" }, "group": "build", "problemMatcher": [] },
+      { "label": "Flash Master", "type": "shell", "command": "cargo run --release", "options": { "cwd": "${workspaceFolder:master-node}" }, "group": "build", "problemMatcher": [] },
+      { "label": "Flash MasterNoCAN", "type": "shell", "command": "cargo run --release --bin master-no-can", "options": { "cwd": "${workspaceFolder:master-node}" }, "group": "build", "problemMatcher": [] },
+      { "label": "Flash EngineRPMSimulator", "type": "shell", "command": "cargo run --release", "options": { "cwd": "${workspaceFolder:sim-engine-rpm}" }, "group": "build", "problemMatcher": [] },
+      { "label": "Flash WheelRPMSimulator", "type": "shell", "command": "cargo run --release", "options": { "cwd": "${workspaceFolder:sim-wheel-rpm}" }, "group": "build", "problemMatcher": [] }
     ]
   },
   "extensions": {

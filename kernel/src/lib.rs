@@ -1,7 +1,6 @@
 //! Rust implementation of the ESP-IDF, FreeRTOS and C library APIs the firmware links against.
 
 #![no_std]
-#![no_main]
 
 extern crate alloc;
 

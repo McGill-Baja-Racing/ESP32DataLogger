@@ -18,7 +18,8 @@ Layer 2         system: errors, logging, clock, C library
 Layer 1         core: boot, memory, interrupts, scheduler, FreeRTOS
 ```
 
-- cargo builds the C with clang and links it into the kernel; a cargo feature picks the node.
+- cargo builds the C with clang and links it into the kernel. Each firmware folder is a cargo
+  package with a binary per firmware.
 - The C API matches ESP-IDF v5.5.5's headers exactly. Each chip's `sdkconfig.h` is ESP-IDF's
   generated one, trimmed to the options the headers and firmware read.
 - Only what the firmware links is implemented (about 130 functions). Anything missing is a link
@@ -121,35 +122,40 @@ Tests:
 - **Install:** `rustup`, git, LLVM (clang and libclang: `brew install llvm`, `winget install
   LLVM.LLVM` or `apt install clang libclang-dev`) and `cargo install espflash@4.6.0 --locked`.
   Rust 1.99.1 is pinned in `rust-toolchain.toml` and every crate exactly.
-- **Build:** inside each firmware's folder, `cargo build --release --features <firmware>`:
+- **Build:** inside the firmware's folder, `cargo build --release` with the command below:
 
-  | Folder | Firmware |
+  | Folder | Command |
   |---|---|
-  | `sensor-node/` | `brake`, `mpu`, `encoder`, `engine`, `engine-bench`, `adc` |
-  | `simulators/engine-rpm/`, `simulators/wheel-rpm/` | `engine-rpm-sim`, `wheel-rpm-sim` |
-  | `master-node/` | `master`, `master-no-can` |
+  | `sensor-node/` | `--bin brake`, `mpu`, `encoder`, `engine`, `engine-bench` or `adc` |
+  | `simulators/engine-rpm/`, `simulators/wheel-rpm/` | none |
+  | `master-node/` | none, or `--bin master-no-can` |
 
-  `kernel/build.rs` compiles that folder's C with the firmware's defines and links it into the
-  kernel. Without a firmware, only `cargo check` and `cargo clippy` work.
+  `kernel/firmware.rs`, the build script of each folder, compiles its C with the firmware's
+  defines and links it into the kernel. Built in another folder, the link fails with `wrong
+  folder`; `cargo check` and `cargo clippy` work anywhere.
 - **Headers:** on the first build, `kernel/sys/build.rs` fetches ESP-IDF v5.5.5's header folders
   and Espressif's newlib headers with git into cargo's target folder. bindgen and clang read
   them with the same arguments.
-- **Flash and logs:** `cargo run --release --features <node>` flashes with espflash and opens its
+- **Flash and logs:** `cargo run --release` (in `sensor-node/` with `--bin <name>`) flashes with espflash and opens its
   monitor. C and Rust logs are both colored by level; Rust logs through the `log` crate and
   `esp-println`.
-- **Editor:** `baja-daq.code-workspace` has a build task per node that flashes it. clangd reads the
-  last build's `target/compile_commands.json` through `sensor-node/.clangd`.
+- **Editor:** `baja-daq.code-workspace` has a build task per firmware that flashes it. clangd reads the
+  last build's `target/<package>/compile_commands.json` through the folder's `.clangd`.
 
 ```
 Cargo.toml             workspace; lints; profiles
 .cargo/config.toml     default target (C3), espflash runners
 master-node/.cargo/config.toml  target (P4)
+sensor-node/, master-node/, simulators/*/
+  Cargo.toml           firmware package; build script kernel/firmware.rs
+  src/bin/<name>.rs    one binary per firmware (src/main.rs in a simulator)
 kernel/
-  Cargo.toml           bin crate; node features; chip from the target
-  build.rs             compiles the node's C with clang; links it and esp-hal's linker script
-  no_c.x               the error a build without a node gives
+  Cargo.toml           library; chip from the target
+  build.rs             turns on the chip's cfg
+  firmware.rs          build script of each firmware: compiles its C with clang; links it and
+                       esp-hal's linker script
   include/             each chip's sdkconfig.h; unsupported.h
-  src/main.rs          boot, watchdog and panic
+  src/lib.rs           boot, watchdog and panic
   src/rtos.rs          layer 1 (submodules in src/rtos/, enforced by mod_module_files)
   src/system.rs        layer 2
   src/<driver>.rs      layer 3, one file per ESP-IDF driver (adc.rs, twai.rs)

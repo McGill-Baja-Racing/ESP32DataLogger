@@ -1,6 +1,6 @@
 //! Fetches the ESP-IDF and newlib headers the firmware compiles against, generates their Rust
-//! bindings with bindgen, and passes the same clang arguments to `kernel/build.rs`. Needs git
-//! and libclang.
+//! bindings with bindgen, and passes the same clang arguments to each firmware's build script.
+//! Needs git and libclang.
 
 use std::{
     env, fs,
@@ -179,6 +179,10 @@ fn main() {
         args.push(format!("-idirafter{}", newlib.join(dir).display()));
     }
     println!("cargo::metadata=chip={chip}");
+    let kernel = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .expect("sys/ is in kernel/");
+    println!("cargo::metadata=kernel={}", kernel.display());
     println!("cargo::metadata=target_dir={}", target_dir.display());
     // A path list, so one metadata line carries every argument.
     let joined = env::join_paths(&args).expect("no argument contains the path separator");

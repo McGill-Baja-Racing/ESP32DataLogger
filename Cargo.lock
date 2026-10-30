@@ -812,6 +812,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "engine-rpm-sim"
+version = "0.0.0"
+dependencies = [
+ "baja-kernel",
+ "baja-sys",
+]
+
+[[package]]
 name = "enumset"
 version = "1.1.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1488,6 +1496,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0ca88d725a0a943b096803bd34e73a4437208b6077654cc4ecb2947a5f91618d"
 
 [[package]]
+name = "master-node"
+version = "0.0.0"
+dependencies = [
+ "baja-kernel",
+ "baja-sys",
+]
+
+[[package]]
 name = "matchers"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1813,6 +1829,14 @@ dependencies = [
  "block-device-driver",
  "embedded-hal 1.0.0",
  "embedded-hal-async",
+]
+
+[[package]]
+name = "sensor-node"
+version = "0.0.0"
+dependencies = [
+ "baja-kernel",
+ "baja-sys",
 ]
 
 [[package]]
@@ -2175,6 +2199,14 @@ name = "void"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6a02e4885ed3bc0f2de90ea6dd45ebcbb66dacffe03547fadbb0eeae2770887d"
+
+[[package]]
+name = "wheel-rpm-sim"
+version = "0.0.0"
+dependencies = [
+ "baja-kernel",
+ "baja-sys",
+]
 
 [[package]]
 name = "winapi-util"

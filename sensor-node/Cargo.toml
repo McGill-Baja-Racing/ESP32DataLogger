@@ -1,0 +1,44 @@
+[package]
+name = "sensor-node"
+edition = "2024"
+# Compiles src/ with clang into each binary.
+build = "../kernel/firmware.rs"
+
+# One binary per node. The `test` crate does not exist for bare-metal targets.
+[[bin]]
+name = "brake"
+test = false
+bench = false
+
+[[bin]]
+name = "mpu"
+test = false
+bench = false
+
+[[bin]]
+name = "encoder"
+test = false
+bench = false
+
+[[bin]]
+name = "engine"
+test = false
+bench = false
+
+[[bin]]
+name = "engine-bench"
+test = false
+bench = false
+
+[[bin]]
+name = "adc"
+test = false
+bench = false
+
+[dependencies]
+kernel = { package = "baja-kernel", path = "../kernel" }
+# Its build script passes the clang arguments to ours.
+sys = { package = "baja-sys", path = "../kernel/sys" }
+
+[lints]
+workspace = true
