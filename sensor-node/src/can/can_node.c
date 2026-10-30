@@ -184,7 +184,9 @@ esp_err_t can_node_send(uint32_t can_id, const uint8_t *payload, uint8_t length)
 {
     bool queued;
     esp_err_t error = transmit(can_id, payload, length, &queued);
-    if (error != ESP_OK) {
+    /* A wait timeout after enqueue leaves the frame pending; its completion
+     * callback records a failure only if transmission actually aborts. */
+    if (error != ESP_OK && !queued) {
         node_health_count(HEALTH_CAN_TX, 1, can_id, error);
     }
     return error;
