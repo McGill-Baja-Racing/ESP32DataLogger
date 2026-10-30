@@ -1,10 +1,10 @@
 //! The C library functions the firmware calls, on the console. Only what the firmware uses.
 
-use alloc::{boxed::Box, vec::Vec};
+use alloc::{boxed::Box, collections::BTreeMap};
 use core::{
     cell::RefCell,
     ffi::{CStr, c_char, c_int},
-    ptr, slice,
+    ptr,
 };
 
 use critical_section::Mutex;
@@ -12,25 +12,19 @@ use esp_hal::peripherals::{UART0, USB_DEVICE};
 use esp_println::Printer;
 use macros::export;
 
-use crate::system;
+use crate::system::{self, c_slice_mut};
 
-#[cfg(feature = "esp32p4")]
-mod master;
-mod string;
-#[cfg(feature = "esp32p4")]
+pub mod string;
 pub mod time;
 
 pub enum Stream {
     Stdin,
     Stdout,
-    #[cfg(feature = "esp32p4")]
+    #[cfg(esp32p4)]
     File(crate::files::Handle),
 }
 
-#[cfg(feature = "esp32p4")]
-pub const EOF: c_int = -1;
-
-sys::c_handle!(Stream, FilePtr, owned);
+sys::c_handle!(Stream, *mut sys::FILE, owned);
 
 static STDIN: Stream = Stream::Stdin;
 static STDOUT: Stream = Stream::Stdout;
@@ -87,9 +81,8 @@ const fn ctype() -> [u8; 257] {
 }
 
 /// Each task's `errno`, boxed so that the address C holds stays put as tasks come and go.
-static ERRNO: Mutex<RefCell<Vec<TaskErrno>>> = Mutex::new(RefCell::new(Vec::new()));
-
-type TaskErrno = (usize, Box<c_int>);
+static ERRNO: Mutex<RefCell<BTreeMap<usize, Box<c_int>>>> =
+    Mutex::new(RefCell::new(BTreeMap::new()));
 
 fn task() -> usize {
     esp_radio_rtos_driver::current_task().as_ptr().addr()
@@ -99,14 +92,12 @@ fn task() -> usize {
 fn __errno() -> *mut c_int {
     let task = task();
     critical_section::with(|cs| {
-        let mut errnos = ERRNO.borrow_ref_mut(cs);
-        if !errnos.iter().any(|(owner, _)| *owner == task) {
-            errnos.push((task, Box::new(0)));
-        }
-        errnos
-            .iter_mut()
-            .find(|(owner, _)| *owner == task)
-            .map_or(ptr::null_mut(), |(_, errno)| ptr::from_mut(&mut **errno))
+        ptr::from_mut(
+            &mut **ERRNO
+                .borrow_ref_mut(cs)
+                .entry(task)
+                .or_insert_with(|| Box::new(0)),
+        )
     })
 }
 
@@ -117,7 +108,7 @@ pub fn set_errno(error: c_int) {
 
 pub fn forget_task() {
     let task = task();
-    critical_section::with(|cs| ERRNO.borrow_ref_mut(cs).retain(|(owner, _)| *owner != task));
+    critical_section::with(|cs| ERRNO.borrow_ref_mut(cs).remove(&task));
 }
 
 #[export]
@@ -151,9 +142,18 @@ unsafe fn fputs(text: *const c_char, stream: &Stream) -> c_int {
     0
 }
 
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "C converts to unsigned char"
+)]
+fn unsigned_char(character: c_int) -> u8 {
+    character as u8
+}
+
 #[export]
 fn putchar(character: c_int) -> c_int {
-    system::locked(|| Printer::write_bytes(&[character.to_le_bytes()[0]]));
+    system::locked(|| Printer::write_bytes(&[unsigned_char(character)]));
     character
 }
 
@@ -164,9 +164,9 @@ fn fflush(stream: &Stream) -> c_int {
     match stream {
         Stream::Stdin => panic!("stdin is not for output"),
         Stream::Stdout => 0,
-        #[cfg(feature = "esp32p4")]
-        Stream::File(file) if file.failed() => EOF,
-        #[cfg(feature = "esp32p4")]
+        #[cfg(esp32p4)]
+        Stream::File(file) if file.failed() => sys::EOF,
+        #[cfg(esp32p4)]
         Stream::File(_) => 0,
     }
 }
@@ -190,8 +190,17 @@ fn read_byte() -> Option<u8> {
     Some(if byte == b'\r' { b'\n' } else { byte })
 }
 
-/// Waits for a whole line. Polling sleeps so that lower-priority tasks, like the watchdog's
-/// feeder, still run.
+/// Sleeps between polls so that lower-priority tasks, like the watchdog's feeder, still run.
+fn wait_byte() -> u8 {
+    loop {
+        if let Some(byte) = read_byte() {
+            return byte;
+        }
+        esp_radio_rtos_driver::usleep(10_000);
+    }
+}
+
+/// Waits for a whole line.
 #[export]
 unsafe fn fgets(buffer: *mut c_char, size: c_int, stream: &Stream) -> *mut c_char {
     assert!(
@@ -205,16 +214,14 @@ unsafe fn fgets(buffer: *mut c_char, size: c_int, stream: &Stream) -> *mut c_cha
         return ptr::null_mut();
     };
     // SAFETY: C gives room for `size` bytes, and the text is at most `size - 1`.
-    let text = unsafe { slice::from_raw_parts_mut(buffer.cast::<u8>(), room) };
+    let Some(text) = (unsafe { c_slice_mut(buffer.cast::<u8>(), room) }) else {
+        return ptr::null_mut();
+    };
     let mut length = 0;
-    while let Some(slot) = text.get_mut(length) {
-        let Some(byte) = read_byte() else {
-            esp_radio_rtos_driver::usleep(10_000);
-            continue;
-        };
-        *slot = byte;
+    for slot in text {
+        *slot = wait_byte();
         length += 1;
-        if byte == b'\n' {
+        if *slot == b'\n' {
             break;
         }
     }

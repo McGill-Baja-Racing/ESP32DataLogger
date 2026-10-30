@@ -9,7 +9,7 @@ use core::{
     fmt::{Debug, Display},
     mem::{MaybeUninit, replace, transmute},
     net::{IpAddr, Ipv4Addr, SocketAddr},
-    ptr, slice,
+    ptr,
     sync::atomic::{AtomicBool, Ordering},
 };
 
@@ -24,6 +24,7 @@ use edge_http::{
 use edge_nal::{TcpBind, TcpSplit, WithTimeout};
 use edge_nal_embassy::Tcp;
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, signal::Signal};
+use embassy_time::{Duration, with_timeout};
 use embedded_io_async::{Read, Write};
 use esp_radio_rtos_driver::{
     self as rtos,
@@ -31,22 +32,29 @@ use esp_radio_rtos_driver::{
 };
 use macros::export;
 
-use crate::rtos::ISR_STACK;
+use crate::{
+    libc::string::copy_c_str,
+    rtos::{ISR_STACK, binary_semaphore},
+    system::{c_slice, c_slice_mut},
+};
 use sys::{
     ESP_ERR_HTTPD_HANDLER_EXISTS, ESP_ERR_HTTPD_HANDLERS_FULL, ESP_ERR_HTTPD_RESP_HDR,
     ESP_ERR_HTTPD_RESP_SEND, ESP_ERR_HTTPD_RESULT_TRUNC, ESP_ERR_INVALID_ARG, ESP_ERR_NOT_FOUND,
     ESP_OK, esp_err_t, httpd_config_t, httpd_method_t, httpd_req_t, httpd_uri_t,
 };
 
-/// Sockets serving at once; an idle client holds one until it closes or the I/O times out.
-pub const CONNECTIONS: usize = 4;
+/// Sockets serving at once: two viewers, one of them loading the page. More can't help while a
+/// download holds the one handler task. An idle client holds one until it closes or the I/O times
+/// out.
+pub const CONNECTIONS: usize = 5;
 /// The sockets' send and receive buffers.
 pub const TX: usize = 2048;
 pub const RX: usize = 1024;
 /// A request's headers must fit in this.
 const REQUEST: usize = 1024;
 const HEADERS: usize = 24;
-/// How long a socket may take to move a byte, like ESP-IDF's default.
+/// How long a socket may take to move a byte, like ESP-IDF's default. A request also waits this
+/// long for the handler task to take it up.
 const IO_TIMEOUT_MS: u32 = 5000;
 /// The longest URI, as in ESP-IDF.
 const URI_MAX: usize = 512;
@@ -82,8 +90,8 @@ enum Message<'a> {
         headers: &'a [(&'a str, &'a str)],
     },
     Body(&'a [u8]),
-    /// The handler returned; whether it returned `ESP_OK`.
-    Done(bool),
+    /// The handler returned, with its error if it failed.
+    Done(Result<(), esp_err_t>),
 }
 
 /// One request, and what its handler says in answer.
@@ -91,6 +99,8 @@ struct Exchange {
     handler: Handle,
     method: httpd_method_t,
     uri: String,
+    /// Signaled when the handler task takes the request up.
+    taken: Signal<CriticalSectionRawMutex, ()>,
     message: Signal<CriticalSectionRawMutex, Message<'static>>,
     /// Given when `message` has been sent, for the handler to wait on: it can't await.
     sent: SemaphoreHandle,
@@ -121,9 +131,12 @@ impl Exchange {
     }
 }
 
-/// C's strings stay valid until the response is sent, as ESP-IDF stores them without a copy.
-fn keep(text: &str) -> &'static str {
-    // SAFETY: `Response` holds the result only while the handler runs, which C's strings outlive.
+/// # Safety
+///
+/// `text` stays valid until the response is sent, as ESP-IDF requires of the strings it stores
+/// without a copy.
+unsafe fn keep(text: &str) -> &'static str {
+    // SAFETY: `Response` holds the result only while the handler runs, which `text` outlives.
     unsafe { transmute::<&str, &'static str>(text) }
 }
 
@@ -163,7 +176,10 @@ impl Response {
     }
 }
 
-fn response(request: &mut httpd_req_t) -> &mut Response {
+/// # Safety
+///
+/// `request` is the one `respond` passed to a handler that is still running.
+unsafe fn response(request: &mut httpd_req_t) -> &mut Response {
     // SAFETY: `respond` points `aux` to a `Response` that outlives the handler, which is the only
     // user of it.
     unsafe { &mut *request.aux.cast::<Response>() }
@@ -178,7 +194,7 @@ fn httpd_start(
         !STARTED.swap(true, Ordering::Relaxed),
         "the kernel starts the HTTP server once"
     );
-    let dispatch = &*Box::leak(Box::new(Dispatch {
+    let server = Box::into_raw(Box::new(Dispatch {
         port: config.server_port,
         max_uris: usize::from(config.max_uri_handlers),
         uris: Mutex::new(RefCell::new(Vec::new())),
@@ -187,44 +203,49 @@ fn httpd_start(
             max: u32::MAX,
             initial: 0,
         }),
-    }));
-    let dispatch_ptr = ptr::from_ref(dispatch).cast_mut().cast();
-    // SAFETY: the task only uses the leaked `Dispatch`.
+    }))
+    .cast::<c_void>();
+    // SAFETY: `server` is a leaked `Dispatch`, which the task only uses.
     unsafe {
         rtos::task_create(
             "httpd",
             run_handlers,
-            dispatch_ptr,
+            server,
             config.task_priority,
             None,
             config.stack_size + ISR_STACK,
         );
     }
-    LISTEN.signal(dispatch);
-    handle.write(dispatch_ptr);
+    // SAFETY: `server` is a leaked `Dispatch`.
+    LISTEN.signal(unsafe { dispatch(server) }?);
+    handle.write(server);
     Ok(())
 }
 
-/// The server a handle from `httpd_start` stands for.
-fn dispatch<'a>(handle: *mut c_void) -> Result<&'a Dispatch, esp_err_t> {
+/// # Safety
+///
+/// `handle` is NULL or came from `httpd_start`.
+unsafe fn dispatch(handle: *mut c_void) -> Result<&'static Dispatch, esp_err_t> {
     // SAFETY: `httpd_start` leaked the `Dispatch` its handles point to.
     unsafe { handle.cast::<Dispatch>().as_ref() }.ok_or(ESP_ERR_INVALID_ARG)
 }
 
 /// Only unregisters the handlers: the listener and the handler task keep running, and answer 404.
 #[export]
-fn httpd_stop(handle: *mut c_void) -> Result<(), esp_err_t> {
-    let dispatch = dispatch(handle)?;
+unsafe fn httpd_stop(handle: *mut c_void) -> Result<(), esp_err_t> {
+    // SAFETY: C passes the handle `httpd_start` gave it.
+    let dispatch = unsafe { dispatch(handle) }?;
     critical_section::with(|cs| dispatch.uris.borrow_ref_mut(cs).clear());
     Ok(())
 }
 
 #[export]
-fn httpd_register_uri_handler(
+unsafe fn httpd_register_uri_handler(
     handle: *mut c_void,
     uri_handler: &httpd_uri_t,
 ) -> Result<(), esp_err_t> {
-    let dispatch = dispatch(handle)?;
+    // SAFETY: C passes the handle `httpd_start` gave it.
+    let dispatch = unsafe { dispatch(handle) }?;
     if uri_handler.uri.is_null() {
         return Err(ESP_ERR_INVALID_ARG);
     }
@@ -253,10 +274,9 @@ fn httpd_register_uri_handler(
     })
 }
 
-/// Runs C's handlers, one request at a time.
-extern "C" fn run_handlers(dispatch: *mut c_void) {
+extern "C" fn run_handlers(server: *mut c_void) {
     // SAFETY: `httpd_start` leaked this `Dispatch`.
-    let dispatch = unsafe { &*dispatch.cast::<Dispatch>() };
+    let dispatch = unsafe { &*server.cast::<Dispatch>() };
     loop {
         dispatch.arrived.take(None);
         let exchange = critical_section::with(|cs| dispatch.pending.borrow_ref_mut(cs).pop_front());
@@ -264,21 +284,18 @@ extern "C" fn run_handlers(dispatch: *mut c_void) {
         if let Some(exchange) = exchange
             && !exchange.failed.load(Ordering::Acquire)
         {
-            respond(dispatch, &exchange);
+            respond(server, &exchange);
         }
     }
 }
 
-fn respond(dispatch: &Dispatch, exchange: &Arc<Exchange>) {
+fn respond(server: *mut c_void, exchange: &Arc<Exchange>) {
+    exchange.taken.signal(());
     // SAFETY: all-zero is a valid `httpd_req_t`: null pointers and zero counts.
     let mut request: httpd_req_t = unsafe { core::mem::zeroed() };
-    request.handle = ptr::from_ref(dispatch).cast_mut().cast();
+    request.handle = server;
     request.method = exchange.method.0.cast_signed();
-    // The last byte stays NUL.
-    let room = request.uri.len() - 1;
-    for (to, from) in request.uri.iter_mut().take(room).zip(exchange.uri.bytes()) {
-        *to = from;
-    }
+    copy_c_str(&mut request.uri, exchange.uri.as_bytes());
     let mut response = Response {
         exchange: Arc::clone(exchange),
         status: "200 OK",
@@ -289,28 +306,40 @@ fn respond(dispatch: &Dispatch, exchange: &Arc<Exchange>) {
     request.aux = ptr::from_mut(&mut response).cast();
     // SAFETY: C registered `handler` for this request, and `request` and `response` outlive it.
     let result = unsafe { (exchange.handler)(&raw mut request) };
-    exchange.post(Message::Done(result == ESP_OK)).ok();
+    let result = match result {
+        ESP_OK => Ok(()),
+        error => Err(error),
+    };
+    exchange.post(Message::Done(result)).ok();
 }
 
 #[export]
-fn httpd_resp_set_status(r: &mut httpd_req_t, status: &str) -> Result<(), esp_err_t> {
-    response(r).status = keep(status);
+unsafe fn httpd_resp_set_status(r: &mut httpd_req_t, status: &str) -> Result<(), esp_err_t> {
+    // SAFETY: C calls this from a running handler, with strings that outlive the response.
+    unsafe { response(r).status = keep(status) };
     Ok(())
 }
 
 #[export]
-fn httpd_resp_set_type(r: &mut httpd_req_t, content_type: &str) -> Result<(), esp_err_t> {
-    response(r).content_type = keep(content_type);
+unsafe fn httpd_resp_set_type(r: &mut httpd_req_t, content_type: &str) -> Result<(), esp_err_t> {
+    // SAFETY: C calls this from a running handler, with strings that outlive the response.
+    unsafe { response(r).content_type = keep(content_type) };
     Ok(())
 }
 
 #[export]
-fn httpd_resp_set_hdr(r: &mut httpd_req_t, field: &str, value: &str) -> Result<(), esp_err_t> {
-    let headers = &mut response(r).headers;
+unsafe fn httpd_resp_set_hdr(
+    r: &mut httpd_req_t,
+    field: &str,
+    value: &str,
+) -> Result<(), esp_err_t> {
+    // SAFETY: C calls this from a running handler.
+    let headers = &mut unsafe { response(r) }.headers;
     if headers.len() >= RESPONSE_HEADERS {
         return Err(ESP_ERR_HTTPD_RESP_HDR);
     }
-    headers.push((keep(field), keep(value)));
+    // SAFETY: C's strings outlive the response.
+    headers.push(unsafe { (keep(field), keep(value)) });
     Ok(())
 }
 
@@ -321,9 +350,8 @@ fn httpd_resp_set_hdr(r: &mut httpd_req_t, field: &str, value: &str) -> Result<(
 /// `buf` points to `buf_len` bytes, or to a NUL-terminated string if `buf_len` is -1.
 unsafe fn bytes<'a>(buf: *const c_char, buf_len: isize) -> &'a [u8] {
     match usize::try_from(buf_len) {
-        Ok(0) => &[],
         // SAFETY: as the caller promises.
-        Ok(length) => unsafe { slice::from_raw_parts(buf.cast(), length) },
+        Ok(length) => unsafe { c_slice(buf.cast(), length) }.unwrap_or_default(),
         // SAFETY: as the caller promises.
         Err(_use_strlen) => unsafe { CStr::from_ptr(buf) }.to_bytes(),
     }
@@ -337,7 +365,8 @@ unsafe fn httpd_resp_send(
 ) -> Result<(), esp_err_t> {
     // SAFETY: C passes `buf_len` bytes at `buf`, or a string.
     let data = unsafe { bytes(buf, buf_len) };
-    let response = response(r);
+    // SAFETY: C calls this from a running handler.
+    let response = unsafe { response(r) };
     response.start(Some(data.len()))?;
     response.body(data)
 }
@@ -351,7 +380,8 @@ unsafe fn httpd_resp_send_chunk(
 ) -> Result<(), esp_err_t> {
     // SAFETY: C passes `buf_len` bytes at `buf`, or a string.
     let data = unsafe { bytes(buf, buf_len) };
-    let response = response(r);
+    // SAFETY: C calls this from a running handler.
+    let response = unsafe { response(r) };
     response.start(None)?;
     response.body(data)
 }
@@ -361,21 +391,20 @@ fn copy(text: &str, buffer: *mut c_char, size: usize) -> Result<(), esp_err_t> {
     if text.len() >= size {
         return Err(ESP_ERR_HTTPD_RESULT_TRUNC);
     }
-    // SAFETY: C gives room for `size` bytes at `buffer`, and the text and its NUL are fewer.
-    let out = unsafe { slice::from_raw_parts_mut(buffer.cast::<u8>(), text.len() + 1) };
-    for (to, from) in out.iter_mut().zip(text.bytes().chain([0])) {
-        *to = from;
-    }
+    // SAFETY: C gives room for `size` bytes at `buffer`.
+    let out = unsafe { c_slice_mut(buffer, size) }.ok_or(ESP_ERR_INVALID_ARG)?;
+    copy_c_str(out, text.as_bytes());
     Ok(())
 }
 
 #[export]
-fn httpd_req_get_url_query_str(
+unsafe fn httpd_req_get_url_query_str(
     r: &mut httpd_req_t,
     buf: *mut c_char,
     buf_len: usize,
 ) -> Result<(), esp_err_t> {
-    let (_path, query) = response(r)
+    // SAFETY: C calls this from a running handler.
+    let (_path, query) = unsafe { response(r) }
         .exchange
         .uri
         .split_once('?')
@@ -406,7 +435,6 @@ fn httpd_query_key_value(
 struct Router(&'static Dispatch);
 
 impl Router {
-    /// The handler for a request, or the status that rejects it.
     fn find(self, uri: &str, method: Method) -> Result<(Handle, httpd_method_t), u16> {
         if uri.len() > URI_MAX {
             return Err(414);
@@ -419,14 +447,14 @@ impl Router {
         };
         critical_section::with(|cs| {
             let uris = self.0.uris.borrow_ref(cs);
-            let mut routes = uris.iter().filter(|uri| uri.path == route).peekable();
-            if routes.peek().is_none() {
-                return Err(404);
-            }
-            routes
-                .find(|uri| Some(uri.method) == method)
+            uris.iter()
+                .find(|uri| uri.path == route && Some(uri.method) == method)
                 .map(|uri| (uri.handler, uri.method))
-                .ok_or(405)
+                .ok_or(if uris.iter().any(|uri| uri.path == route) {
+                    405
+                } else {
+                    404
+                })
         })
     }
 }
@@ -447,6 +475,13 @@ async fn forward<T: Read + Write + TcpSplit, const N: usize>(
     }
 
     let _release = Release(exchange);
+    let wait = Duration::from_millis(IO_TIMEOUT_MS.into());
+    if with_timeout(wait, exchange.taken.wait()).await.is_err() {
+        connection
+            .initiate_response(503, None, &[("Content-Length", "0")])
+            .await?;
+        return Ok(());
+    }
     loop {
         match exchange.message.wait().await {
             Message::Head { status, headers } => {
@@ -457,8 +492,7 @@ async fn forward<T: Read + Write + TcpSplit, const N: usize>(
                     .await?;
             }
             Message::Body(data) => connection.write_all(data).await?,
-            Message::Done(true) => return Ok(()),
-            Message::Done(false) => return Err(Error::ConnectionClosed),
+            Message::Done(result) => return result.map_err(|_code| Error::ConnectionClosed),
         }
         exchange.sent.give();
     }
@@ -475,6 +509,18 @@ impl Handler for Router {
     where
         T: Read + Write + TcpSplit,
     {
+        // C's handlers never read a body, and one that is still arriving would hold up the single
+        // handler task if the request were queued first.
+        if !connection.split().1.is_complete() {
+            connection
+                .initiate_response(
+                    413,
+                    None,
+                    &[("Connection", "close"), ("Content-Length", "0")],
+                )
+                .await?;
+            return Ok(());
+        }
         let headers = connection.headers()?;
         let found = self.find(headers.path, headers.method);
         let (handler, method) = match found {
@@ -490,8 +536,9 @@ impl Handler for Router {
             handler,
             method,
             uri: headers.path.into(),
+            taken: Signal::new(),
             message: Signal::new(),
-            sent: SemaphoreHandle::new(SemaphoreKind::Counting { max: 1, initial: 0 }),
+            sent: binary_semaphore(),
             failed: AtomicBool::new(false),
         });
         critical_section::with(|cs| {

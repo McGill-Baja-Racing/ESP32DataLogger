@@ -36,16 +36,6 @@ impl<T: Copy> CPointer for T {
     type Unique = *mut T;
 }
 
-/// What C sees of a `FILE`, which the kernel's streams stand for.
-pub type FilePtr = *mut FILE;
-
-/// What C sees of a `DIR`, which the kernel's directory streams stand for.
-pub type DirPtr = *mut DIR;
-
-/// What C sees of an `esp_netif_t`, which the kernel's network interface stands for.
-#[cfg(esp32p4)]
-pub type NetifPtr = *mut esp_netif_t;
-
 /// Makes `&$kernel` in an `#[export]` the C handle `$c`, which C shares between tasks. With
 /// `owned`, `&mut` and `Box` stand for it too: C passes it back for the kernel to free or step.
 #[macro_export]
@@ -59,11 +49,11 @@ macro_rules! c_handle {
             type Unique = $unique;
         }
     };
-    ($kernel:ty, $c:ident) => {
-        $crate::c_handle!(@ $kernel, $crate::$c, ());
+    ($kernel:ty, $c:ty) => {
+        $crate::c_handle!(@ $kernel, $c, ());
     };
-    ($kernel:ty, $c:ident, owned) => {
-        $crate::c_handle!(@ $kernel, $crate::$c, $crate::$c);
+    ($kernel:ty, $c:ty, owned) => {
+        $crate::c_handle!(@ $kernel, $c, $c);
     };
 }
 

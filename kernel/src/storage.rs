@@ -9,24 +9,18 @@
 
 use alloc::boxed::Box;
 use core::{
-    cell::{Cell, UnsafeCell},
     ffi::{c_int, c_void},
-    fmt::Debug,
     mem::MaybeUninit,
     sync::atomic::{AtomicU32, Ordering},
 };
 
-use critical_section::Mutex;
 use esp_hal::{
     Blocking,
     dma::aligned::InternalMemory,
     peripherals::{GPIO39, GPIO40, GPIO41, GPIO42, GPIO43, GPIO44},
     sdmmc::{BlockingError, BusWidth, CommandFlags, Error, ResponseLen, Slot, SlotConfig},
 };
-use esp_radio_rtos_driver::{
-    self as rtos,
-    semaphore::{SemaphoreHandle, SemaphoreKind},
-};
+use esp_radio_rtos_driver as rtos;
 use fatfs::{
     Date, DateTime, FileSystem, FsOptions, IoBase, LossyOemCpConverter, Read, Seek, SeekFrom, Time,
     TimeProvider, Write,
@@ -39,16 +33,50 @@ use sys::{
     sdmmc_host_t, sdmmc_slot_config_t,
 };
 
-use crate::{libc::time, sdmmc};
+use crate::{
+    files::ROOT,
+    libc::time,
+    rtos::{Global, Locked},
+    sdmmc,
+};
 
-const SECTOR: u32 = 512;
-const SECTOR_U16: u16 = 512;
+const SECTOR: u16 = 512;
+type Sector = [u8; SECTOR as usize];
+/// Where a FAT12/16 and a FAT32 boot sector spell "FAT", and the partition table's fields.
+const FAT_LABEL_OFFSETS: [usize; 2] = [54, 82];
+const PARTITION_TYPE_OFFSET: usize = 450;
+const PARTITION_START_OFFSET: usize = 454;
+const SIGNATURE_OFFSET: usize = 510;
+const SIGNATURE: [u8; 2] = [0x55, 0xAA];
+
+const GO_IDLE_STATE: u8 = 0;
+const ALL_SEND_CID: u8 = 2;
+const SEND_RELATIVE_ADDR: u8 = 3;
+const SET_BUS_WIDTH: u8 = 6;
+const SELECT_CARD: u8 = 7;
+const SEND_IF_COND: u8 = 8;
+const SEND_STATUS: u8 = 13;
+const SET_BLOCKLEN: u8 = 16;
+const READ_SINGLE_BLOCK: u8 = 17;
+const WRITE_BLOCK: u8 = 24;
+const SD_SEND_OP_COND: u8 = 41;
+const APP_CMD: u8 = 55;
+/// CMD8's argument: the 2.7 to 3.6 V range and a check pattern the card echoes.
+const IF_COND: u32 = 0x1AA;
+const IF_COND_MASK: u32 = 0xFFF;
+/// `SET_BUS_WIDTH`'s argument for four lines.
+const BUS_WIDTH_4: u32 = 2;
 /// The voltage window of a 3.3 V host, and the bit that asks for a high-capacity card.
 const OCR_VOLTAGE: u32 = 0xFF_8000;
 const OCR_HIGH_CAPACITY: u32 = 1 << 30;
 const OCR_READY: u32 = 1 << 31;
 const STATUS_READY_FOR_DATA: u32 = 1 << 8;
 const STATUS_APP_CMD: u32 = 1 << 5;
+/// The R1 bits for an error the last command caused: out of range and address, block length,
+/// erase, write protect, lock, CRC, illegal command, ECC, controller, card and overwrite errors.
+const STATUS_ERRORS: u32 = 0xFDF9_8000;
+const STATUS_STATE_SHIFT: u32 = 9;
+const STATUS_STATE_MASK: u32 = 0xF;
 const STATE_TRANSFER: u32 = 4;
 /// The card finishes programming a write within this, as in ESP-IDF.
 const READY_TIMEOUT_US: u64 = 5_000_000;
@@ -59,39 +87,23 @@ const GO_IDLE_DELAY_US: u32 = 20_000;
 /// A transfer of the other slot takes well under a millisecond, so waiting this long for the
 /// shared engine means that transfer is stuck.
 const ENGINE_TIMEOUT_US: u64 = 5_000_000;
-/// Sector reads in one volume operation. A 65,536-entry directory, the most `FatFs` walks, takes
-/// fewer, so more means a corrupt FAT chain loops.
-const MAX_READS: u32 = 1 << 18;
+/// The most entries a FAT directory holds.
+const MAX_DIR_ENTRIES: u32 = 1 << 16;
 
-static READS: AtomicU32 = AtomicU32::new(0);
+/// Sector reads the running volume operation may still make; unlimited while mounting.
+static READS_LEFT: AtomicU32 = AtomicU32::new(u32::MAX);
 
 type Fs = FileSystem<Disk, Clock, LossyOemCpConverter>;
 pub type File = fatfs::File<'static, Disk, Clock, LossyOemCpConverter>;
 pub type Dir = fatfs::Dir<'static, Disk, Clock, LossyOemCpConverter>;
 pub type DirIter = fatfs::DirIter<'static, Disk, Clock, LossyOemCpConverter>;
+pub type DirEntry<'a> = fatfs::DirEntry<'a, Disk, Clock, LossyOemCpConverter>;
 
-/// Data that tasks use only while holding its mutex, which can span slow I/O unlike a critical
-/// section.
-struct Locked<T> {
-    lock: SemaphoreHandle,
-    data: UnsafeCell<T>,
-}
-
-// SAFETY: `with` is the only access to `data`, and it holds `lock`.
-unsafe impl<T> Sync for Locked<T> {}
-
-impl<T> Locked<T> {
-    fn with<R>(&self, f: impl FnOnce(&mut T) -> R) -> R {
-        self.lock.take(None);
-        // SAFETY: `lock` gives this task the only access until it gives it back.
-        let result = f(unsafe { &mut *self.data.get() });
-        self.lock.give();
-        result
-    }
-}
-
-/// The `errno` for a FAT failure.
-pub fn errno(error: &fatfs::Error<()>) -> c_int {
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "`map_err` passes the error by value"
+)]
+pub fn errno(error: fatfs::Error<()>) -> c_int {
     match error {
         fatfs::Error::NotFound => ENOENT,
         fatfs::Error::AlreadyExists => EEXIST,
@@ -108,16 +120,29 @@ pub struct Entry {
 
 pub struct Volume {
     fs: &'static Fs,
-    /// File descriptor `n + 3` is `files[n]`.
+    /// Indexed by file descriptor, offset by `files::FIRST_FD`.
     files: Box<[Option<Entry>]>,
+    /// Sector reads one operation may make. A FAT scan and a chain walk each read at most one
+    /// entry per cluster, so more means a corrupt FAT chain loops.
+    read_budget: u32,
 }
 
+// SAFETY: `Fs` isn't `Sync` because its handles share `Cell`s and a `RefCell` disk. Every handle
+// into it is made, used and dropped while holding the volume's lock, so one task at a time
+// touches them: `root` and its entries can't outlive the closure that holds the lock, and
+// `DirStream` and `Entry` drop their handles under it.
+unsafe impl Send for Volume {}
+
 impl Volume {
-    pub fn root(&self) -> Dir {
+    pub fn root(&self) -> fatfs::Dir<'_, Disk, Clock, LossyOemCpConverter> {
         self.fs.root_dir()
     }
 
-    /// Opens a file with `open` and returns where the table put it.
+    /// The root folder's entries, for a `DirStream`, which must drop them holding the lock.
+    pub fn entries(&self) -> DirIter {
+        self.fs.root_dir().iter()
+    }
+
     pub fn open(
         &mut self,
         open: impl FnOnce(&Dir) -> Result<File, fatfs::Error<()>>,
@@ -128,7 +153,7 @@ impl Volume {
             .enumerate()
             .find(|(_, slot)| slot.is_none())
             .ok_or(ENFILE)?;
-        let file = open(&self.fs.root_dir()).map_err(|error| errno(&error))?;
+        let file = open(&self.fs.root_dir()).map_err(errno)?;
         *slot = Some(Entry {
             file,
             failed: false,
@@ -140,19 +165,18 @@ impl Volume {
         self.files.get_mut(index)?.as_mut()
     }
 
-    /// Closes the file.
     pub fn close(&mut self, index: usize) -> bool {
         self.files.get_mut(index).and_then(Option::take).is_some()
     }
 }
 
-static VOLUME: Mutex<Cell<Option<&'static Locked<Volume>>>> = Mutex::new(Cell::new(None));
+static VOLUME: Global<Locked<Volume>> = Global::new();
 
 /// Runs `f` on the volume, or returns `None` before the card is mounted.
 pub fn with_volume<R>(f: impl FnOnce(&mut Volume) -> R) -> Option<R> {
-    let volume = critical_section::with(|cs| VOLUME.borrow(cs).get())?;
+    let volume = VOLUME.get()?;
     Some(volume.with(|volume| {
-        READS.store(0, Ordering::Relaxed);
+        READS_LEFT.store(volume.read_budget, Ordering::Relaxed);
         f(volume)
     }))
 }
@@ -168,21 +192,18 @@ impl TimeProvider for Clock {
 
     fn get_current_date_time(&self) -> DateTime {
         let field = |value: c_int| u16::try_from(value).unwrap_or_default();
-        time::civil(time::now())
-            .filter(|now| (80..=207).contains(&now.tm_year))
-            .map_or_else(
-                || DateTime::new(Date::new(1980, 1, 1), Time::new(0, 0, 0, 0)),
-                |now| {
-                    DateTime::new(
-                        Date::new(
-                            field(now.tm_year + 1900),
-                            field(now.tm_mon + 1),
-                            field(now.tm_mday),
-                        ),
-                        Time::new(field(now.tm_hour), field(now.tm_min), field(now.tm_sec), 0),
-                    )
-                },
-            )
+        let Some(now) = time::civil(time::now()).filter(|now| (80..=207).contains(&now.tm_year))
+        else {
+            return DateTime::new(Date::new(1980, 1, 1), Time::new(0, 0, 0, 0));
+        };
+        DateTime::new(
+            Date::new(
+                field(now.tm_year + 1900),
+                field(now.tm_mon + 1),
+                field(now.tm_mday),
+            ),
+            Time::new(field(now.tm_hour), field(now.tm_min), field(now.tm_sec), 0),
+        )
     }
 }
 
@@ -195,7 +216,7 @@ pub struct Disk {
     /// Standard-capacity cards take byte addresses.
     block_addressing: bool,
     base: u32,
-    buffer: Box<InternalMemory<[u8; SECTOR as usize]>>,
+    buffer: Box<InternalMemory<Sector>>,
     sector: Option<u32>,
     dirty: bool,
     position: u64,
@@ -227,7 +248,6 @@ fn code(error: BlockingError) -> esp_err_t {
 }
 
 impl Disk {
-    /// Takes slot 0 with the pins the master wires.
     fn new(config: &sdmmc_slot_config_t) -> Result<Self, esp_err_t> {
         // SAFETY: both union members are the GPIO number, and `SDMMC_SLOT_NO_CD` and `_NO_WP` are
         // -1.
@@ -271,7 +291,6 @@ impl Disk {
         })
     }
 
-    /// Sends a command with no data and returns the response words.
     fn command(
         &mut self,
         index: u8,
@@ -280,11 +299,11 @@ impl Disk {
     ) -> Result<[u32; 4], BlockingError> {
         // CMD0 has no response to wait for and CMD7 answers with busy. ACMD41's answer has no CRC.
         let flags = CommandFlags {
-            wait_complete: index != 0,
+            wait_complete: index != GO_IDLE_STATE,
             stop_abort: false,
-            busy: index == 7,
+            busy: index == SELECT_CARD,
         };
-        let crc = !matches!(response, ResponseLen::None) && index != 41;
+        let crc = !matches!(response, ResponseLen::None) && index != SD_SEND_OP_COND;
         retry(|| self.slot.command_blocking(index, arg, response, crc, flags))
     }
 
@@ -294,7 +313,7 @@ impl Disk {
         arg: u32,
         response: ResponseLen,
     ) -> Result<[u32; 4], BlockingError> {
-        let status = self.command(55, u32::from(self.rca) << 16, ResponseLen::Short)?[0];
+        let status = self.command(APP_CMD, u32::from(self.rca) << 16, ResponseLen::Short)?[0];
         if status & STATUS_APP_CMD == 0 {
             return Err(Error::Unsupported.into());
         }
@@ -305,8 +324,14 @@ impl Disk {
     fn wait_ready(&mut self) -> Result<(), BlockingError> {
         let deadline = rtos::now() + READY_TIMEOUT_US;
         loop {
-            let status = self.command(13, u32::from(self.rca) << 16, ResponseLen::Short)?[0];
-            if status & STATUS_READY_FOR_DATA != 0 && (status >> 9) & 0xF == STATE_TRANSFER {
+            let status =
+                self.command(SEND_STATUS, u32::from(self.rca) << 16, ResponseLen::Short)?[0];
+            if status & STATUS_ERRORS != 0 {
+                return Err(Error::ResponseError.into());
+            }
+            if status & STATUS_READY_FOR_DATA != 0
+                && (status >> STATUS_STATE_SHIFT) & STATUS_STATE_MASK == STATE_TRANSFER
+            {
                 return Ok(());
             }
             if rtos::now() > deadline {
@@ -316,27 +341,16 @@ impl Disk {
         }
     }
 
-    /// Moves the card through its start-up states, as `sdmmc_card_init` does for an SD memory
-    /// card, and returns its OCR. Only version 2 cards, which answer CMD8, and the 4-bit bus.
-    /// ESP-IDF also keeps the card clock running through ACMD41, which esp-hal does not offer.
-    fn start(&mut self) -> Result<u32, BlockingError> {
-        self.slot
-            .set_bus_low_level(BusWidth::Bit1, SDMMC_FREQ_PROBING.unsigned_abs() * 1000)?;
-        retry(|| self.slot.send_init_sequence())?;
-        self.command(0, 0, ResponseLen::None)?;
-        rtos::usleep(GO_IDLE_DELAY_US);
-        if self.command(8, 0x1AA, ResponseLen::Short)?[0] & 0xFFF != 0x1AA {
-            return Err(Error::ResponseError.into());
-        }
+    /// Polls ACMD41 until the card has powered up, and returns its OCR.
+    fn wait_op_cond(&mut self) -> Result<u32, BlockingError> {
         let mut errors = OP_COND_ERRORS;
-        let mut tries = OP_COND_TRIES;
-        let ocr = loop {
-            if tries == 0 {
-                return Err(Error::Timeout.into());
-            }
-            tries -= 1;
-            match self.app_command(41, OCR_VOLTAGE | OCR_HIGH_CAPACITY, ResponseLen::Short) {
-                Ok(response) if response[0] & OCR_READY != 0 => break response[0],
+        for _ in 0..OP_COND_TRIES {
+            match self.app_command(
+                SD_SEND_OP_COND,
+                OCR_VOLTAGE | OCR_HIGH_CAPACITY,
+                ResponseLen::Short,
+            ) {
+                Ok(response) if response[0] & OCR_READY != 0 => return Ok(response[0]),
                 Ok(_) => rtos::usleep(10_000),
                 Err(error) => {
                     errors -= 1;
@@ -345,17 +359,33 @@ impl Disk {
                     }
                 }
             }
-        };
-        self.command(2, 0, ResponseLen::Long)?;
-        let address = self.command(3, 0, ResponseLen::Short)?[0] >> 16;
+        }
+        Err(Error::Timeout.into())
+    }
+
+    /// Moves the card through its start-up states, as `sdmmc_card_init` does for an SD memory
+    /// card, and returns its OCR. Only version 2 cards, which answer CMD8, and the 4-bit bus.
+    /// ESP-IDF also keeps the card clock running through ACMD41, which esp-hal does not offer.
+    fn start(&mut self) -> Result<u32, BlockingError> {
+        self.slot
+            .set_bus_low_level(BusWidth::Bit1, SDMMC_FREQ_PROBING.unsigned_abs() * 1000)?;
+        retry(|| self.slot.send_init_sequence())?;
+        self.command(GO_IDLE_STATE, 0, ResponseLen::None)?;
+        rtos::usleep(GO_IDLE_DELAY_US);
+        if self.command(SEND_IF_COND, IF_COND, ResponseLen::Short)?[0] & IF_COND_MASK != IF_COND {
+            return Err(Error::ResponseError.into());
+        }
+        let ocr = self.wait_op_cond()?;
+        self.command(ALL_SEND_CID, 0, ResponseLen::Long)?;
+        let address = self.command(SEND_RELATIVE_ADDR, 0, ResponseLen::Short)?[0] >> 16;
         self.rca = u16::try_from(address).map_err(|_rca| Error::ResponseError)?;
-        self.command(7, address << 16, ResponseLen::Short)?;
+        self.command(SELECT_CARD, address << 16, ResponseLen::Short)?;
         self.block_addressing = ocr & OCR_HIGH_CAPACITY != 0;
         if !self.block_addressing {
-            self.command(16, SECTOR, ResponseLen::Short)?;
+            self.command(SET_BLOCKLEN, u32::from(SECTOR), ResponseLen::Short)?;
         }
         self.wait_ready()?;
-        self.app_command(6, 2, ResponseLen::Short)?;
+        self.app_command(SET_BUS_WIDTH, BUS_WIDTH_4, ResponseLen::Short)?;
         self.slot
             .set_bus_low_level(BusWidth::Bit4, SDMMC_FREQ_DEFAULT.unsigned_abs() * 1000)?;
         Ok(ocr)
@@ -366,14 +396,13 @@ impl Disk {
     fn find_partition(&mut self) -> Result<(), ()> {
         self.load(0, false)?;
         let sector = self.buffer.get_mut();
-        let at = |from: usize, len: usize| sector.get(from..from + len);
-        let is_boot = [54, 82]
+        let is_boot = FAT_LABEL_OFFSETS
             .iter()
-            .any(|&from| at(from, 3) == Some(b"FAT".as_slice()));
-        if at(510, 2) == Some([0x55, 0xAA].as_slice())
+            .any(|&from| field(&sector, from) == Some(b"FAT"));
+        if field(&sector, SIGNATURE_OFFSET) == Some(&SIGNATURE)
             && !is_boot
-            && sector.get(450) != Some(&0)
-            && let Some(start) = at(454, 4).and_then(<[u8]>::first_chunk::<4>)
+            && sector.get(PARTITION_TYPE_OFFSET) != Some(&0)
+            && let Some(start) = field(&sector, PARTITION_START_OFFSET)
         {
             self.base = u32::from_le_bytes(*start);
         }
@@ -385,18 +414,25 @@ impl Disk {
         let address = if self.block_addressing {
             sector
         } else {
-            sector.checked_mul(SECTOR).ok_or(Error::Unsupported)?
+            sector
+                .checked_mul(u32::from(SECTOR))
+                .ok_or(Error::Unsupported)?
         };
         let mut data = self.buffer.get_mut().unsize();
         let result = if write {
             retry(|| {
                 self.slot
-                    .write_blocks_blocking(24, address, data.reborrow(), SECTOR_U16, 1)
+                    .write_blocks_blocking(WRITE_BLOCK, address, data.reborrow(), SECTOR, 1)
             })
         } else {
             retry(|| {
-                self.slot
-                    .read_blocks_blocking(17, address, data.reborrow(), SECTOR_U16, 1)
+                self.slot.read_blocks_blocking(
+                    READ_SINGLE_BLOCK,
+                    address,
+                    data.reborrow(),
+                    SECTOR,
+                    1,
+                )
             })
         };
         match result {
@@ -408,7 +444,9 @@ impl Disk {
     }
 
     fn flush_sector(&mut self) -> Result<(), ()> {
-        if let (true, Some(sector)) = (self.dirty, self.sector) {
+        if self.dirty
+            && let Some(sector) = self.sector
+        {
             self.transfer(sector, true).map_err(drop)?;
             self.dirty = false;
         }
@@ -428,7 +466,6 @@ impl Disk {
         Ok(())
     }
 
-    /// The card sector the position is in, and the offset in it.
     fn locate(&self) -> Result<(u32, usize), ()> {
         let sector = u32::try_from(self.position / u64::from(SECTOR))
             .ok()
@@ -442,18 +479,21 @@ impl Disk {
 impl Read for Disk {
     /// Reads up to the end of the sector.
     fn read(&mut self, out: &mut [u8]) -> Result<usize, ()> {
-        if READS.fetch_add(1, Ordering::Relaxed) >= MAX_READS {
-            return Err(());
-        }
+        READS_LEFT
+            .try_update(Ordering::Relaxed, Ordering::Relaxed, |left| {
+                left.checked_sub(1)
+            })
+            .map_err(drop)?;
         let (sector, offset) = self.locate()?;
         self.load(sector, false)?;
-        let count = out.len().min(SECTOR as usize - offset);
-        let data = self.buffer.get_mut();
-        out.iter_mut()
-            .zip(data.iter().skip(offset))
-            .take(count)
-            .for_each(|(to, from)| *to = *from);
-        self.position += count as u64;
+        let count = out.len().min(usize::from(SECTOR) - offset);
+        let buffer = self.buffer.get_mut();
+        let (Some(to), Some(from)) = (out.get_mut(..count), buffer.get(offset..offset + count))
+        else {
+            return Err(());
+        };
+        to.copy_from_slice(from);
+        self.position += u64::try_from(count).map_err(drop)?;
         Ok(count)
     }
 }
@@ -462,16 +502,16 @@ impl Write for Disk {
     /// Writes up to the end of the sector.
     fn write(&mut self, data: &[u8]) -> Result<usize, ()> {
         let (sector, offset) = self.locate()?;
-        let count = data.len().min(SECTOR as usize - offset);
-        self.load(sector, count == SECTOR as usize)?;
-        self.buffer
-            .get_mut()
-            .iter_mut()
-            .skip(offset)
-            .zip(data)
-            .for_each(|(to, from)| *to = *from);
+        let count = data.len().min(usize::from(SECTOR) - offset);
+        self.load(sector, count == usize::from(SECTOR))?;
+        let mut buffer = self.buffer.get_mut();
+        let (Some(to), Some(from)) = (buffer.get_mut(offset..offset + count), data.get(..count))
+        else {
+            return Err(());
+        };
+        to.copy_from_slice(from);
         self.dirty = true;
-        self.position += count as u64;
+        self.position += u64::try_from(count).map_err(drop)?;
         Ok(count)
     }
 
@@ -491,6 +531,10 @@ impl Seek for Disk {
     }
 }
 
+fn field<const N: usize>(sector: &Sector, from: usize) -> Option<&[u8; N]> {
+    sector.get(from..)?.first_chunk()
+}
+
 /// Brings up the card and mounts its volume. Only what the master passes: "/sdcard", a card
 /// that is already formatted and at most `max_files` open files.
 fn mount(
@@ -504,13 +548,12 @@ fn mount(
     let rca = disk.rca;
     let fs =
         FileSystem::new(disk, FsOptions::new().time_provider(Clock)).map_err(|_fat| ESP_FAIL)?;
-    let volume = Box::leak(Box::new(Locked {
-        lock: SemaphoreHandle::new(SemaphoreKind::Mutex),
-        data: UnsafeCell::new(Volume {
-            fs: Box::leak(Box::new(fs)),
-            files: (0..max_files).map(|_| None).collect(),
-        }),
-    }));
+    let clusters = fs.stats().map_err(|_fat| ESP_FAIL)?.total_clusters();
+    let volume = Box::leak(Box::new(Locked::new(Volume {
+        fs: Box::leak(Box::new(fs)),
+        files: (0..max_files).map(|_| None).collect(),
+        read_budget: clusters.saturating_mul(2).saturating_add(MAX_DIR_ENTRIES),
+    })));
     // SAFETY: all-zero is a valid `sdmmc_card_t`: plain integers and function pointers. C reads
     // neither `cid` nor `csd`.
     let mut card: sdmmc_card_t = unsafe { core::mem::zeroed() };
@@ -530,13 +573,13 @@ fn esp_vfs_fat_sdmmc_mount(
     out_card: Option<&mut MaybeUninit<&'static mut sdmmc_card_t>>,
 ) -> Result<(), esp_err_t> {
     assert!(
-        base_path == "/sdcard"
+        base_path == ROOT
             && host_config.slot == 0
             && host_config.max_freq_khz == SDMMC_FREQ_DEFAULT
             && !mount_config.format_if_mount_failed,
         "the kernel supports only a mount at /sdcard on slot 0 at 20 MHz that never formats"
     );
-    if critical_section::with(|cs| VOLUME.borrow(cs).get().is_some()) {
+    if VOLUME.get().is_some() {
         return Err(ESP_ERR_INVALID_STATE);
     }
     let max_files =
@@ -544,7 +587,7 @@ fn esp_vfs_fat_sdmmc_mount(
     // SAFETY: C passes the slot configuration of the host it names, which is this driver's.
     let slot_config = unsafe { &*slot_config.cast::<sdmmc_slot_config_t>() };
     let (card, volume) = mount(host_config, slot_config, max_files)?;
-    critical_section::with(|cs| VOLUME.borrow(cs).set(Some(volume)));
+    VOLUME.set(volume);
     if let Some(out_card) = out_card {
         out_card.write(card);
     }

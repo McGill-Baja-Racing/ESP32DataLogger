@@ -4,110 +4,91 @@
 //! Only standard data frames at 1 Mbit/s in normal mode, with every frame accepted.
 
 use esp_hal::{
-    gpio::{AnyPin, Flex, InputConfig, InputSignal, OutputConfig, OutputSignal, Pull},
+    gpio::{AnyPin, Flex, InputConfig, InputSignal, Level, OutputConfig, OutputSignal, Pull},
     interrupt::{self, InterruptHandler},
     peripherals::{HP_SYS_CLKRST, Interrupt, TWAI0},
 };
 
-use super::{Events, Status};
+use super::{ACK_SLOT, Events, Status};
 
-/// The bit position `ERR_CODE_CAP` reports for an error in the ACK slot.
-const ACK_SLOT: u8 = 25;
+/// Leaves the node in reset mode until `enable`.
+///
+/// # Safety
+///
+/// Nothing else may use TWAI0 or the pins.
+pub unsafe fn start(tx: u8, rx: u8, handler: InterruptHandler) {
+    let clock = HP_SYS_CLKRST::regs();
+    clock
+        .soc_clk_ctrl2()
+        .modify(|_, w| w.twai0_apb_clk_en().set_bit());
+    clock.peri_clk_ctrl115().modify(|_, w| {
+        w.twai0_clk_en().set_bit();
+        w.twai0_clk_src_sel().clear_bit()
+    });
+    clock.hp_rst_en1().modify(|_, w| w.rst_en_can0().set_bit());
+    clock
+        .hp_rst_en1()
+        .modify(|_, w| w.rst_en_can0().clear_bit());
 
-pub struct Controller;
+    let twai = TWAI0::regs();
+    twai.mode().write(|w| {
+        w.reset_mode().set_bit();
+        w.acceptance_filter_mode().set_bit()
+    });
+    // In reset mode the data registers hold the acceptance code, then the mask: accept all.
+    for index in 0..8 {
+        // SAFETY: the registers take any byte.
+        twai.data(index)
+            .write(|w| unsafe { w.tx_byte().bits(if index < 4 { 0 } else { 0xff }) });
+    }
+    // SAFETY: the caller has the pins to itself.
+    let (tx, rx) = unsafe { (AnyPin::steal(tx), AnyPin::steal(rx)) };
+    let mut tx = Flex::new(tx);
+    tx.apply_output_config(&OutputConfig::default());
+    // Until the controller's signal is routed the pin is a plain GPIO, and low is dominant.
+    tx.set_level(Level::High);
+    tx.set_output_enable(true);
+    OutputSignal::TWAI0_TX.connect_to(&tx.into_peripheral_output());
+    let mut rx = Flex::new(rx);
+    rx.apply_input_config(&InputConfig::default().with_pull(Pull::Up));
+    InputSignal::TWAI0_RX.connect_to(&rx.peripheral_input());
 
-#[expect(
-    clippy::unused_self,
-    reason = "the controller is TWAI0, whose registers need no owner"
-)]
-impl Controller {
-    /// Starts the node at 1 Mbit/s on the given pins, with `handler` for its interrupt.
-    ///
-    /// # Safety
-    ///
-    /// Nothing else may use TWAI0 or the pins.
-    pub unsafe fn start(tx: u8, rx: u8, handler: InterruptHandler) -> Self {
-        let clock = HP_SYS_CLKRST::regs();
-        clock
-            .soc_clk_ctrl2()
-            .modify(|_, w| w.twai0_apb_clk_en().set_bit());
-        clock.peri_clk_ctrl115().modify(|_, w| {
-            w.twai0_clk_en().set_bit();
-            w.twai0_clk_src_sel().clear_bit()
+    // SAFETY: the registers take any value. Each holds its value minus one: from 40 MHz, a
+    // prescaler of 2, a jump width of 3 and segments of 15 and 4 quanta give 1 Mbit/s.
+    unsafe {
+        twai.tx_err_cnt().write(|w| w.tx_err_cnt().bits(0));
+        twai.rx_err_cnt().write(|w| w.rx_err_cnt().bits(0));
+        twai.err_warning_limit()
+            .write(|w| w.err_warning_limit().bits(96));
+        twai.bus_timing_0().modify(|_, w| {
+            w.baud_presc().bits(0);
+            w.sync_jump_width().bits(2)
         });
-        clock.hp_rst_en1().modify(|_, w| w.rst_en_can0().set_bit());
-        clock
-            .hp_rst_en1()
-            .modify(|_, w| w.rst_en_can0().clear_bit());
-
-        let twai = TWAI0::regs();
-        twai.mode().write(|w| {
-            w.reset_mode().set_bit();
-            w.acceptance_filter_mode().set_bit()
+        twai.bus_timing_1().modify(|_, w| {
+            w.time_segment1().bits(14);
+            w.time_segment2().bits(3);
+            w.time_sampling().clear_bit()
         });
-        // In reset mode the data registers hold the acceptance code, then the mask: accept all.
-        for index in 0..8 {
-            // SAFETY: the registers take any byte.
-            twai.data(index)
-                .write(|w| unsafe { w.tx_byte().bits(if index < 4 { 0 } else { 0xff }) });
-        }
-        // SAFETY: the caller has the pins to itself.
-        let (tx, rx) = unsafe { (AnyPin::steal(tx), AnyPin::steal(rx)) };
-        let mut tx = Flex::new(tx);
-        tx.apply_output_config(&OutputConfig::default());
-        tx.set_output_enable(true);
-        OutputSignal::TWAI0_TX.connect_to(&tx.into_peripheral_output());
-        let mut rx = Flex::new(rx);
-        rx.apply_input_config(&InputConfig::default().with_pull(Pull::Up));
-        InputSignal::TWAI0_RX.connect_to(&rx.peripheral_input());
-
-        // SAFETY: the registers take any value. Each holds its value minus one: from 40 MHz, a
-        // prescaler of 2, a jump width of 3 and segments of 15 and 4 quanta give 1 Mbit/s.
-        unsafe {
-            twai.tx_err_cnt().write(|w| w.tx_err_cnt().bits(0));
-            twai.rx_err_cnt().write(|w| w.rx_err_cnt().bits(0));
-            twai.err_warning_limit()
-                .write(|w| w.err_warning_limit().bits(96));
-            twai.bus_timing_0().modify(|_, w| {
-                w.baud_presc().bits(0);
-                w.sync_jump_width().bits(2)
-            });
-            twai.bus_timing_1().modify(|_, w| {
-                w.time_segment1().bits(14);
-                w.time_segment2().bits(3);
-                w.time_sampling().clear_bit()
-            });
-        }
-        twai.clock_divider().modify(|_, w| w.clock_off().set_bit());
-
-        interrupt::bind_handler(Interrupt::TWAI0, handler);
-        // Reading clears the flags.
-        let _ = twai.interrupt().read();
-        twai.mode().modify(|_, w| w.reset_mode().clear_bit());
-        Self
     }
+    twai.clock_divider().modify(|_, w| w.clock_off().set_bit());
 
-    pub fn is_bus_off(&self) -> bool {
-        status().bus_off
-    }
+    interrupt::bind_handler(Interrupt::TWAI0, handler);
+}
 
-    pub fn tx_errors(&self) -> u8 {
-        TWAI0::regs().tx_err_cnt().read().tx_err_cnt().bits()
-    }
+pub fn tx_errors() -> u8 {
+    TWAI0::regs().tx_err_cnt().read().tx_err_cnt().bits()
+}
 
-    pub fn rx_errors(&self) -> u8 {
-        TWAI0::regs().rx_err_cnt().read().rx_err_cnt().bits()
-    }
+pub fn rx_errors() -> u8 {
+    TWAI0::regs().rx_err_cnt().read().rx_err_cnt().bits()
+}
 
-    /// The controller recovers once it has seen 128 sequences of 11 idle bits.
-    pub fn initiate_recovery(&mut self) {
-        if self.is_bus_off() {
-            // Bus-off leaves it in reset mode; leaving that mode starts the recovery.
-            let mode = TWAI0::regs().mode();
-            mode.modify(|_, w| w.reset_mode().set_bit());
-            mode.modify(|_, w| w.reset_mode().clear_bit());
-        }
-    }
+/// The controller recovers once it has seen 128 sequences of 11 idle bits.
+pub fn recover() {
+    // Bus-off leaves it in reset mode; leaving that mode starts the recovery.
+    let mode = TWAI0::regs().mode();
+    mode.modify(|_, w| w.reset_mode().set_bit());
+    mode.modify(|_, w| w.reset_mode().clear_bit());
 }
 
 pub fn status() -> Status {
@@ -165,8 +146,12 @@ pub fn events() -> Events {
     }
 }
 
-pub fn enable_interrupts() {
-    TWAI0::regs().interrupt_enable().write(|w| {
+/// Leaves reset mode, with the interrupts on.
+pub fn enable() {
+    let twai = TWAI0::regs();
+    // Reading clears the flags.
+    let _ = twai.interrupt().read();
+    twai.interrupt_enable().write(|w| {
         w.ext_receive_int_ena().set_bit();
         w.ext_transmit_int_ena().set_bit();
         w.ext_err_warning_int_ena().set_bit();
@@ -174,4 +159,5 @@ pub fn enable_interrupts() {
         w.arbitration_lost_int_ena().set_bit();
         w.bus_err_int_ena().set_bit()
     });
+    twai.mode().modify(|_, w| w.reset_mode().clear_bit());
 }

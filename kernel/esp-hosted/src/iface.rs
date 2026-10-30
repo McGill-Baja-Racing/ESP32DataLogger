@@ -1,12 +1,7 @@
-//! SDIO interface.
-//!
-//! Speaks the esp-hosted SDIO transport protocol on top of the [`sdio`] crate's
-//! [`SdioCard`], in *streaming mode*: one read takes everything the co-processor has queued,
-//! several frames back to back.
-
 use ::sdio::sdio::SdioCard;
 use ::sdio::{MmcBus, MmcError};
 use aligned::{A4, Aligned};
+use core::{ptr, slice};
 use embassy_time::{Delay, Timer};
 
 const SDIO_FUNC_1: u8 = 1;
@@ -22,13 +17,11 @@ const REG_PACKET_LEN: u32 = 0x060;
 const REG_INT_CLR: u32 = 0x0D4;
 const REG_HOST_TO_SLAVE_INTR: u32 = 0x08C; // scratch register 7
 
-const NEW_PACKET_INT: u32 = 1 << 23;
-
 /// CMD53 data window end; data is transferred to/from `ESP_DATA_END_ADDR - len`.
 const ESP_DATA_END_ADDR: u32 = 0x1F800;
-const ESP_BLOCK_U16: u16 = 512;
-const ESP_BLOCK_SIZE: usize = ESP_BLOCK_U16 as usize;
+const ESP_BLOCK_SIZE: usize = 512;
 const _: () = assert!(crate::MAX_BUFFER_SIZE.is_multiple_of(ESP_BLOCK_SIZE));
+type Block = Aligned<A4, [u8; ESP_BLOCK_SIZE]>;
 
 const ESP_RX_BYTE_MAX: u32 = 0x10_0000;
 const ESP_LEN_MASK: u32 = 0x0F_FFFF;
@@ -36,6 +29,8 @@ const ESP_TX_BUFFER_MAX: u32 = 0x1000;
 const ESP_TX_BUFFER_MASK: u32 = 0x0FFF;
 /// Co-processor RX buffer size; one packet uses `ceil(len / this)` buffers.
 const ESP_RX_BUFFER_SIZE: usize = 1536;
+/// Times, 1 ms apart, to look for TX buffers before giving up on a packet.
+const CREDIT_RETRIES: u8 = 50;
 
 /// The window address that makes the co-processor's FIFO advance by `len`.
 fn data_address(len: usize) -> u32 {
@@ -46,9 +41,23 @@ fn word(value: usize) -> u32 {
     u32::try_from(value).unwrap_or(u32::MAX)
 }
 
-/// SDIO interface for esp-hosted.
-///
-/// Wraps an [`SdioCard`]. Pass the [`MmcBus`] to be used.
+fn block_count(available: usize, len: usize) -> Option<usize> {
+    let count = len.div_ceil(ESP_BLOCK_SIZE);
+    (count * ESP_BLOCK_SIZE <= available).then_some(count)
+}
+
+fn blocks(buffer: &Aligned<A4, [u8]>, len: usize) -> Option<&[Block]> {
+    let count = block_count(buffer.len(), len)?;
+    // SAFETY: `buffer` is A4-aligned and holds `count` whole blocks.
+    Some(unsafe { slice::from_raw_parts(ptr::from_ref(buffer).cast::<Block>(), count) })
+}
+
+fn blocks_mut(buffer: &mut Aligned<A4, [u8]>, len: usize) -> Option<&mut [Block]> {
+    let count = block_count(buffer.len(), len)?;
+    // SAFETY: as in `blocks`, and `buffer` is borrowed mutably.
+    Some(unsafe { slice::from_raw_parts_mut(ptr::from_mut(buffer).cast::<Block>(), count) })
+}
+
 pub(crate) struct SdioInterface<B: MmcBus> {
     card: SdioCard<B, Delay>,
     freq: u32,
@@ -60,7 +69,6 @@ pub(crate) struct SdioInterface<B: MmcBus> {
 }
 
 impl<B: MmcBus> SdioInterface<B> {
-    /// Create a new SDIO interface targeting `freq_hz` (clamped during acquisition).
     pub fn new(bus: B, freq_hz: u32) -> Self {
         Self {
             card: SdioCard::new_uninit(bus, Delay),
@@ -79,8 +87,9 @@ impl<B: MmcBus> SdioInterface<B> {
         self.cached_granted = 0;
 
         self.card.enable_functions(FUNC1_MASK).await?;
-        self.card.set_block_size(0, ESP_BLOCK_U16).await?;
-        self.card.set_block_size(1, ESP_BLOCK_U16).await?;
+        let block_size = u16::try_from(ESP_BLOCK_SIZE).map_err(|_overflow| MmcError::BlockSize)?;
+        self.card.set_block_size(0, block_size).await?;
+        self.card.set_block_size(1, block_size).await?;
         self.card.enable_interrupts(FUNC1_MASK).await?;
         self.card
             .cmd52_write(SDIO_FUNC_1, REG_HOST_TO_SLAVE_INTR, ESP_OPEN_DATA_PATH)
@@ -105,8 +114,6 @@ impl<B: MmcBus> SdioInterface<B> {
         Ok(())
     }
 
-    /// Read `INT_RAW` and `PACKET_LEN` in a single CMD53, returning
-    /// `(interrupts, raw_packet_len)`.
     async fn read_status(&mut self) -> Result<(u32, u32), MmcError> {
         /// Length of the combined status read (`INT_RAW`..=`PACKET_LEN`), in bytes.
         const REG_STATUS_LEN: usize = (REG_PACKET_LEN - REG_INT_RAW + 4) as usize;
@@ -121,45 +128,26 @@ impl<B: MmcBus> SdioInterface<B> {
         Ok((interrupts, packet_len))
     }
 
-    /// Read `len` of the `left` bytes still queued via a single block-only CMD53. The transfer is
-    /// rounded up to whole blocks (the co-processor zero-pads the tail); the address encodes `left`,
-    /// as in esp-hosted's host driver.
+    /// Reads `len` of the `left` bytes still queued, rounded up to whole blocks: the address
+    /// encodes `left`, as in esp-hosted's host driver.
     async fn read_data(
         &mut self,
         buffer: &mut Aligned<A4, [u8]>,
         len: usize,
         left: usize,
     ) -> Result<(), MmcError> {
-        let blocks_n = len.div_ceil(ESP_BLOCK_SIZE);
-        // SAFETY: `buffer` is A4-aligned and a whole number of blocks long, and `len` is at most
-        // its length.
-        let blocks: &mut [Aligned<A4, [u8; ESP_BLOCK_SIZE]>] = unsafe {
-            core::slice::from_raw_parts_mut(
-                core::ptr::from_mut(buffer).cast::<Aligned<A4, [u8; ESP_BLOCK_SIZE]>>(),
-                blocks_n,
-            )
-        };
+        let blocks = blocks_mut(buffer, len).ok_or(MmcError::BlockSize)?;
         self.card
             .cmd53_read_blocks::<ESP_BLOCK_SIZE>(SDIO_FUNC_1, true, data_address(left), blocks)
-            .await?;
-        Ok(())
+            .await
     }
 
-    /// Write `len` bytes via a single block-only CMD53. The tail up to the block
-    /// boundary is sent from `buffer` and discarded by the co-processor.
+    /// Writes `len` bytes, rounded up to whole blocks; the co-processor discards the tail.
     async fn write_data(&mut self, buffer: &Aligned<A4, [u8]>, len: usize) -> Result<(), MmcError> {
-        let blocks_n = len.div_ceil(ESP_BLOCK_SIZE);
-        // SAFETY: see `read_data`.
-        let blocks: &[Aligned<A4, [u8; ESP_BLOCK_SIZE]>] = unsafe {
-            core::slice::from_raw_parts(
-                core::ptr::from_ref(buffer).cast::<Aligned<A4, [u8; ESP_BLOCK_SIZE]>>(),
-                blocks_n,
-            )
-        };
+        let blocks = blocks(buffer, len).ok_or(MmcError::BlockSize)?;
         self.card
             .cmd53_write_blocks::<ESP_BLOCK_SIZE>(SDIO_FUNC_1, true, data_address(len), blocks)
-            .await?;
-        Ok(())
+            .await
     }
 
     fn has_credit(&self, buf_needed: u32) -> bool {
@@ -173,33 +161,19 @@ impl<B: MmcBus> SdioInterface<B> {
     ) -> Result<(), MmcError> {
         let buf_needed = word(tx_len.div_ceil(ESP_RX_BUFFER_SIZE));
 
-        let mut retries = 50_u8;
-        loop {
-            if self.has_credit(buf_needed) {
-                break;
+        for _ in 0..CREDIT_RETRIES {
+            if !self.has_credit(buf_needed) {
+                let token = self.read_reg32(REG_TOKEN_RDATA).await?;
+                self.cached_granted = (token >> 16) & ESP_TX_BUFFER_MASK;
             }
-
-            let token = self.read_reg32(REG_TOKEN_RDATA).await?;
-            self.cached_granted = (token >> 16) & ESP_TX_BUFFER_MASK;
-
             if self.has_credit(buf_needed) {
-                break;
-            }
-            retries -= 1;
-            if retries == 0 {
+                self.write_data(buffer, tx_len).await?;
+                self.tx_buf_count = (self.tx_buf_count + buf_needed) % ESP_TX_BUFFER_MAX;
                 return Ok(());
             }
             Timer::after_millis(1).await;
         }
-        // The block-only write rounds up to a whole block, so guard the padded length.
-        if tx_len.div_ceil(ESP_BLOCK_SIZE) * ESP_BLOCK_SIZE > buffer.len() {
-            return Ok(());
-        }
-
-        self.write_data(buffer, tx_len).await?;
-        self.tx_buf_count = (self.tx_buf_count + buf_needed) % ESP_TX_BUFFER_MAX;
-
-        Ok(())
+        Err(MmcError::Busy)
     }
 
     async fn read_packet(&mut self, buffer: &mut Aligned<A4, [u8]>) -> Result<usize, MmcError> {
@@ -209,8 +183,9 @@ impl<B: MmcBus> SdioInterface<B> {
             self.write_reg32(REG_INT_CLR, interrupts).await?;
         }
         let raw = raw & ESP_LEN_MASK;
-        // All ones is a failed bus read, not a length.
-        if interrupts & NEW_PACKET_INT == 0 || raw == ESP_LEN_MASK {
+        // All ones is a failed bus read, not a length. The count, not the interrupt, says whether
+        // a packet came: the clear above can hide one that arrived after the status read.
+        if raw == ESP_LEN_MASK {
             return Ok(0);
         }
         let len = (raw.wrapping_sub(self.rx_byte_count) & ESP_LEN_MASK) as usize;
@@ -227,20 +202,16 @@ impl<B: MmcBus> SdioInterface<B> {
         Ok(if len <= buffer.len() { len } else { 0 })
     }
 
-    /// Initialize or re-initialize the transport.
     pub async fn init(&mut self) {
         while self.try_init().await.is_err() {
             Timer::after_millis(100).await;
         }
     }
 
-    /// Wait for the co-processor to have data to send.
     pub async fn wait_for_ready(&mut self) {
         self.card.wait_for_event().await.ok();
     }
 
-    /// Writes `tx_len` bytes of `buffer`, if any, then reads a packet into it and returns its
-    /// length, or 0 for none.
     pub async fn transfer(
         &mut self,
         buffer: &mut Aligned<A4, [u8]>,

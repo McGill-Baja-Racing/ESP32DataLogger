@@ -32,7 +32,6 @@ impl Shared {
         }))
     }
 
-    /// Hands `request` to the runner and waits for the response.
     pub fn ioctl(&self, request: Vec<u8>) -> impl Future<Output = Vec<u8>> + '_ {
         {
             let mut this = self.0.borrow_mut();
@@ -64,10 +63,6 @@ impl Shared {
                 Poll::Pending
             }
         })
-    }
-
-    pub fn ioctl_cancel(&self) {
-        self.0.borrow_mut().ioctl = Ioctl::Idle;
     }
 
     /// Drops a response nobody waits for.

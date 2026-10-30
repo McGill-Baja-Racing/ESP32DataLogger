@@ -120,11 +120,17 @@ Tests:
 
 - **Install:** `rustup`, git, LLVM (clang and libclang: `brew install llvm`, `winget install
   LLVM.LLVM` or `apt install clang libclang-dev`) and `cargo install espflash@4.6.0 --locked`.
-  Rust 1.99.1 is pinned in `kernel/rust-toolchain.toml` and every crate exactly.
-- **Build:** in `kernel/`, `cargo build --release --features <node>`, with one of `brake`, `mpu`,
-  `encoder`, `engine`, `engine-bench` and `adc`. `kernel/build.rs` compiles `sensor-node/src`
-  with that node's defines and links it into the kernel. Without a node, only `cargo check` and
-  `cargo clippy` work.
+  Rust 1.99.1 is pinned in `rust-toolchain.toml` and every crate exactly.
+- **Build:** inside each firmware's folder, `cargo build --release --features <firmware>`:
+
+  | Folder | Firmware |
+  |---|---|
+  | `sensor-node/` | `brake`, `mpu`, `encoder`, `engine`, `engine-bench`, `adc` |
+  | `simulators/engine-rpm/`, `simulators/wheel-rpm/` | `engine-rpm-sim`, `wheel-rpm-sim` |
+  | `master-node/` | `master`, `master-no-can` |
+
+  `kernel/build.rs` compiles that folder's C with the firmware's defines and links it into the
+  kernel. Without a firmware, only `cargo check` and `cargo clippy` work.
 - **Headers:** on the first build, `kernel/sys/build.rs` fetches ESP-IDF v5.5.5's header folders
   and Espressif's newlib headers with git into cargo's target folder. bindgen and clang read
   them with the same arguments.
@@ -132,12 +138,14 @@ Tests:
   monitor. C and Rust logs are both colored by level; Rust logs through the `log` crate and
   `esp-println`.
 - **Editor:** `baja-daq.code-workspace` has a build task per node that flashes it. clangd reads the
-  last build's `kernel/target/compile_commands.json` through `sensor-node/.clangd`.
+  last build's `target/compile_commands.json` through `sensor-node/.clangd`.
 
 ```
+Cargo.toml             workspace; lints; profiles
+.cargo/config.toml     default target (C3), espflash runners
+master-node/.cargo/config.toml  target (P4)
 kernel/
-  Cargo.toml           bin crate; chip and node features; workspace root; lints
-  .cargo/config.toml   default target (C3), espflash runners
+  Cargo.toml           bin crate; node features; chip from the target
   build.rs             compiles the node's C with clang; links it and esp-hal's linker script
   no_c.x               the error a build without a node gives
   include/             each chip's sdkconfig.h; unsupported.h

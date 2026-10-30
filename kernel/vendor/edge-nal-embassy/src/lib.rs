@@ -1,8 +1,4 @@
 #![no_std]
-#![allow(async_fn_in_trait)]
-#![warn(clippy::large_futures)]
-#![allow(clippy::uninlined_format_args)]
-#![allow(unknown_lints)]
 
 use core::cell::{Cell, UnsafeCell};
 use core::mem::MaybeUninit;
@@ -11,29 +7,16 @@ use core::ptr::NonNull;
 
 use embassy_net::{IpAddress, IpEndpoint, IpListenEndpoint};
 
-#[cfg(feature = "dns")]
-pub use dns::*;
-#[cfg(feature = "tcp")]
 pub use tcp::*;
-#[cfg(feature = "udp")]
-pub use udp::*;
 
 use crate::sealed::SealedDynPool;
 
-// This mod MUST go first, so that the others see its macros.
-pub(crate) mod fmt;
-
-#[cfg(feature = "dns")]
-mod dns;
-#[cfg(feature = "tcp")]
 mod tcp;
-#[cfg(feature = "udp")]
-mod udp;
 
 /// A const-generics-erased trait variant of `Pool`
 ///
-/// Allows for types like `Tcp`, `TcpSocket`, `Udp` and `UdpSocket` that do reference the
-/// pool to erase the const-generics set on the Pool object type when used for TCP and UDP buffers.
+/// Allows for types like `Tcp` and `TcpSocket` that do reference the
+/// pool to erase the const-generics set on the Pool object type when used for TCP buffers.
 ///
 /// To erase the type of the pool itself, these types use `&dyn DynPool<B>`
 pub trait DynPool<B>: SealedDynPool<B> {}
@@ -78,9 +61,15 @@ pub struct Pool<T, const N: usize> {
 }
 
 impl<T, const N: usize> Pool<T, N> {
-    #[allow(clippy::declare_interior_mutable_const)]
+    #[expect(
+        clippy::declare_interior_mutable_const,
+        reason = "array repeat expressions need a const"
+    )]
     const VALUE: Cell<bool> = Cell::new(false);
-    #[allow(clippy::declare_interior_mutable_const)]
+    #[expect(
+        clippy::declare_interior_mutable_const,
+        reason = "array repeat expressions need a const"
+    )]
     const UNINIT: UnsafeCell<MaybeUninit<T>> = UnsafeCell::new(MaybeUninit::uninit());
 
     /// Create a new pool.
@@ -89,6 +78,12 @@ impl<T, const N: usize> Pool<T, N> {
             used: [Self::VALUE; N],
             data: [Self::UNINIT; N],
         }
+    }
+}
+
+impl<T, const N: usize> Default for Pool<T, N> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -130,14 +125,6 @@ pub(crate) fn to_net_socket(socket: IpEndpoint) -> SocketAddr {
     SocketAddr::new(socket.addr.into(), socket.port)
 }
 
-/// Convert an embassy-net `IpListenEndpoint` to a standard library `SocketAddr`.
-pub(crate) fn to_emb_socket(socket: SocketAddr) -> Option<IpEndpoint> {
-    Some(IpEndpoint {
-        addr: to_emb_addr(socket.ip())?,
-        port: socket.port(),
-    })
-}
-
 /// Convert a standard library `SocketAddr` to an embassy-net `IpListenEndpoint`.
 pub(crate) fn to_emb_bind_socket(socket: SocketAddr) -> Option<IpListenEndpoint> {
     let addr = if socket.ip().is_unspecified() {
@@ -155,11 +142,7 @@ pub(crate) fn to_emb_bind_socket(socket: SocketAddr) -> Option<IpListenEndpoint>
 /// Convert an embassy-net `IpAddress` to a standard library `IpAddr`.
 pub(crate) fn to_emb_addr(addr: IpAddr) -> Option<IpAddress> {
     match addr {
-        #[cfg(feature = "proto-ipv4")]
         IpAddr::V4(addr) => Some(addr.into()),
-        #[cfg(feature = "proto-ipv6")]
-        IpAddr::V6(addr) => Some(addr.into()),
-        #[allow(unreachable_patterns)]
-        _ => None,
+        IpAddr::V6(_) => None,
     }
 }

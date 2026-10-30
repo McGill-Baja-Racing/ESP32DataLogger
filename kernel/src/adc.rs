@@ -27,6 +27,11 @@ type Regs = ADC1<'static>;
 
 const ATTENUATION: Attenuation = Attenuation::_11dB;
 
+const LAST_CHANNEL: u8 = 4;
+
+/// The largest 12-bit reading.
+const MAX_RAW: u16 = 0xfff;
+
 static TAKEN: AtomicBool = AtomicBool::new(false);
 
 struct Unit {
@@ -35,17 +40,17 @@ struct Unit {
     init_code: u16,
 }
 
-sys::c_handle!(Unit, adc_oneshot_unit_handle_t);
+sys::c_handle!(Unit, sys::adc_oneshot_unit_handle_t);
 
 struct Calibration(AdcCalCurve<Regs>);
 
-sys::c_handle!(Calibration, adc_cali_handle_t);
+sys::c_handle!(Calibration, sys::adc_cali_handle_t);
 
 /// ADC1 channel `n` is GPIO`n` on the C3.
 fn channel(chan: adc_channel_t) -> Result<u8, esp_err_t> {
     u8::try_from(chan.0)
         .ok()
-        .filter(|&number| number <= 4)
+        .filter(|&number| number <= LAST_CHANNEL)
         .ok_or(ESP_ERR_INVALID_ARG)
 }
 
@@ -124,7 +129,7 @@ fn adc_cali_raw_to_voltage(
 ) -> Result<(), esp_err_t> {
     let reading = u16::try_from(raw)
         .ok()
-        .filter(|&reading| reading <= 0xfff)
+        .filter(|&reading| reading <= MAX_RAW)
         .ok_or(ESP_ERR_INVALID_ARG)?;
     voltage.write(calibration.0.adc_val(reading).into());
     Ok(())

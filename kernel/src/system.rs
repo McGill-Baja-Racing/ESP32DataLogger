@@ -2,24 +2,23 @@
 
 use alloc::boxed::Box;
 use core::{
-    cell::Cell,
     ffi::{CStr, c_char, c_int},
+    slice,
 };
 
-use critical_section::Mutex;
 use esp_hal::rng::Rng;
-use esp_radio_rtos_driver::{
-    self as rtos,
-    semaphore::{SemaphoreHandle, SemaphoreKind},
-};
+use esp_radio_rtos_driver as rtos;
 use macros::export;
 use sys::{
     ESP_ERR_INVALID_ARG, ESP_ERR_INVALID_CRC, ESP_ERR_INVALID_RESPONSE, ESP_ERR_INVALID_SIZE,
     ESP_ERR_INVALID_STATE, ESP_ERR_NO_MEM, ESP_ERR_NOT_FOUND, ESP_ERR_NOT_SUPPORTED,
-    ESP_ERR_TIMEOUT, ESP_FAIL, ESP_OK, esp_err_t, esp_log_config_t,
+    ESP_ERR_TIMEOUT, ESP_FAIL, ESP_OK, SOC_GPIO_PIN_COUNT, esp_err_t, esp_log_config_t,
 };
 
-use crate::chip;
+use crate::{
+    chip,
+    rtos::{Global, Locked},
+};
 
 /// Only the codes the kernel and firmware return; the chip's own are `chip::error_name`.
 fn error_name(code: esp_err_t) -> &'static CStr {
@@ -81,22 +80,59 @@ fn esp_random() -> u32 {
 }
 
 /// Keeps each task's log line whole with interrupts on, like ESP-IDF's stdout lock.
-static LOG_LOCK: Mutex<Cell<Option<&'static SemaphoreHandle>>> = Mutex::new(Cell::new(None));
+static LOG_LOCK: Global<Locked<()>> = Global::new();
 
 pub fn init() {
-    let lock = Box::leak(Box::new(SemaphoreHandle::new(SemaphoreKind::Mutex)));
-    critical_section::with(|cs| LOG_LOCK.borrow(cs).set(Some(lock)));
+    LOG_LOCK.set(Box::leak(Box::new(Locked::new(()))));
 }
 
-/// Runs `print` so that no other task's text lands in the middle of its output.
 pub fn locked(print: impl FnOnce()) {
-    let lock = critical_section::with(|cs| LOG_LOCK.borrow(cs).get());
-    if let Some(lock) = lock {
-        lock.take(None);
+    match LOG_LOCK.get() {
+        Some(lock) => lock.with(|()| print()),
+        None => print(),
     }
-    print();
-    if let Some(lock) = lock {
-        lock.give();
+}
+
+/// The pin number if the chip has that GPIO, as the drivers' `GPIO_IS_VALID_GPIO` checks.
+pub fn gpio_number(gpio: c_int) -> Result<u8, esp_err_t> {
+    u8::try_from(gpio)
+        .ok()
+        .filter(|&number| i32::from(number) < SOC_GPIO_PIN_COUNT)
+        .ok_or(ESP_ERR_INVALID_ARG)
+}
+
+/// The slice C describes with a pointer and a length, where a length of 0 allows any pointer and
+/// otherwise NULL is `None`.
+///
+/// # Safety
+///
+/// Unless `len` is 0, `ptr` is NULL or points to `len` initialised `T`s that nothing writes for
+/// `'a`.
+pub unsafe fn c_slice<'a, T>(ptr: *const T, len: usize) -> Option<&'a [T]> {
+    if len == 0 {
+        Some(&[])
+    } else if ptr.is_null() {
+        None
+    } else {
+        // SAFETY: as the caller promises.
+        Some(unsafe { slice::from_raw_parts(ptr, len) })
+    }
+}
+
+/// `c_slice` for a buffer C lets the kernel write.
+///
+/// # Safety
+///
+/// Unless `len` is 0, `ptr` is NULL or points to `len` initialised `T`s that nothing else uses
+/// for `'a`.
+pub unsafe fn c_slice_mut<'a, T>(ptr: *mut T, len: usize) -> Option<&'a mut [T]> {
+    if len == 0 {
+        Some(&mut [])
+    } else if ptr.is_null() {
+        None
+    } else {
+        // SAFETY: as the caller promises.
+        Some(unsafe { slice::from_raw_parts_mut(ptr, len) })
     }
 }
 

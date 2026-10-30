@@ -46,12 +46,13 @@
         "problemMatcher": []
       },
       // Ctrl+Shift+B lists them: each builds a node's firmware, flashes it and opens the monitor.
-      { "label": "Flash NodeBrake", "type": "shell", "command": "cargo run --release --features brake", "options": { "cwd": "${workspaceFolder:kernel}" }, "group": "build", "problemMatcher": [] },
-      { "label": "Flash NodeMPU", "type": "shell", "command": "cargo run --release --features mpu", "options": { "cwd": "${workspaceFolder:kernel}" }, "group": "build", "problemMatcher": [] },
-      { "label": "Flash NodeEncoder", "type": "shell", "command": "cargo run --release --features encoder", "options": { "cwd": "${workspaceFolder:kernel}" }, "group": "build", "problemMatcher": [] },
-      { "label": "Flash NodeEngine", "type": "shell", "command": "cargo run --release --features engine", "options": { "cwd": "${workspaceFolder:kernel}" }, "group": "build", "problemMatcher": [] },
-      { "label": "Flash NodeEngineBench", "type": "shell", "command": "cargo run --release --features engine-bench", "options": { "cwd": "${workspaceFolder:kernel}" }, "group": "build", "problemMatcher": [] },
-      { "label": "Flash NodeADC", "type": "shell", "command": "cargo run --release --features adc", "options": { "cwd": "${workspaceFolder:kernel}" }, "group": "build", "problemMatcher": [] }
+      { "label": "Flash NodeBrake", "type": "shell", "command": "cargo run --release --features brake", "options": { "cwd": "${workspaceFolder:sensor-node}" }, "group": "build", "problemMatcher": [] },
+      { "label": "Flash NodeMPU", "type": "shell", "command": "cargo run --release --features mpu", "options": { "cwd": "${workspaceFolder:sensor-node}" }, "group": "build", "problemMatcher": [] },
+      { "label": "Flash NodeEncoder", "type": "shell", "command": "cargo run --release --features encoder", "options": { "cwd": "${workspaceFolder:sensor-node}" }, "group": "build", "problemMatcher": [] },
+      { "label": "Flash NodeEngine", "type": "shell", "command": "cargo run --release --features engine", "options": { "cwd": "${workspaceFolder:sensor-node}" }, "group": "build", "problemMatcher": [] },
+      { "label": "Flash NodeEngineBench", "type": "shell", "command": "cargo run --release --features engine-bench", "options": { "cwd": "${workspaceFolder:sensor-node}" }, "group": "build", "problemMatcher": [] },
+      { "label": "Flash NodeADC", "type": "shell", "command": "cargo run --release --features adc", "options": { "cwd": "${workspaceFolder:sensor-node}" }, "group": "build", "problemMatcher": [] },
+      { "label": "Flash Master", "type": "shell", "command": "cargo run --release --features master", "options": { "cwd": "${workspaceFolder:master-node}" }, "group": "build", "problemMatcher": [] }
     ]
   },
   "extensions": {
