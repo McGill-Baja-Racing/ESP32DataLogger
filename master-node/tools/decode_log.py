@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import ctypes
 import struct
 import sys
 from pathlib import Path
@@ -41,8 +42,9 @@ NODE_EVENT_BASE = 0x0E0
 NODE_DIAGNOSTICS_BASE = 0x0F0
 NODE_SLOT_COUNT = 7
 HEALTH_FAULT_COUNT = 17
-# Health subjects for the master-only GPS IDs 0x700-0x702.
+# The 8-bit event subject holds the master-only GPS IDs 0x700-0x702 as 0x70-0x72.
 HEALTH_SUBJECT_GPS_BASE = 0x70
+HEALTH_EVENT_COUNT_MAX = 0x1FF
 HEALTH_CODE_NAMES = [
     "sensor_init", "sensor_read", "sensor_dead", "samples_missed", "samples_dropped",
     "bad_timestamp", "no_time_sync", "can_tx", "can_rx_overflow", "can_no_ack",
@@ -66,43 +68,73 @@ NODE_NAMES = [
 ]
 
 
+# Payloads of node_status_frame_t, health_event_frame_t and node_diagnostics_frame_t in app_protocol.h.
+class NodeStatus(ctypes.LittleEndianStructure):
+    _fields_ = [
+        ("faults", ctypes.c_uint32, 24),
+        ("health", ctypes.c_uint32, 2),
+        ("mode", ctypes.c_uint32, 1),
+    ]
+
+
+class HealthEvent(ctypes.LittleEndianStructure):
+    _fields_ = [
+        ("code", ctypes.c_uint32, 5),
+        ("error", ctypes.c_uint32, 4),
+        ("subject", ctypes.c_uint32, 8),
+        ("sequence", ctypes.c_uint32, 6),
+        ("count", ctypes.c_uint32, 9),
+    ]
+
+
+class NodeDiagnostics(ctypes.LittleEndianStructure):
+    _fields_ = [
+        ("tx_errors", ctypes.c_uint8),
+        ("rx_errors", ctypes.c_uint8),
+        ("resets", ctypes.c_uint8),
+        ("reset_reason", ctypes.c_uint8),
+    ]
+
+
 def name_or_unknown(names: list[str], index: int) -> str:
     return names[index] if index < len(names) else "unknown"
 
 
+def subject_can_id(subject: int) -> int:
+    if HEALTH_SUBJECT_GPS_BASE <= subject <= HEALTH_SUBJECT_GPS_BASE + 2:
+        return 0x700 + (subject - HEALTH_SUBJECT_GPS_BASE)
+    return subject
+
+
 def describe_health(can_id: int, packed: int) -> tuple[str, str, str] | None:
     """Return (signal, node, detail) for a status, event or diagnostics frame, else None."""
+    payload = (packed & 0xFFFFFFFF).to_bytes(4, "little")
     if NODE_STATUS_BASE <= can_id < NODE_STATUS_BASE + NODE_SLOT_COUNT:
         node_id = can_id - NODE_STATUS_BASE
-        faults = packed & 0xFFFFFF
-        words = [
-            HEALTH_NAMES[packed >> 24 & 0x3],
-            "recording" if packed >> 26 & 1 else "idle",
-        ]
-        words += [HEALTH_CODE_NAMES[f] for f in range(HEALTH_FAULT_COUNT) if faults >> f & 1]
+        status = NodeStatus.from_buffer_copy(payload)
+        words = [HEALTH_NAMES[status.health], "recording" if status.mode else "idle"]
+        words += [HEALTH_CODE_NAMES[f] for f in range(HEALTH_FAULT_COUNT) if status.faults >> f & 1]
         signal = "node_status"
     elif NODE_EVENT_BASE <= can_id < NODE_EVENT_BASE + NODE_SLOT_COUNT:
         node_id = can_id - NODE_EVENT_BASE
-        code, error = packed & 0x1F, packed >> 5 & 0xF
-        subject, count = packed >> 9 & 0xFF, packed >> 23 & 0x1FF
-        if code == HEALTH_CODE_NAMES.index("node_offline"):
-            words = ["node_offline"] + [NODE_NAMES[n] for n in range(NODE_SLOT_COUNT) if subject >> n & 1]
+        event = HealthEvent.from_buffer_copy(payload)
+        if event.code == HEALTH_CODE_NAMES.index("node_offline"):
+            words = ["node_offline"] + [NODE_NAMES[n] for n in range(NODE_SLOT_COUNT) if event.subject >> n & 1]
         else:
-            if HEALTH_SUBJECT_GPS_BASE <= subject <= HEALTH_SUBJECT_GPS_BASE + 2:
-                subject += 0x700 - HEALTH_SUBJECT_GPS_BASE
             words = [
-                name_or_unknown(HEALTH_CODE_NAMES, code),
-                f"subject 0x{subject:02X}",
-                f"count {count}{'+' if count == 0x1FF else ''}",
-                name_or_unknown(HEALTH_ERROR_NAMES, error),
+                name_or_unknown(HEALTH_CODE_NAMES, event.code),
+                f"subject 0x{subject_can_id(event.subject):02X}",
+                f"count {event.count}{'+' if event.count == HEALTH_EVENT_COUNT_MAX else ''}",
+                name_or_unknown(HEALTH_ERROR_NAMES, event.error),
             ]
         signal = "health_event"
     elif NODE_DIAGNOSTICS_BASE <= can_id < NODE_DIAGNOSTICS_BASE + NODE_SLOT_COUNT:
         node_id = can_id - NODE_DIAGNOSTICS_BASE
-        tx_errors, rx_errors, resets, reason = (packed >> (8 * i) & 0xFF for i in range(4))
+        diagnostics = NodeDiagnostics.from_buffer_copy(payload)
         words = [
-            f"tx_errors {tx_errors}", f"rx_errors {rx_errors}", f"resets {resets}",
-            f"last_reset {name_or_unknown(RESET_NAMES, reason)}",
+            f"tx_errors {diagnostics.tx_errors}", f"rx_errors {diagnostics.rx_errors}",
+            f"resets {diagnostics.resets}",
+            f"last_reset {name_or_unknown(RESET_NAMES, diagnostics.reset_reason)}",
         ]
         signal = "node_diagnostics"
     else:
