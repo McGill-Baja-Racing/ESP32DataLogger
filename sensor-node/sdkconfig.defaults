@@ -1,0 +1,4 @@
+# A new image boots once on trial and reverts unless it confirms itself.
+CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
+# Rebuilding the same commit must give the same image hash, or an update reflashes it.
+# CONFIG_APP_COMPILE_TIME_DATE is not set

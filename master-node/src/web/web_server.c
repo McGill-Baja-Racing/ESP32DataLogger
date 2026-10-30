@@ -8,6 +8,7 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <time.h>
+#include <unistd.h>
 
 #include "app/app_control.h"
 #include "esp_event.h"
@@ -22,12 +23,15 @@
 #include "logger/data_logger.h"
 #include "live/live_data.h"
 #include "protocol/app_protocol.h"
+#include "update/firmware_update.h"
 #include "lwip/ip4_addr.h"
 #include "nvs_flash.h"
 
 #define AP_SSID "BajaDAQ"
 #define SD_ROOT "/sdcard"
 #define DOWNLOAD_CHUNK_SIZE 4096
+#define FIRMWARE_UPLOAD_PATH FIRMWARE_DIR "/upload.tmp"
+#define FIRMWARE_MAX_BYTES (4 * 1024 * 1024)
 
 typedef struct {
     char name[DATA_LOGGER_FILENAME_MAX + 1];
@@ -620,11 +624,156 @@ static esp_err_t live_stop_handler(httpd_req_t *request)
     httpd_resp_set_type(request, "application/json");
     return httpd_resp_sendstr(request, "{\"live_enabled\":false}");
 }
+static esp_err_t firmware_status_handler(httpd_req_t *request)
+{
+    firmware_update_status_t status;
+    firmware_update_get_status(&status);
+    char body[2048];
+    int length = snprintf(body, sizeof(body),
+                          "{\"updating\":%s,\"target\":%d,\"percent\":%u,\"slots\":{",
+                          app_control_firmware_busy() ? "true" : "false",
+                          status.target, status.percent);
+    for (unsigned int id = 0; id < CAN_NODE_SLOT_COUNT; id++) {
+        if (!firmware_update_is_slot(id)) continue;
+        const firmware_slot_status_t *slot = &status.slots[id];
+        length += snprintf(body + length, sizeof(body) - length,
+                           "%s\"%u\":{\"known\":%s,\"hash\":\"%s\",\"on_trial\":%s,"
+                           "\"needs_update\":%s,\"image\":%s,\"result\":\"%s\"}",
+                           id == 0 ? "" : ",", id, slot->known ? "true" : "false", slot->hash,
+                           slot->on_trial ? "true" : "false",
+                           slot->needs_update ? "true" : "false",
+                           slot->image ? "true" : "false", slot->result ? slot->result : "");
+        if (length >= (int)sizeof(body)) {
+            return send_json_error(request, "500 Internal Server Error",
+                                   "Firmware status too large");
+        }
+    }
+    if (length + 3 > (int)sizeof(body)) {
+        return send_json_error(request, "500 Internal Server Error",
+                               "Firmware status too large");
+    }
+    strcpy(body + length, "}}");
+    httpd_resp_set_type(request, "application/json");
+    httpd_resp_set_hdr(request, "Cache-Control", "no-store");
+    return httpd_resp_sendstr(request, body);
+}
+
+static bool firmware_files_locked(void)
+{
+    return data_logger_state() != LOGGER_IDLE || app_control_firmware_busy();
+}
+
+static esp_err_t firmware_busy_error(httpd_req_t *request)
+{
+    return send_json_error(request, "409 Conflict", "Firmware update in progress");
+}
+
+static const char *receive_firmware(httpd_req_t *request)
+{
+    if (mkdir(FIRMWARE_DIR, 0775) != 0 && errno != EEXIST) {
+        return "Unable to create the firmware folder";
+    }
+    char *buffer = malloc(DOWNLOAD_CHUNK_SIZE);
+    FILE *file = buffer ? fopen(FIRMWARE_UPLOAD_PATH, "wb") : NULL;
+    if (!file) {
+        free(buffer);
+        return "Unable to write the SD card";
+    }
+    size_t remaining = request->content_len;
+    const char *failure = NULL;
+    while (remaining > 0 && !failure) {
+        int received = httpd_req_recv(request, buffer,
+                                      remaining < DOWNLOAD_CHUNK_SIZE ? remaining
+                                                                      : DOWNLOAD_CHUNK_SIZE);
+        if (received == HTTPD_SOCK_ERR_TIMEOUT) continue;
+        if (received <= 0) {
+            failure = "Upload interrupted";
+        } else if (fwrite(buffer, 1, received, file) != (size_t)received) {
+            failure = "Unable to write the SD card";
+        } else {
+            remaining -= received;
+        }
+    }
+    free(buffer);
+    bool closed = fclose(file) == 0;
+    if (!failure && !closed) failure = "Unable to write the SD card";
+    if (failure) unlink(FIRMWARE_UPLOAD_PATH);
+    return failure;
+}
+
+static esp_err_t firmware_upload_handler(httpd_req_t *request)
+{
+    if (firmware_files_locked()) return firmware_busy_error(request);
+    if (request->content_len > FIRMWARE_MAX_BYTES) {
+        return send_json_error(request, "413 Content Too Large", "Image is larger than 4 MB");
+    }
+    if (!firmware_update_lock_files()) return firmware_busy_error(request);
+    char stored[24];
+    const char *reason = receive_firmware(request);
+    esp_err_t result = ESP_FAIL;
+    if (!reason) {
+        result = firmware_update_store_image(FIRMWARE_UPLOAD_PATH, stored, sizeof(stored),
+                                             &reason);
+    }
+    firmware_update_unlock_files();
+    if (result == ESP_ERR_INVALID_ARG) {
+        return send_json_error(request, "400 Bad Request", reason);
+    }
+    if (reason || result != ESP_OK) {
+        return send_json_error(request, "500 Internal Server Error",
+                               reason ? reason : "Unable to store the image");
+    }
+    char body[48];
+    snprintf(body, sizeof(body), "{\"stored\":\"%s\"}", stored);
+    httpd_resp_set_type(request, "application/json");
+    return httpd_resp_sendstr(request, body);
+}
+
+static esp_err_t firmware_delete_handler(httpd_req_t *request)
+{
+    char query[32], value[8], *end;
+    if (httpd_req_get_url_query_str(request, query, sizeof(query)) != ESP_OK ||
+        httpd_query_key_value(query, "node", value, sizeof(value)) != ESP_OK) {
+        return send_json_error(request, "400 Bad Request", "Missing node");
+    }
+    unsigned long node = strtoul(value, &end, 10);
+    if (*value == '\0' || *end != '\0' || !firmware_update_is_slot(node)) {
+        return send_json_error(request, "400 Bad Request", "Unknown node");
+    }
+    if (firmware_files_locked() || !firmware_update_lock_files()) {
+        return firmware_busy_error(request);
+    }
+    esp_err_t result = firmware_update_delete_image(node);
+    firmware_update_unlock_files();
+    if (result != ESP_OK) {
+        return send_json_error(request, "404 Not Found", "No image for this node");
+    }
+    httpd_resp_set_type(request, "application/json");
+    return httpd_resp_sendstr(request, "{}");
+}
+
+static esp_err_t firmware_update_handler(httpd_req_t *request)
+{
+    app_control_result_t result = app_control_update_firmware();
+    if (result == APP_CONTROL_CONFLICT) {
+        return send_json_error(request, "409 Conflict", "Stop recording before updating");
+    }
+    if (result == APP_CONTROL_BUSY) {
+        return send_json_error(request, "409 Conflict", "An update is already running");
+    }
+    if (result != APP_CONTROL_OK) {
+        return send_json_error(request, "500 Internal Server Error", "Unable to start the update");
+    }
+    httpd_resp_set_status(request, "202 Accepted");
+    httpd_resp_set_type(request, "application/json");
+    return httpd_resp_sendstr(request, "{}");
+}
+
 static esp_err_t start_http_server(void)
 {
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.stack_size = 8192;
-    config.max_uri_handlers = 12;
+    config.max_uri_handlers = 16;
     esp_err_t error = httpd_start(&server, &config);
     if (error != ESP_OK) return error;
     const httpd_uri_t handlers[] = {
@@ -639,6 +788,10 @@ static esp_err_t start_http_server(void)
         {.uri = "/api/live/start", .method = HTTP_POST, .handler = live_start_handler},
         {.uri = "/api/live/samples", .method = HTTP_GET, .handler = live_samples_handler},
         {.uri = "/api/live/stop", .method = HTTP_POST, .handler = live_stop_handler},
+        {.uri = "/api/firmware", .method = HTTP_GET, .handler = firmware_status_handler},
+        {.uri = "/api/firmware/upload", .method = HTTP_PUT, .handler = firmware_upload_handler},
+        {.uri = "/api/firmware/delete", .method = HTTP_POST, .handler = firmware_delete_handler},
+        {.uri = "/api/firmware/update", .method = HTTP_POST, .handler = firmware_update_handler},
     };
     for (size_t i = 0; i < sizeof(handlers) / sizeof(handlers[0]); i++) {
         error = httpd_register_uri_handler(server, &handlers[i]);

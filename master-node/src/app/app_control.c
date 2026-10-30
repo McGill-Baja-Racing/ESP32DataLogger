@@ -6,12 +6,15 @@
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
+#include "freertos/task.h"
 #include "node_state/node_registry.h"
 #include "live/live_data.h"
 #include "time/time_beacon.h"
+#include "update/firmware_update.h"
 
 static const char *TAG = "AppControl";
 static SemaphoreHandle_t lifecycle_mutex;
+static bool updating;
 
 esp_err_t app_control_init(void)
 {
@@ -28,6 +31,11 @@ app_control_result_t app_control_start_logging(const char *filename)
     if (data_logger_state() != LOGGER_IDLE) {
         ESP_LOGW(TAG, "Start rejected while logger is %s",
                  data_logger_state_name());
+        xSemaphoreGive(lifecycle_mutex);
+        return APP_CONTROL_CONFLICT;
+    }
+    if (updating) {
+        ESP_LOGW(TAG, "Start rejected during firmware update");
         xSemaphoreGive(lifecycle_mutex);
         return APP_CONTROL_CONFLICT;
     }
@@ -90,6 +98,47 @@ app_control_result_t app_control_stop_logging(void)
     }
 #endif
     return APP_CONTROL_OK;
+}
+
+static void update_task(void *argument)
+{
+    (void)argument;
+    firmware_update_run();
+    xSemaphoreTake(lifecycle_mutex, portMAX_DELAY);
+    updating = false;
+    xSemaphoreGive(lifecycle_mutex);
+    vTaskDelete(NULL);
+}
+
+app_control_result_t app_control_update_firmware(void)
+{
+    if (!lifecycle_mutex ||
+        xSemaphoreTake(lifecycle_mutex, pdMS_TO_TICKS(1000)) != pdTRUE) {
+        return APP_CONTROL_FAILED;
+    }
+    if (data_logger_state() != LOGGER_IDLE) {
+        ESP_LOGW(TAG, "Update rejected while logger is %s; run stop first",
+                 data_logger_state_name());
+        xSemaphoreGive(lifecycle_mutex);
+        return APP_CONTROL_CONFLICT;
+    }
+    if (updating) {
+        xSemaphoreGive(lifecycle_mutex);
+        return APP_CONTROL_BUSY;
+    }
+    updating = true;
+    if (xTaskCreate(update_task, "fw_update", 6144, NULL, 5, NULL) != pdPASS) {
+        updating = false;
+        xSemaphoreGive(lifecycle_mutex);
+        return APP_CONTROL_FAILED;
+    }
+    xSemaphoreGive(lifecycle_mutex);
+    return APP_CONTROL_OK;
+}
+
+bool app_control_firmware_busy(void)
+{
+    return updating;
 }
 
 app_control_result_t app_control_start_live_data(uint32_t *token)
