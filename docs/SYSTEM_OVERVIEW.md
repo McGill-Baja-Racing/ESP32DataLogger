@@ -26,7 +26,7 @@ The periodic time message also carries the recording state. A node that reboots 
 
 ## GPS and calendar time
 
-GPS is connected directly to the master. Valid receiver messages provide location and speed. A valid date/time can also anchor elapsed master time to **UTC**, the common calendar time standard used in exported recordings. Before that anchor exists, absolute-time fields are blank. GPS time is not continuously corrected in this implementation; see [absolute time](../master-node/docs/ABSOLUTE_TIME.md) for accuracy limits.
+GPS is connected directly to the master. Valid receiver messages provide location and speed. A valid date/time can also anchor elapsed master time to **UTC**, the common calendar time standard used in exported recordings. Before that anchor exists, absolute-time fields are blank. Later GPS messages keep that anchor corrected gradually, so absolute time never jumps backwards; see [absolute time](../master-node/docs/ABSOLUTE_TIME.md) for accuracy limits.
 
 ## Storage and live display serve different purposes
 

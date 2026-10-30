@@ -24,7 +24,9 @@ An interrupt callback must do bounded work. Receiving a sample and finishing its
 | `logger/data_logger.*` | Session files, log queue, writer, rename | [Recording/storage](logger/README.md) |
 | `storage/sd_card.*` | Physical SD mount | SDMMC wiring/mount flags |
 | `gps/gps_receiver.*`, `gps/rmc_parser.*` | UART reception and GPS decoding | Validated local telemetry |
-| `time/absolute_clock.*`, `time/gps_time.*` | UTC anchor and calendar conversion | Absolute timestamps |
+| `gps/ubx_config.*` | u-blox commands for the 5 Hz update rate, no hardware calls | Receiver setup |
+| `time/absolute_clock.*`, `time/gps_time.*` | UTC clock and calendar conversion | Absolute timestamps |
+| `time/clock_discipline.*` | Gradual GPS UTC correction, no hardware calls | Clock-correction policy |
 | `time/time_beacon.*` | Periodic clock/state broadcast | Node synchronization |
 | `console/serial_console.*` | Text command parsing | Serial commands |
 | `live/live_data.*` | Latest values and viewer lease | Live cache/rate policy |

@@ -69,7 +69,7 @@ Default naming can wait up to three seconds for GPS UTC. [Logger guide](../src/l
 
 ## Time and liveness
 
-Time beacons broadcast master elapsed time and recording state periodically. Node timestamps are translated to this clock before transmission. GPS calendar synchronization is a separate concern; see [Absolute time](ABSOLUTE_TIME.md).
+Time beacons broadcast master elapsed time and recording state periodically. Node timestamps are translated to this clock before transmission. GPS calendar synchronization is a separate concern: `absolute_clock` anchors UTC on the first valid RMC and `clock_discipline` then corrects it gradually from later sentences; see [Absolute time](ABSOLUTE_TIME.md).
 
 The registry receives explicit state transitions, but active-recording liveness comes from sensor traffic. Its expected-node mask selects monitored nodes. Idle operation disables traffic monitoring. Missing data can indicate a sensor/read problem as well as a bus or power failure.
 
