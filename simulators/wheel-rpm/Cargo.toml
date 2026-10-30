@@ -1,0 +1,20 @@
+[package]
+name = "wheel-rpm-sim"
+edition = "2024"
+# Compiles src/ with clang into each binary.
+build = "../../kernel/firmware.rs"
+
+# The `test` crate does not exist for bare-metal targets.
+[[bin]]
+name = "wheel-rpm-sim"
+path = "src/main.rs"
+test = false
+bench = false
+
+[dependencies]
+kernel = { package = "baja-kernel", path = "../../kernel" }
+# Its build script passes the clang arguments to ours.
+sys = { package = "baja-sys", path = "../../kernel/sys" }
+
+[lints]
+workspace = true
