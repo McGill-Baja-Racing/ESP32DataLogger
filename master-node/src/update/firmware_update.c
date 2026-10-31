@@ -272,8 +272,8 @@ static bool is_bin_name(const char *name)
     return name_length >= 4 && strcasecmp(name + name_length - 4, ".bin") == 0;
 }
 
-/* Deletes every image for remove_node (-1: none) and scans the rest. */
-static void scan_images(int remove_node)
+/* Deletes every image for remove_node (-1: none) except keep (NULL: none) and scans the rest. */
+static void scan_images(int remove_node, const char *keep)
 {
     memset(images, 0, sizeof(images));
     DIR *directory = opendir(FIRMWARE_DIR);
@@ -297,7 +297,7 @@ static void scan_images(int remove_node)
             ESP_LOGW(TAG, "Skipping %s: not a firmware image", path);
             continue;
         }
-        if (identity.node_id == remove_node) {
+        if (identity.node_id == remove_node && (!keep || strcasecmp(path, keep) != 0)) {
             unlink(path);
             continue;
         }
@@ -327,6 +327,24 @@ static void image_path(unsigned int node_id, char *path, size_t size)
     }
 }
 
+/* A power cut while storing can leave only the backup; bring it back before it is overwritten. */
+static void restore_backups(void)
+{
+    for (unsigned int id = 0; id < CAN_NODE_SLOT_COUNT; id++) {
+        if (!firmware_update_is_slot(id)) {
+            continue;
+        }
+        char path[96];
+        char backup[100];
+        struct stat info;
+        image_path(id, path, sizeof(path));
+        snprintf(backup, sizeof(backup), "%s.old", path);
+        if (stat(path, &info) != 0 && rename(backup, path) == 0) {
+            ESP_LOGW(TAG, "Restored %s from %s", path, backup);
+        }
+    }
+}
+
 esp_err_t firmware_update_store_image(const char *temp_path, char *stored_name,
                                       size_t stored_name_size, const char **reason)
 {
@@ -342,15 +360,25 @@ esp_err_t firmware_update_store_image(const char *temp_path, char *stored_name,
         unlink(temp_path);
         return ESP_ERR_INVALID_ARG;
     }
-    scan_images(identity.node_id);
     char path[96];
+    char backup[100];
     image_path(identity.node_id, path, sizeof(path));
+    snprintf(backup, sizeof(backup), "%s.old", path);
+    /* FAT cannot rename onto an existing file, so the old image steps aside until the new one
+     * is in place. */
+    unlink(backup);
+    bool had_old = (rename(path, backup) == 0);
     if (rename(temp_path, path) != 0) {
         ESP_LOGE(TAG, "Cannot store %s as %s", temp_path, path);
         unlink(temp_path);
+        if (had_old && rename(backup, path) != 0) {
+            ESP_LOGE(TAG, "Cannot restore %s; old image left as %s", path, backup);
+        }
+        scan_images(-1, NULL);
         return ESP_FAIL;
     }
-    scan_images(-1);
+    unlink(backup);
+    scan_images(identity.node_id, path);
     snprintf(stored_name, stored_name_size, "%s", strrchr(path, '/') + 1);
     return ESP_OK;
 }
@@ -360,7 +388,7 @@ esp_err_t firmware_update_delete_image(unsigned int node_id)
     if (!images[node_id].present) {
         return ESP_ERR_NOT_FOUND;
     }
-    scan_images(node_id);
+    scan_images(node_id, NULL);
     return ESP_OK;
 }
 
@@ -386,6 +414,7 @@ void firmware_update_get_status(firmware_update_status_t *status)
         if (slot->known) {
             format_hash(hash, slot->hash);
             slot->on_trial = id == 0 ? is_on_trial() : node_on_trial(id);
+            slot->wrong_protocol = (id != 0 && nodes[id].frame.protocol_hash != CAN_PROTOCOL_HASH);
             slot->needs_update = needs_update(id, hash);
         }
         slot->image = images[id].present;
@@ -622,7 +651,8 @@ esp_err_t firmware_update_init(void)
             return error;
         }
     }
-    scan_images(-1);
+    restore_backups();
+    scan_images(-1, NULL);
     if (needs_update(0, master_hash())) {
         ESP_LOGW(TAG, "Master needs update: %s differs", images[0].path);
     }
@@ -638,7 +668,7 @@ void firmware_update_run(void)
         results[0] = "failed: firmware files busy";
         return;
     }
-    scan_images(-1);
+    scan_images(-1, NULL);
 
     const char *master_blocked = NULL;
 #if MASTER_CAN_ENABLED

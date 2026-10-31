@@ -13,6 +13,7 @@ typedef struct {
     bool known;
     char hash[2 * NODE_IDENTITY_HASH_LENGTH + 1];
     bool on_trial;
+    bool wrong_protocol;
     bool needs_update;
     bool image;
     const char *result;

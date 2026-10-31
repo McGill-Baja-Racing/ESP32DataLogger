@@ -223,7 +223,7 @@ function renderFirmware(){
   for(const id of Object.keys(f.slots)){
     const s=f.slots[id],row=document.createElement('div');row.className='row';const label=document.createElement('span');
     const status=f.updating&&f.target===Number(id)?`updating ${f.percent}%`:s.result||(!s.image?'no image':!s.known?'not seen':s.needs_update?'needs update':'current');
-    label.textContent=`${id==='0'?'Master':'Node '+id}: ${s.known?s.hash.slice(0,12):'not seen'}${s.on_trial?' (on trial)':''} - ${status}`;row.append(label);
+    label.textContent=`${id==='0'?'Master':'Node '+id}: ${s.known?s.hash.slice(0,12):'not seen'}${s.on_trial?' (on trial)':''}${s.wrong_protocol?' (wrong protocol)':''} - ${status}`;row.append(label);
     if(s.image){const del=document.createElement('button');del.textContent='Delete image';del.disabled=firmwareLock();del.onclick=()=>deleteFirmware(id);row.append(del)}
     box.append(row);
   }
