@@ -58,7 +58,7 @@
       <button id="firmwareUpdate">Update firmware</button>
     </div>
     <div class="muted">Pick the firmware folder at the repo root: every build copies its image there. Bench-only builds are skipped.</div>
-    <div class="muted">Update flashes the nodes whose image differs one at a time (offline nodes, current nodes and images for another protocol are skipped), then the master if its image differs and every node succeeded. The master restarts: rejoin the BajaDAQ Wi-Fi if the page does not reconnect.</div>
+    <div class="muted">Update flashes the nodes whose image differs one at a time (offline nodes, current nodes and images for a protocol the master will not run are skipped), then the master if its image differs and every node succeeded. A master image with a new protocol installs only if every expected node is online, confirmed and has an image for that protocol; nodes then follow the master's protocol on their own. The master restarts: rejoin the BajaDAQ Wi-Fi if the page does not reconnect.</div>
     <div id="firmwareNotice" class="muted"></div><div id="firmwareError" class="error"></div>
   </section>
 
