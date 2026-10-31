@@ -59,6 +59,15 @@ static twai_frame_t tx_frame;
 static uint8_t tx_payload[8];
 static bool tx_pending;
 
+/**
+ * @brief Called by the CAN driver when the bus error state changes.
+ *
+ * Counts each bus-off for recovery_task, so it sees even a short one.
+ * Sets HEALTH_CAN_PASSIVE while the node is error-passive or bus-off.
+ *
+ * @param event Old and new error state.
+ * @return false: no task to wake.
+ */
 static bool state_change_callback(twai_node_handle_t node,
                                   const twai_state_change_event_data_t *event,
                                   void *context)
@@ -74,6 +83,15 @@ static bool state_change_callback(twai_node_handle_t node,
     return false;
 }
 
+/**
+ * @brief Called by the CAN driver on each bus error.
+ *
+ * Counts a missing ACK as HEALTH_CAN_NO_ACK and other errors as
+ * HEALTH_CAN_BUS_ERROR. Lost arbitration is not counted.
+ *
+ * @param event Error flags.
+ * @return false: no task to wake.
+ */
 static bool error_callback(twai_node_handle_t node,
                            const twai_error_event_data_t *event,
                            void *context)
@@ -89,7 +107,15 @@ static bool error_callback(twai_node_handle_t node,
     return false;
 }
 
-/* The hardware resends until success, so a failure is a frame aborted, as at bus-off. */
+/**
+ * @brief Called by the CAN driver when a frame finishes sending.
+ *
+ * The hardware resends until success, so a failure is a frame aborted, as at
+ * bus-off. Each one counts as HEALTH_CAN_TX.
+ *
+ * @param event The frame and whether it was sent.
+ * @return false: no task to wake.
+ */
 static bool tx_done_callback(twai_node_handle_t node,
                              const twai_tx_done_event_data_t *event,
                              void *context)
@@ -102,6 +128,15 @@ static bool tx_done_callback(twai_node_handle_t node,
     return false;
 }
 
+/**
+ * @brief Called by the CAN driver when a frame arrives.
+ *
+ * Copies the frame into rx_queue for dispatch_task. If the queue is full, the
+ * frame is lost and counts as HEALTH_CAN_RX_OVERFLOW.
+ *
+ * @param node Driver handle to read the frame from.
+ * @return true if dispatch_task should run right away.
+ */
 static bool receive_callback(twai_node_handle_t node,
                              const twai_rx_done_event_data_t *event,
                              void *context)
@@ -128,6 +163,15 @@ static bool receive_callback(twai_node_handle_t node,
     return task_woken == pdTRUE;
 }
 
+/**
+ * @brief Check whether a START or STOP command is for this node.
+ *
+ * Byte 0 is the target node ID, or 0xFF for all nodes. A command with no
+ * data is for all nodes.
+ *
+ * @param message Received command.
+ * @return true if this node should act on it.
+ */
 static bool targets_this_node(const can_message_t *message)
 {
     if (message->dlc == 0) {
@@ -137,8 +181,17 @@ static bool targets_this_node(const can_message_t *message)
     return target == NODE_ID || target == 0xFF;
 }
 
-/* Sets *queued once the driver holds the frame: it then goes out after a
- * timeout too, unless bus-off recovery discards it. */
+/**
+ * @brief Send one frame and wait until it is out.
+ *
+ * Shared by can_node_send() and can_node_queue(). Only one frame is in flight
+ * at a time, so it first waits for the previous one. Once the driver holds
+ * the frame, it goes out even after a timeout, unless bus-off recovery
+ * discards it.
+ *
+ * @param queued Set to true once the driver holds the frame.
+ * @return ESP_OK once sent; errors as for can_node_send().
+ */
 static esp_err_t transmit(uint32_t can_id, const uint8_t *payload, uint8_t length,
                           bool *queued)
 {
@@ -228,6 +281,15 @@ void can_node_report_state(node_state_t state, node_state_reason_t reason)
     }
 }
 
+/**
+ * @brief Task that handles master commands from rx_queue.
+ *
+ * A beacon passes the master time to on_time_beacon. If its recording flag
+ * disagrees with the node state, the node starts or stops, so a node that
+ * rebooted mid-run rejoins it. START and STOP call on_start or on_stop only
+ * when the state changes, but every copy is acknowledged, in case an earlier
+ * acknowledgement was lost.
+ */
 static void dispatch_task(void *argument)
 {
     /* This is the single receive-side protocol dispatch point. */
@@ -277,6 +339,11 @@ static void dispatch_task(void *argument)
     }
 }
 
+/**
+ * @brief Name a CAN error state for logs.
+ *
+ * @return "active", "warning", "passive", "bus-off" or "unknown".
+ */
 static const char *state_name(twai_error_state_t state)
 {
     switch (state) {
@@ -288,6 +355,15 @@ static const char *state_name(twai_error_state_t state)
     }
 }
 
+/**
+ * @brief Task that watches CAN errors and recovers from bus-off.
+ *
+ * Every 250 ms it reads the error state and counters, and logs state changes
+ * and new errors, at most once a second. On bus-off it calls on_bus_off,
+ * counts HEALTH_CAN_BUS_OFF and starts recovery, again if another bus-off
+ * happens meanwhile. Recovery waits for the bus to go quiet, warning every
+ * 5 s. Once recovered, it reports the unchanged node state to the master.
+ */
 static void recovery_task(void *argument)
 {
     /* Recovery preserves current_state; only unsent samples are discarded. */

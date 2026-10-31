@@ -13,19 +13,77 @@ typedef struct {
     void (*on_bus_off)(void);
 } can_node_callbacks_t;
 
-/* Initializes TWAI and starts the command-dispatch and recovery tasks. */
+/**
+ * @brief Set up the CAN controller and start the receive and recovery tasks.
+ *
+ * Receives only master commands (0x0A0-0x0A3). Callbacks may be NULL. START,
+ * STOP and beacon callbacks run on the receive task; on_bus_off runs on the
+ * recovery task, which then restarts the bus. Does not send the boot report;
+ * call can_node_report_state() after.
+ *
+ * @param callbacks Copied, so it may live on the caller's stack.
+ * @param boot_reset_reason esp_reset_reason(), sent in the boot state report.
+ * @retval ESP_OK               CAN is running.
+ * @retval ESP_ERR_INVALID_ARG  callbacks is NULL.
+ * @retval ESP_ERR_NO_MEM       The queue, mutex or a task could not be created.
+ * @return Other TWAI driver errors from setup.
+ */
 esp_err_t can_node_init(const can_node_callbacks_t *callbacks,
                         uint8_t boot_reset_reason);
 
-/* Sends one standard CAN frame. The payload is copied by the TWAI driver. */
+/**
+ * @brief Send one standard-ID CAN frame and wait until it is on the bus.
+ *
+ * Safe from any task. One frame is in flight at a time, so this first waits
+ * for the previous one; each wait gives up after 50 ms. A failure is counted
+ * in node health. If the frame was handed to the driver but timed out, it can
+ * still go out later, and is counted only if the driver aborts it.
+ *
+ * @param can_id 11-bit CAN ID.
+ * @param payload Copied; may be NULL when length is 0.
+ * @param length Payload bytes, 0-8.
+ * @retval ESP_OK               The frame was sent.
+ * @retval ESP_ERR_INVALID_ARG  length > 8, or payload is NULL with length > 0.
+ * @retval ESP_ERR_TIMEOUT      A wait gave up: another task was sending, or
+ *                              the previous frame or this one was not sent.
+ * @return Other TWAI driver errors, for example while the bus is off.
+ */
 esp_err_t can_node_send(uint32_t can_id, const uint8_t *payload, uint8_t length);
 
-/* Like can_node_send(), but returns ESP_OK once the driver holds the frame,
- * even if the bus has not taken it yet. */
+/**
+ * @brief Send one frame like can_node_send(), but succeed once the driver has it.
+ *
+ * Still waits up to 50 ms for the frame to go out, but a timeout after the
+ * driver took it is not an error. Use where a later send is acceptable.
+ *
+ * @param can_id 11-bit CAN ID.
+ * @param payload Copied; may be NULL when length is 0.
+ * @param length Payload bytes, 0-8.
+ * @return ESP_OK if the driver holds the frame, otherwise the can_node_send()
+ *         error.
+ */
 esp_err_t can_node_queue(uint32_t can_id, const uint8_t *payload, uint8_t length);
 
-/* Reads the TWAI error counters, capped at 255; zeros if they cannot be read. */
+/**
+ * @brief Read the CAN transmit and receive error counters.
+ *
+ * Each is capped at 255. Both are 0 before can_node_init() or if the read
+ * fails.
+ *
+ * @param tx_errors Set to the transmit error count.
+ * @param rx_errors Set to the receive error count.
+ */
 void can_node_error_counts(uint8_t *tx_errors, uint8_t *rx_errors);
 
-/* Sends the three-byte state acknowledgement defined in app_protocol.h. */
+/**
+ * @brief Record this node's state and report it to the master.
+ *
+ * Sends the 3-byte state frame on CAN_ID_NODE_STATE_BASE + NODE_ID: state,
+ * reason, and the reset reason for NODE_STATE_REASON_BOOT (else 0). The
+ * recorded state decides whether a later START, STOP or beacon calls the
+ * start/stop callbacks. A failed send is logged and not retried.
+ *
+ * @param state State to record and send.
+ * @param reason Why the state was reported.
+ */
 void can_node_report_state(node_state_t state, node_state_reason_t reason);
