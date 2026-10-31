@@ -720,7 +720,7 @@ static const char *receive_firmware(httpd_req_t *request)
         }
     }
     free(buffer);
-    bool closed = fclose(file) == 0;
+    bool closed = (fclose(file) == 0);
     if (!failure && !closed) failure = "Unable to write the SD card";
     if (failure) unlink(FIRMWARE_UPLOAD_PATH);
     return failure;
