@@ -109,6 +109,7 @@ void app_main(void)
         vTaskDelay(pdMS_TO_TICKS(50));
     }
     ESP_ERROR_CHECK_WITHOUT_ABORT(firmware_update_request_identity());
+    ESP_ERROR_CHECK(firmware_update_start_announcing());
 
     serial_console_callbacks_t console = {
         .start = start_logging,
