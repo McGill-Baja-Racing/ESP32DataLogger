@@ -54,7 +54,17 @@ static void arm_schedule(void)
     }
 }
 
-/* A failed sensor is reported by node health; the others keep working. */
+/**
+ * @brief Initialize one sensor and record whether it is ready.
+ *
+ * Sets up the shared ADC unit on brake/ADC nodes, then runs the sensor's init
+ * callback. Stores the result in sensor_ready[i], reports it to node health,
+ * and logs it. Runs at boot and again on each start until it succeeds; a
+ * failed sensor is only skipped. adc_input_init() is idempotent, so calling it
+ * per sensor is safe.
+ *
+ * @param i Index into sensors[].
+ */
 static void init_sensor(size_t i)
 {
     esp_err_t error = ESP_OK;
@@ -64,7 +74,7 @@ static void init_sensor(size_t i)
     if (error == ESP_OK && sensors[i].init) {
         error = sensors[i].init(&sensors[i]);
     }
-    sensor_ready[i] = error == ESP_OK;
+    sensor_ready[i] = (error == ESP_OK);
     node_health_sensor_init(i, sensors[i].can_id, error);
     ESP_LOGI(TAG, "%s: CAN=0x%03" PRIX32 " period=%" PRIu32 "us init=%s",
              sensors[i].name, sensors[i].can_id, sensors[i].period_us,
@@ -116,6 +126,14 @@ bool sampler_is_active(void)
     return active;
 }
 
+/**
+ * @brief Queue a sample for send_task without blocking.
+ *
+ * If the queue is full, drops the oldest sample, counts it as dropped in node
+ * health, and queues this one in its place.
+ *
+ * @param sample Copied into the queue.
+ */
 static void enqueue_latest(sample_t *sample)
 {
     if (xQueueSend(sample_queue, sample, 0) == pdTRUE) {
@@ -130,25 +148,36 @@ static void enqueue_latest(sample_t *sample)
 }
 
 #if NODE_FIXED_ENGINE_CONFIG
+/**
+ * @brief Turn one engine event into spark and RPM samples and queue them.
+ *
+ * A spark queues a spark sample (value 1), and an RPM sample when RPM > 0. A
+ * stop event queues only its RPM 0 sample. Both samples are queued or neither:
+ * if the queue lacks room, the event is dropped and each sample counts as
+ * dropped in node health. In serial test builds only the RPM sample is queued,
+ * through enqueue_latest(). A negative timestamp counts as a bad timestamp.
+ *
+ * @param event Event from engine_rpm_next_event().
+ */
 static void enqueue_engine_event(const engine_event_t *event)
 {
-    sample_t sample = {
+    sample_t rpm = {
         .sensor_name = "engine_rpm",
         .can_id = CAN_ID_ENGINE_RPM,
         .timestamp_ms = time_sync_timestamp_ms_at(event->timestamp_us),
         .value = event->engine_rpm,
     };
-    if (sample.timestamp_ms < 0) {
+    if (rpm.timestamp_ms < 0) {
         node_health_count(HEALTH_BAD_TIMESTAMP, 1, CAN_ID_ENGINE_RPM, ESP_OK);
     }
-    bool has_rpm = !event->spark || event->engine_rpm > 0;
+    bool send_rpm = !event->spark || event->engine_rpm > 0;
 #if SENSOR_SERIAL_TEST
     /* Bench output uses the same value and throttling as every sensor. */
-    if (has_rpm) {
-        enqueue_latest(&sample);
+    if (send_rpm) {
+        enqueue_latest(&rpm);
     }
 #else
-    UBaseType_t count = (event->spark ? 1 : 0) + (has_rpm ? 1 : 0);
+    UBaseType_t count = (event->spark ? 1 : 0) + (send_rpm ? 1 : 0);
     /* This task is the only producer. Reserve room for the whole event so
      * queue pressure cannot split a spark from its RPM measurement. */
     if (uxQueueSpacesAvailable(sample_queue) < count) {
@@ -157,7 +186,7 @@ static void enqueue_engine_event(const engine_event_t *event)
             node_health_count(HEALTH_SAMPLES_DROPPED, 1,
                               CAN_ID_ENGINE_SPARK, ESP_OK);
         }
-        if (has_rpm) {
+        if (send_rpm) {
             node_health_count(HEALTH_SAMPLES_DROPPED, 1,
                               CAN_ID_ENGINE_RPM, ESP_OK);
         }
@@ -167,18 +196,28 @@ static void enqueue_engine_event(const engine_event_t *event)
         sample_t spark = {
             .sensor_name = "engine_spark",
             .can_id = CAN_ID_ENGINE_SPARK,
-            .timestamp_ms = sample.timestamp_ms,
+            .timestamp_ms = rpm.timestamp_ms,
             .value = 1,
         };
         (void)xQueueSend(sample_queue, &spark, 0);
     }
-    if (has_rpm) {
-        (void)xQueueSend(sample_queue, &sample, 0);
+    if (send_rpm) {
+        (void)xQueueSend(sample_queue, &rpm, 0);
     }
 #endif
 }
 #endif
 
+/**
+ * @brief Task that reads sensors on schedule and queues samples for send_task.
+ *
+ * Polls every 20 ms while inactive. On the engine node it waits for engine
+ * events instead and reports sparks lost by the capture queue. Otherwise it
+ * reads each ready sensor that is due and queues successful reads; read errors
+ * go to node health. A late sensor skips the periods it missed rather than
+ * catching up, and they count as missed. Then it sleeps until the next sensor
+ * is due: at least one tick, at most 1 s.
+ */
 static void sample_task(void *argument)
 {
     (void)argument;
@@ -202,8 +241,7 @@ static void sample_task(void *argument)
             ESP_LOGW(TAG, "Spark capture overflow: %" PRIu32 " events lost", dropped);
             node_health_count(HEALTH_SAMPLES_DROPPED, dropped, CAN_ID_ENGINE_SPARK, ESP_OK);
         }
-        continue;
-#endif
+#else
         int64_t now = esp_timer_get_time();
         int64_t next_due = now + 1000000;
         for (size_t i = 0; i < sensor_count; i++) {
@@ -246,9 +284,19 @@ static void sample_task(void *argument)
         TickType_t sleep_ticks = sleep_us > 0
             ? pdMS_TO_TICKS((uint32_t)(sleep_us / 1000)) : 0;
         vTaskDelay(sleep_ticks > 0 ? sleep_ticks : 1);
+#endif
     }
 }
 
+/**
+ * @brief Task that sends queued samples over CAN.
+ *
+ * Blocks until a sample arrives and discards it if sampling has stopped. Each
+ * sample becomes one 8-byte frame on its sensor's CAN ID: value in bytes 0-3,
+ * timestamp_ms in bytes 4-7, little-endian. A failed send is logged and the
+ * sample is lost. In serial test builds it prints samples instead, at most one
+ * per sensor every 500 ms.
+ */
 static void send_task(void *argument)
 {
     (void)argument;
@@ -293,9 +341,8 @@ static void send_task(void *argument)
         }
 #else
         uint8_t payload[8];
-        uint64_t packed = ((uint64_t)(uint32_t)sample.timestamp_ms << 32) |
-                          (uint32_t)sample.value;
-        memcpy(payload, &packed, sizeof(payload));
+        memcpy(&payload[0], &sample.value, 4);
+        memcpy(&payload[4], &sample.timestamp_ms, 4);
         esp_err_t error = can_node_send(sample.can_id, payload, sizeof(payload));
         if (error != ESP_OK) {
             ESP_LOGW(TAG, "Sensor 0x%03" PRIX32 " TX failed: %s",
