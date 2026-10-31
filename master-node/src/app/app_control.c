@@ -101,6 +101,11 @@ app_control_result_t app_control_stop_logging(void)
     return APP_CONTROL_OK;
 }
 
+/**
+ * @brief Task that runs firmware_update_run(), then ends the update.
+ *
+ * A master that flashed itself restarts and never gets past the run.
+ */
 static void update_task(void *argument)
 {
     (void)argument;

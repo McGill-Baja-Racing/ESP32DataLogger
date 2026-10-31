@@ -183,6 +183,11 @@ static bool targets_this_node(const can_message_t *message)
     return target == NODE_ID || target == 0xFF;
 }
 
+/**
+ * @brief Copy a received frame's data bytes out in bus order.
+ *
+ * @param payload At least message->dlc bytes.
+ */
 static void unpack_payload(const can_message_t *message, uint8_t *payload)
 {
     for (uint8_t i = 0; i < message->dlc; i++) {
@@ -302,7 +307,8 @@ node_state_t can_node_state(void)
  * disagrees with the node state, the node starts or stops, so a node that
  * rebooted mid-run rejoins it. START and STOP call on_start or on_stop only
  * when the state changes, but every copy is acknowledged, in case an earlier
- * acknowledgement was lost.
+ * acknowledgement was lost. Update commands for this node, update data and
+ * master identity announcements go to their callbacks.
  */
 static void dispatch_task(void *argument)
 {

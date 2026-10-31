@@ -135,6 +135,11 @@ bool firmware_update_master_heard(void)
     return atomic_load(&master_heard);
 }
 
+/**
+ * @brief Send an update reply on CAN_ID_NODE_UPDATE_BASE + NODE_ID.
+ *
+ * A failed send is logged and not retried.
+ */
 static void send_reply(const uint8_t *payload, uint8_t length)
 {
     esp_err_t error = can_node_send(CAN_ID_NODE_UPDATE_BASE + NODE_ID, payload, length);
@@ -143,6 +148,9 @@ static void send_reply(const uint8_t *payload, uint8_t length)
     }
 }
 
+/**
+ * @brief Drop the update being received, if any.
+ */
 static void stop_receiving(void)
 {
     if (receiving) {
@@ -151,6 +159,11 @@ static void stop_receiving(void)
     }
 }
 
+/**
+ * @brief Drop the update being received and report the error to the master.
+ *
+ * @param error Sent in an UPDATE_REPLY_ERROR and logged.
+ */
 static void fail(update_error_t error)
 {
     static const char *const names[UPDATE_ERROR_COUNT] = {
@@ -169,6 +182,12 @@ static void fail(update_error_t error)
     ESP_LOGW(TAG, "Update failed: %s", error < UPDATE_ERROR_COUNT ? names[error] : "unknown");
 }
 
+/**
+ * @brief Ask the master for the chunk at offset, under the next tag.
+ *
+ * The 3-bit tag changes with every request, so frames still arriving for an
+ * earlier one are ignored. Restarts the retry timer.
+ */
 static void request_chunk(void)
 {
     tag = (tag + 1) & 7;
@@ -186,6 +205,18 @@ static void request_chunk(void)
     requested_at = xTaskGetTickCount();
 }
 
+/**
+ * @brief Start receiving an image.
+ *
+ * Drops any update in progress. Fails with UPDATE_ERROR_RECORDING while the
+ * node is active, UPDATE_ERROR_BAD_IMAGE if the image is too small to hold
+ * firmware_identity_t, UPDATE_ERROR_TOO_LARGE if it does not fit the next OTA
+ * partition, UPDATE_ERROR_ON_TRIAL if the running image is not confirmed, and
+ * UPDATE_ERROR_FLASH if the partition cannot be prepared.
+ *
+ * @param bytes UPDATE_OP_BEGIN command: target, op, u32 image size,
+ *              little-endian.
+ */
 static void begin_update(const uint8_t *bytes)
 {
     stop_receiving();
@@ -219,6 +250,11 @@ static void begin_update(const uint8_t *bytes)
     request_chunk();
 }
 
+/**
+ * @brief Check the received image, boot it next, reply DONE and restart.
+ *
+ * Returns only after a failure, once the error is sent.
+ */
 static void finish_update(void)
 {
     receiving = false;
@@ -238,6 +274,12 @@ static void finish_update(void)
     esp_restart();
 }
 
+/**
+ * @brief Write a complete chunk, then ask for the next one or finish.
+ *
+ * The chunk holding firmware_identity_t fails with UPDATE_ERROR_WRONG_IMAGE
+ * unless the image is for this NODE_ID and not bench-only.
+ */
 static void accept_chunk(void)
 {
     if (offset <= FIRMWARE_IDENTITY_OFFSET &&
@@ -263,6 +305,14 @@ static void accept_chunk(void)
     }
 }
 
+/**
+ * @brief Check whether an app slot can boot this node on a protocol.
+ *
+ * @param part App partition, or NULL.
+ * @param protocol Protocol hash to match.
+ * @return false if part is NULL or unreadable, its trial failed, or its image
+ *         is a bench-only build, for another node or for another protocol.
+ */
 static bool runs_protocol(const esp_partition_t *part, uint16_t protocol)
 {
     firmware_identity_t identity;
@@ -281,8 +331,17 @@ static bool runs_protocol(const esp_partition_t *part, uint16_t protocol)
            identity.bench_only == 0 && identity.protocol_hash == protocol;
 }
 
-/* Counting starts only once confirmed, so the master sees the new image's identity before the
- * node switches back. */
+/**
+ * @brief Boot the other app slot if it matches the master's protocol.
+ *
+ * Once MASTER_SWITCH_ANNOUNCEMENTS announcements in a row carry a protocol
+ * other than this image's, checks the other slot once and restarts into it
+ * if runs_protocol(). Counting starts only once confirmed, so the master sees
+ * the new image's identity before the node switches back. It also waits
+ * while an update is being received.
+ *
+ * @param bytes node_identity_frame_t from the master.
+ */
 static void follow_master(const uint8_t *bytes)
 {
     node_identity_frame_t master;
@@ -318,6 +377,15 @@ static void follow_master(const uint8_t *bytes)
     esp_restart();
 }
 
+/**
+ * @brief Handle one input on the update task.
+ *
+ * A data frame is kept only if it carries the current tag, an index inside
+ * the chunk and the right length. Once every frame of the chunk is in, the
+ * chunk is accepted.
+ *
+ * @param input Queued command, data frame or master announcement.
+ */
 static void handle_input(const update_input_t *input)
 {
     if (input->kind == INPUT_MASTER) {
@@ -353,6 +421,14 @@ static void handle_input(const update_input_t *input)
     }
 }
 
+/**
+ * @brief Task that runs updates from input_queue.
+ *
+ * Asks again for the current chunk every UPDATE_RETRY_MS without it, and
+ * fails with UPDATE_ERROR_TIMEOUT after UPDATE_RETRY_LIMIT retries in a row.
+ * Restarts to roll back an image still on trial UPDATE_CONFIRM_TIMEOUT_MS
+ * after boot.
+ */
 static void update_task(void *argument)
 {
     (void)argument;

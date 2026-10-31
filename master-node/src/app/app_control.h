@@ -48,10 +48,11 @@ esp_err_t app_control_init(void);
  *
  * @param filename Name on the SD card, or NULL for a default name; see
  *                 data_logger_start().
- * @return APP_CONTROL_OK, or why it did not start: not idle (CONFLICT), bad
- *         name (INVALID_FILENAME), the file exists (FILENAME_EXISTS), or the
- *         file could not be created or another start or stop held the lock
- *         for over 1 s (FAILED).
+ * @return APP_CONTROL_OK, or why it did not start: not idle or a firmware
+ *         update or upload is running (CONFLICT), bad name
+ *         (INVALID_FILENAME), the file exists (FILENAME_EXISTS), or the file
+ *         could not be created or another start or stop held the lock for
+ *         over 1 s (FAILED).
  */
 app_control_result_t app_control_start_logging(const char *filename);
 
@@ -70,6 +71,9 @@ app_control_result_t app_control_stop_logging(void);
 /**
  * @brief Start the firmware update task for sensor nodes and the master.
  *
+ * Returns once the task runs; see firmware_update_run(). Logging cannot
+ * start until it ends.
+ *
  * @return APP_CONTROL_OK, CONFLICT unless the logger is idle, BUSY if an
  *         update or upload is running, or FAILED if the lock was held for
  *         over 1 s or the task could not start.
@@ -77,13 +81,16 @@ app_control_result_t app_control_stop_logging(void);
 app_control_result_t app_control_update_firmware(void);
 
 /**
- * @brief Whether a firmware update is running.
+ * @brief Check whether a firmware update is running.
+ *
+ * @return true from app_control_update_firmware() until the update ends.
  */
 bool app_control_firmware_busy(void);
 
 /**
- * @brief Claim the SD card for a firmware upload; logging cannot start until
- *        app_control_end_upload().
+ * @brief Mark a firmware upload as running.
+ *
+ * Until app_control_end_upload(), logging and firmware updates cannot start.
  *
  * @return APP_CONTROL_OK, CONFLICT unless the logger is idle, BUSY if an
  *         update or upload is running, or FAILED if the lock was held for
