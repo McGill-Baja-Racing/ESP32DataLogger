@@ -77,17 +77,33 @@ bool firmware_update_is_slot(unsigned int id)
     return id == 0 || (id < CAN_NODE_SLOT_COUNT && (CAN_NODE_ID_MASK & (1U << id)));
 }
 
+/**
+ * @brief Get the ELF SHA-256 of the running master image.
+ */
 static const uint8_t *master_hash(void)
 {
     return esp_app_get_description()->app_elf_sha256;
 }
 
+/**
+ * @brief Check whether a node's last identity says its image is on trial.
+ *
+ * @param id Node ID.
+ * @return true if NODE_IDENTITY_PENDING was set.
+ */
 static bool node_on_trial(unsigned int id)
 {
     return (nodes[id].frame.flags & NODE_IDENTITY_PENDING) != 0;
 }
 
-/* NULL when the image should be flashed over the running hash (NULL: unknown). */
+/**
+ * @brief Tell why a stored image should not be flashed.
+ *
+ * @param image Stored image of the slot.
+ * @param running_hash Hash the slot runs, or NULL if unknown.
+ * @return "no image", "two images, skipped" or "current", or NULL if the
+ *         image should be flashed.
+ */
 static const char *image_problem(const image_t *image, const uint8_t *running_hash)
 {
     if (!image->present) {
@@ -102,11 +118,26 @@ static const char *image_problem(const image_t *image, const uint8_t *running_ha
     return NULL;
 }
 
+/**
+ * @brief Check whether a slot's stored image should be flashed.
+ *
+ * See image_problem().
+ *
+ * @param id Slot ID.
+ * @param hash Hash the slot runs, or NULL if unknown.
+ * @return true if image_problem() finds none.
+ */
 static bool needs_update(unsigned int id, const uint8_t *hash)
 {
     return image_problem(&images[id], hash) == NULL;
 }
 
+/**
+ * @brief Tell why the stored master image should not be flashed.
+ *
+ * @return The image_problem() reason, "failed: image too large" if it does
+ *         not fit the next OTA partition, or NULL if it should be flashed.
+ */
 static const char *master_problem(void)
 {
     const char *problem = image_problem(&images[0], master_hash());
@@ -124,6 +155,12 @@ static const char *const error_names[UPDATE_ERROR_COUNT] = {
 };
 #endif
 
+/**
+ * @brief Write an identity hash as lowercase hex.
+ *
+ * @param hash NODE_IDENTITY_HASH_LENGTH bytes.
+ * @param text At least 2 * NODE_IDENTITY_HASH_LENGTH + 1 bytes.
+ */
 static void format_hash(const uint8_t *hash, char *text)
 {
     for (int i = 0; i < NODE_IDENTITY_HASH_LENGTH; i++) {
@@ -169,6 +206,11 @@ esp_err_t firmware_update_request_identity(void)
     return can_master_send(CAN_ID_UPDATE_COMMAND, payload, sizeof(payload));
 }
 
+/**
+ * @brief Check whether the running master image is on trial.
+ *
+ * @return true while the running partition is ESP_OTA_IMG_PENDING_VERIFY.
+ */
 static bool is_on_trial(void)
 {
     esp_ota_img_states_t state;
@@ -207,6 +249,17 @@ void firmware_update_handle_reply(const can_message_t *message)
 #define APP_DESC_MAGIC            0xABCD5432
 #define APP_DESC_ELF_SHA256_OFFSET 144
 
+/**
+ * @brief Read the identity and hash from the start of an image.
+ *
+ * @param header Start of the image file.
+ * @param length Bytes in header.
+ * @param identity Set to the firmware_identity_t after esp_app_desc_t.
+ * @param hash Set to the first NODE_IDENTITY_HASH_LENGTH bytes of the ELF
+ *             SHA-256.
+ * @return false if header is too short to hold the identity, or the image,
+ *         app descriptor or identity magic does not match.
+ */
 static bool parse_image(const uint8_t *header, size_t length, firmware_identity_t *identity,
                         uint8_t *hash)
 {
@@ -237,6 +290,14 @@ _Static_assert(sizeof(esp_image_header_t) + sizeof(esp_image_segment_header_t) =
                    IMAGE_APP_DESC_OFFSET,
                "app desc must follow the first segment header");
 
+/**
+ * @brief Read the identity, hash and size of an image file.
+ *
+ * See parse_image().
+ *
+ * @param size Set to the file size.
+ * @return false if the file cannot be read or is not a firmware image.
+ */
 static bool read_image(const char *path, firmware_identity_t *identity, uint8_t *hash,
                        uint32_t *size)
 {
@@ -255,6 +316,11 @@ static bool read_image(const char *path, firmware_identity_t *identity, uint8_t 
     return true;
 }
 
+/**
+ * @brief Tell why an image cannot be stored.
+ *
+ * @return "bench-only build" or "unknown node", or NULL if it can be stored.
+ */
 static const char *reject_reason(const firmware_identity_t *identity)
 {
     if (identity->bench_only) {
@@ -266,13 +332,25 @@ static const char *reject_reason(const firmware_identity_t *identity)
     return NULL;
 }
 
+/**
+ * @brief Check whether a file name ends in .bin, in any case.
+ */
 static bool is_bin_name(const char *name)
 {
     size_t name_length = strlen(name);
     return name_length >= 4 && strcasecmp(name + name_length - 4, ".bin") == 0;
 }
 
-/* Deletes every image for remove_node (-1: none) except keep (NULL: none) and scans the rest. */
+/**
+ * @brief Rebuild images from the .bin files in FIRMWARE_DIR.
+ *
+ * Skips, with a warning, names too long for a path, files that are not
+ * firmware images, and images reject_reason() refuses. A second image for a
+ * slot marks it duplicate. With no folder, every slot is left empty.
+ *
+ * @param remove_node Node whose images are deleted, or -1 for none.
+ * @param keep Path not deleted, compared in any case, or NULL.
+ */
 static void scan_images(int remove_node, const char *keep)
 {
     memset(images, 0, sizeof(images));
@@ -318,6 +396,9 @@ static void scan_images(int remove_node, const char *keep)
     closedir(directory);
 }
 
+/**
+ * @brief Build the stored path of a slot's image: master.bin or node<N>.bin.
+ */
 static void image_path(unsigned int node_id, char *path, size_t size)
 {
     if (node_id == 0) {
@@ -327,7 +408,12 @@ static void image_path(unsigned int node_id, char *path, size_t size)
     }
 }
 
-/* A power cut while storing can leave only the backup; bring it back before it is overwritten. */
+/**
+ * @brief Put back each slot image left only as its .old backup.
+ *
+ * A power cut while storing can leave only the backup; bring it back before
+ * it is overwritten.
+ */
 static void restore_backups(void)
 {
     for (unsigned int id = 0; id < CAN_NODE_SLOT_COUNT; id++) {
@@ -423,6 +509,12 @@ void firmware_update_get_status(firmware_update_status_t *status)
 }
 
 #if MASTER_CAN_ENABLED
+/**
+ * @brief Task that sends the master's identity every MASTER_ANNOUNCE_MS.
+ *
+ * Nodes boot whichever app slot matches its protocol_hash. The flags are
+ * always 0 and send errors are ignored.
+ */
 static void announce_task(void *argument)
 {
     (void)argument;
@@ -440,12 +532,30 @@ esp_err_t firmware_update_start_announcing(void)
          ? ESP_OK : ESP_ERR_NO_MEM;
 }
 
+/**
+ * @brief Tell a node to drop the update it is receiving.
+ *
+ * Send errors are ignored.
+ *
+ * @param id Node ID.
+ */
 static void send_abort(unsigned int id)
 {
     uint8_t payload[] = {(uint8_t)id, UPDATE_OP_ABORT};
     (void)can_master_send(CAN_ID_UPDATE_COMMAND, payload, sizeof(payload));
 }
 
+/**
+ * @brief Send one chunk of an image as CAN_ID_UPDATE_DATA frames.
+ *
+ * Send errors are ignored; the node asks for the chunk again.
+ *
+ * @param file Image file.
+ * @param offset Start of the chunk in the image.
+ * @param length Chunk length, at most UPDATE_CHUNK_BYTES.
+ * @param tag Tag from the node's READ, sent in every frame.
+ * @return false if the chunk could not be read from the file.
+ */
 static bool send_chunk(FILE *file, uint32_t offset, uint32_t length, uint8_t tag)
 {
     uint8_t chunk[UPDATE_CHUNK_BYTES];
@@ -465,7 +575,18 @@ static bool send_chunk(FILE *file, uint32_t offset, uint32_t length, uint8_t tag
     return true;
 }
 
-/* NULL once the node has all the data. */
+/**
+ * @brief Send an image to a node, answering each chunk it asks for.
+ *
+ * Sends UPDATE_OP_BEGIN, then serves READ replies until DONE, ERROR, or
+ * UPDATE_REPLY_TIMEOUT_MS without a reply. A timeout after the last chunk
+ * counts as done. Updates percent.
+ *
+ * @param file Open image file.
+ * @param id Node ID.
+ * @param image Stored image of the node.
+ * @return NULL once the node has all the data, otherwise the result to show.
+ */
 static const char *transfer_image(FILE *file, unsigned int id, const image_t *image)
 {
     xQueueReset(reply_queue);
@@ -526,6 +647,14 @@ static const char *transfer_image(FILE *file, unsigned int id, const image_t *im
     }
 }
 
+/**
+ * @brief Update one node and wait until it confirms the new image.
+ *
+ * After the transfer, asks for identities every 2 s until the node reports
+ * the new hash off trial, for up to UPDATE_CONFIRM_WAIT_MS.
+ *
+ * @return "updated", or a result starting with "failed:".
+ */
 static const char *flash_node(unsigned int id, const image_t *image)
 {
     FILE *file = fopen(image->path, "rb");
@@ -550,7 +679,16 @@ static const char *flash_node(unsigned int id, const image_t *image)
     return "failed: new image not confirmed";
 }
 
-/* True when node id will not end this run confirmed on protocol. */
+/**
+ * @brief Check whether a node could end this update off a protocol.
+ *
+ * @param id Node ID.
+ * @param protocol Protocol the master is to run.
+ * @param asked_us When identities were requested; older ones do not count.
+ * @return true if an expected node was not heard, the node is on trial, or
+ *         it would run another protocol: its stored image's if that is to be
+ *         flashed, else its current one.
+ */
 static bool off_protocol(unsigned int id, uint16_t protocol, int64_t asked_us)
 {
     if (nodes[id].heard_us < asked_us) {
@@ -567,6 +705,16 @@ static bool off_protocol(unsigned int id, uint16_t protocol, int64_t asked_us)
 }
 #endif
 
+/**
+ * @brief Flash the stored master image to the next OTA slot and boot it next.
+ *
+ * Does not restart.
+ *
+ * @param blocked Result to return instead of flashing, or NULL. A
+ *                master_problem() reason comes first.
+ * @return MASTER_UPDATED, the master_problem() or blocked reason, or a result
+ *         starting with "failed:".
+ */
 static const char *update_master(const char *blocked)
 {
     const char *problem = master_problem();
@@ -622,6 +770,9 @@ static const char *update_master(const char *blocked)
     return MASTER_UPDATED;
 }
 
+/**
+ * @brief Timer callback that restarts to roll back an image still on trial.
+ */
 static void confirm_timeout(void *argument)
 {
     (void)argument;

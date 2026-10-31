@@ -161,6 +161,11 @@ static bool targets_this_node(const can_message_t *message)
     return target == NODE_ID || target == 0xFF;
 }
 
+/**
+ * @brief Copy a received frame's data bytes out in bus order.
+ *
+ * @param payload At least message->dlc bytes.
+ */
 static void unpack_payload(const can_message_t *message, uint8_t *payload)
 {
     for (uint8_t i = 0; i < message->dlc; i++) {
@@ -243,7 +248,9 @@ node_state_t can_node_state(void)
  *
  * A beacon gives the master time to on_time_beacon, and starts or stops the
  * node if its recording flag disagrees with the node state. START and STOP
- * call their callback only on a state change, but every copy is acknowledged.
+ * call their callback only on a state change, but every copy is acknowledged. Update
+ * commands for this node, update data and master identity announcements go
+ * to their callbacks.
  */
 static void dispatch_task(void *argument)
 {

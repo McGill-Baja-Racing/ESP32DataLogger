@@ -20,8 +20,9 @@ typedef struct {
  * @brief Start the CAN controller and its receive and recovery tasks.
  *
  * Callbacks may be NULL. on_bus_off runs on the recovery task, the others on
- * the receive task. Does not send the boot report; call can_node_report_state()
- * after.
+ * the receive task. on_update_command gets only commands for this node or all
+ * nodes, and the payload pointers are valid only during the call. Does not
+ * send the boot report; call can_node_report_state() after.
  *
  * @param callbacks Copied.
  * @param boot_reset_reason Sent in the boot state report.
@@ -71,6 +72,6 @@ void can_node_error_counts(uint8_t *tx_errors, uint8_t *rx_errors);
 void can_node_report_state(node_state_t state, node_state_reason_t reason);
 
 /**
- * @brief The state last reported to the master.
+ * @brief Get the state last recorded by can_node_report_state().
  */
 node_state_t can_node_state(void);
