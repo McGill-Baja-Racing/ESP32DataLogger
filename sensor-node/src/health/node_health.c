@@ -74,6 +74,9 @@ static uint8_t resets;
 static uint8_t reset_reason;
 static uint8_t event_sequence;
 
+/**
+ * @brief Get the node's own time in ms, not synced to the master.
+ */
 static uint32_t local_ms(void)
 {
     return (uint32_t)(esp_timer_get_time() / 1000);
@@ -113,6 +116,11 @@ void node_health_sensor_read(size_t index, esp_err_t error)
     portEXIT_CRITICAL_SAFE(&lock);
 }
 
+/**
+ * @brief Tell whether a code keeps a separate count for each subject.
+ *
+ * @return true for codes whose subject is a CAN ID.
+ */
 static bool counted_per_subject(health_code_t code)
 {
     return code == HEALTH_SAMPLES_MISSED || code == HEALTH_SAMPLES_DROPPED ||
@@ -120,11 +128,17 @@ static bool counted_per_subject(health_code_t code)
            code == HEALTH_CAN_RX_OVERFLOW;
 }
 
-/* Counter N belongs to code N. A code counted per subject keeps its first
+/**
+ * @brief Find the counter for a code and subject.
+ *
+ * Counter N belongs to code N. A code counted per subject keeps its first
  * subject there and takes shared counters for the others. Shared counters are
  * taken in order and never freed, so the first unused one ends the search;
  * once all are taken, a new subject is added to the code's own counter.
- * Call under lock. */
+ * Call under lock.
+ *
+ * @return The counter to add to; never NULL.
+ */
 static counter_t *counter_for(health_code_t code, uint32_t subject)
 {
     counter_t *own = &state.counters[code];
@@ -169,6 +183,11 @@ void node_health_set(health_code_t fault, bool active)
     }
 }
 
+/**
+ * @brief Map an ESP-IDF error to the 4-bit error of an event frame.
+ *
+ * @return The matching health_error_t, or HEALTH_ERROR_OTHER.
+ */
 static health_error_t health_error(esp_err_t error)
 {
     switch (error) {
@@ -184,6 +203,16 @@ static health_error_t health_error(esp_err_t error)
     }
 }
 
+/**
+ * @brief Pack an event frame.
+ *
+ * @param code health_code_t of the event.
+ * @param subject Sent as one byte.
+ * @param sequence Event sequence number; only the low 6 bits are sent.
+ * @param count Capped at HEALTH_EVENT_COUNT_MAX.
+ * @param error Mapped by health_error().
+ * @param timestamp_ms Master time in ms of the last occurrence.
+ */
 static health_event_frame_t event_frame(uint8_t code, uint32_t subject, uint8_t sequence,
                                         uint32_t count, esp_err_t error, int32_t timestamp_ms)
 {
@@ -198,6 +227,17 @@ static health_event_frame_t event_frame(uint8_t code, uint32_t subject, uint8_t 
     return event;
 }
 
+/**
+ * @brief Send one event frame and advance the event sequence.
+ *
+ * @param code health_code_t of the event.
+ * @param subject Sent as one byte.
+ * @param count Occurrences since the last report.
+ * @param error Last error, or ESP_OK.
+ * @param when_local_ms Local time of the last occurrence.
+ * @return false if not recording, the master's beacons stopped, or the CAN
+ *         driver did not take the frame.
+ */
 static bool send_event(uint8_t code, uint32_t subject, uint32_t count, esp_err_t error,
                        uint32_t when_local_ms)
 {
@@ -219,6 +259,14 @@ static bool send_event(uint8_t code, uint32_t subject, uint32_t count, esp_err_t
     return true;
 }
 
+/**
+ * @brief Send an event for a counter that grew since its last report.
+ *
+ * @param now Current state.
+ * @param reported Counts already reported; updated once the event is sent.
+ * @param i Counter index.
+ * @return false if the event could not be sent.
+ */
 static bool report_counter(const health_state_t *now, health_state_t *reported, size_t i)
 {
     const counter_t *counter = &now->counters[i];
@@ -231,8 +279,17 @@ static bool report_counter(const health_state_t *now, health_state_t *reported, 
     return true;
 }
 
-/* Stops at the first unsent event: on a failing bus each send holds the
- * transmitter long enough to delay samples. */
+/**
+ * @brief Send every event not yet reported.
+ *
+ * Sends the boot event first, then sensor init failures and failed reads,
+ * then the counters. Stops at the first unsent event: on a failing bus each
+ * send holds the transmitter long enough to delay samples.
+ *
+ * @param now Current state.
+ * @param reported Counts already reported; updated for each sent event.
+ * @param init_reported Per sensor, true once its init failure was sent.
+ */
 static void report_events(const health_state_t *now, health_state_t *reported,
                           bool *init_reported)
 {
@@ -267,6 +324,9 @@ static void report_events(const health_state_t *now, health_state_t *reported,
     }
 }
 
+/**
+ * @brief Send the node's CAN error counters, resets and last reset reason.
+ */
 static void send_diagnostics(void)
 {
     uint8_t tx_errors = 0;
@@ -282,6 +342,13 @@ static void send_diagnostics(void)
                         NODE_HEALTH_PAYLOAD);
 }
 
+/**
+ * @brief Task that reports the node's health.
+ *
+ * Every NODE_STATUS_PERIOD_MS it sends a status with the faults active now or
+ * seen in the last period and a diagnostics frame. Once the status is sent
+ * and while recording, it also sends the events.
+ */
 static void health_task(void *argument)
 {
     (void)argument;

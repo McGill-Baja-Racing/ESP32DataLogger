@@ -56,11 +56,19 @@ static RTC_NOINIT_ATTR uint32_t reset_count;
 static uint8_t resets;
 static uint8_t reset_reason;
 
+/**
+ * @brief Get the master time in ms.
+ */
 static uint32_t now_ms(void)
 {
     return (uint32_t)(esp_timer_get_time() / 1000);
 }
 
+/**
+ * @brief Tell whether a code keeps a separate count for each subject.
+ *
+ * @return true for codes whose subject is a CAN ID or a node ID.
+ */
 static bool counted_per_subject(health_code_t code)
 {
     return code == HEALTH_SAMPLES_MISSED || code == HEALTH_SAMPLES_DROPPED ||
@@ -68,11 +76,17 @@ static bool counted_per_subject(health_code_t code)
            code == HEALTH_CAN_RX_OVERFLOW || code == HEALTH_EVENT_LOST;
 }
 
-/* Counter N belongs to code N. A code counted per subject keeps its first
+/**
+ * @brief Find the counter for a code and subject.
+ *
+ * Counter N belongs to code N. A code counted per subject keeps its first
  * subject there and takes shared counters for the others. Shared counters are
  * taken in order and never freed, so the first unused one ends the search;
  * once all are taken, a new subject is added to the code's own counter.
- * Call under lock. */
+ * Call under lock.
+ *
+ * @return The counter to add to; never NULL.
+ */
 static counter_t *counter_for(health_code_t code, uint32_t subject)
 {
     counter_t *own = &state.counters[code];
@@ -114,6 +128,11 @@ void node_health_set(health_code_t fault, bool active)
     if (onset) node_health_count(fault, 1, 0, ESP_OK);
 }
 
+/**
+ * @brief Map an ESP-IDF error to the 4-bit error of an event frame.
+ *
+ * @return The matching health_error_t, or HEALTH_ERROR_OTHER.
+ */
 static health_error_t health_error(esp_err_t error)
 {
     switch (error) {
@@ -129,6 +148,13 @@ static health_error_t health_error(esp_err_t error)
     }
 }
 
+/**
+ * @brief Get the base ID of the health frame kind an ID falls in.
+ *
+ * @param id CAN ID.
+ * @return CAN_ID_NODE_STATUS_BASE, CAN_ID_NODE_EVENT_BASE or
+ *         CAN_ID_NODE_DIAGNOSTICS_BASE; CAN_ID_NODE_STATUS_BASE for lower IDs.
+ */
 static uint32_t frame_base(uint32_t id)
 {
     if (id >= CAN_ID_NODE_DIAGNOSTICS_BASE) return CAN_ID_NODE_DIAGNOSTICS_BASE;
@@ -265,7 +291,14 @@ const char *node_health_describe(uint32_t id, uint64_t data, const char **node,
     return NULL;
 }
 
-/* Prints every event, but status and diagnostics only when they change. */
+/**
+ * @brief Print a health frame to the console.
+ *
+ * Prints every event, but status and diagnostics only when they change.
+ * Called from health_task only.
+ *
+ * @param message Frame from the print queue.
+ */
 static void print_frame(const can_message_t *message)
 {
     uint32_t base = frame_base(message->id);
@@ -287,9 +320,17 @@ static void print_frame(const can_message_t *message)
 static uint8_t last_sequence[CAN_NODE_SLOT_COUNT];
 static bool sequence_seen[CAN_NODE_SLOT_COUNT];
 
-/* Sets *missed to the node's events before this one that never arrived.
- * Returns false for a repeated sequence: CAN delivers a frame twice when only
- * its sender saw an error in the last bit. */
+/**
+ * @brief Check a node event's sequence number against the last one.
+ *
+ * A boot event restarts the check.
+ *
+ * @param node Sending node.
+ * @param event Received event.
+ * @param missed Set to the node's events before this one that never arrived.
+ * @return false for a repeated sequence: CAN delivers a frame twice when only
+ *         its sender saw an error in the last bit.
+ */
 static bool check_sequence(unsigned node, const health_event_frame_t *event,
                            uint32_t *missed)
 {
@@ -328,6 +369,15 @@ bool node_health_handle_frame(const can_message_t *message)
     return logged;
 }
 
+/**
+ * @brief Log one of the master's own health frames.
+ *
+ * See node_health_handle_frame().
+ *
+ * @param id Base ID of the frame kind; node 0 is the master.
+ * @param frame 8-byte frame payload.
+ * @return true if the logger accepted the frame.
+ */
 static bool log_own_frame(uint32_t id, const void *frame)
 {
     can_message_t message = {.id = id, .dlc = 8};
@@ -335,6 +385,11 @@ static bool log_own_frame(uint32_t id, const void *frame)
     return node_health_handle_frame(&message);
 }
 
+/**
+ * @brief Log the master's CAN error counters, resets and last reset reason.
+ *
+ * Error counters above 255 are sent as 255.
+ */
 static void log_diagnostics(void)
 {
     uint32_t rx_errors = 0;
@@ -349,6 +404,15 @@ static void log_diagnostics(void)
     log_own_frame(CAN_ID_NODE_DIAGNOSTICS_BASE, &diagnostics);
 }
 
+/**
+ * @brief Log one event per counter that grew since its last report.
+ *
+ * Stops at the first event the logger refuses and leaves it and the rest for
+ * the next call. A count above HEALTH_EVENT_COUNT_MAX is sent as that maximum.
+ *
+ * @param now Current state.
+ * @param reported Counts already reported; updated for each logged event.
+ */
 static void log_events(const health_state_t *now, health_state_t *reported)
 {
     for (size_t i = 0; i < COUNTER_COUNT; i++) {
@@ -369,6 +433,13 @@ static void log_events(const health_state_t *now, health_state_t *reported)
     }
 }
 
+/**
+ * @brief Task that prints queued frames and reports the master's health.
+ *
+ * Every NODE_STATUS_PERIOD_MS it prints the queued frames, then logs a status
+ * with the faults active now or counted in the last period, a diagnostics
+ * frame and, while recording, the events.
+ */
 static void health_task(void *argument)
 {
     (void)argument;
