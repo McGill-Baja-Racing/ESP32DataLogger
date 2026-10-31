@@ -474,7 +474,7 @@ static const char *transfer_image(FILE *file, unsigned int id, const image_t *im
             send_abort(id);
             return "failed: SD read";
         }
-        last_chunk_sent = offset + length == image->size;
+        last_chunk_sent = (offset + length == image->size);
         percent = (uint64_t)offset * 100 / image->size;
     }
 }
@@ -680,7 +680,7 @@ void firmware_update_run(void)
     target = 0;
     results[0] = update_master(master_blocked);
     ESP_LOGI(TAG, "Master: %s", results[0]);
-    bool restart = strcmp(results[0], MASTER_UPDATED) == 0;
+    bool restart = (strcmp(results[0], MASTER_UPDATED) == 0);
     if (restart) {
         vTaskDelay(pdMS_TO_TICKS(2000));
         firmware_update_unlock_files();
