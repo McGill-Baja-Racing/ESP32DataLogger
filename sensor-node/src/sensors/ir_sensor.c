@@ -17,9 +17,12 @@
 #define T0                      298.15f
 #define BETA                    3960.0f
 
+#define S_MV_PER_K4   7.56e-10f   /* mV/K^4, sensor level */
+#define EMISSIVITY    0.9f
+#define V_OFF_MV      6.0f  
+
 static esp_err_t read_cvt_temperature(sensor_t *sensor, int32_t *value)
 {
-    //hello
     (void)sensor;
     int thermistor_mv = 0;
     int thermopile_mv = 0;
@@ -42,10 +45,26 @@ static esp_err_t read_cvt_temperature(sensor_t *sensor, int32_t *value)
     float temp_kelvin = 1.0f / ((1.0f / T0) + (1.0f / BETA) * logf(r_therm / R0));
     float ambient_temp_c = temp_kelvin - 273.15f;
 
+
+    /*
+
+    Previous logic that used a simplified linear computation, which was limited due to the temperature range
+
     float true_thermopile_mv = (float)thermopile_mv / AMP_GAIN;
     float delta_t = true_thermopile_mv / SENSITIVITY_MV_C;
-    /* The thermopile measures the target relative to its own (ambient) temperature. */
+    The thermopile measures the target relative to its own (ambient) temperature. 
     float target_temp_c = ambient_temp_c + delta_t;
+    *value = target_temp_c > 0.0f ? (int32_t)target_temp_c : 0;
+    */
+
+    float k_val = AMP_GAIN * S_MV_PER_K4 * EMISSIVITY;
+    float t_a2  = temp_kelvin * temp_kelvin;
+    float t_a4  = t_a2 * t_a2;
+    float arg   = ((float)thermopile_mv - V_OFF_MV) / k_val + t_a4;
+    if (arg <= 0.0f) {
+        return ESP_ERR_INVALID_RESPONSE;
+    }
+    float target_temp_c = powf(arg, 0.25f) - 273.15f;
     *value = target_temp_c > 0.0f ? (int32_t)target_temp_c : 0;
     return ESP_OK;
 }
