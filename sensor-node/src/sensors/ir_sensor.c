@@ -19,6 +19,7 @@
 
 static esp_err_t read_cvt_temperature(sensor_t *sensor, int32_t *value)
 {
+    //hello
     (void)sensor;
     int thermistor_mv = 0;
     int thermopile_mv = 0;
