@@ -33,6 +33,8 @@
 #define DOWNLOAD_CHUNK_SIZE 4096
 #define FIRMWARE_UPLOAD_PATH FIRMWARE_DIR "/upload.tmp"
 #define FIRMWARE_MAX_BYTES (4 * 1024 * 1024)
+/* A client gone from Wi-Fi never closes the socket, so the upload gives up after ~15 s of silence. */
+#define FIRMWARE_RECV_TIMEOUTS 3
 
 typedef struct {
     char name[DATA_LOGGER_FILENAME_MAX + 1];
@@ -708,17 +710,19 @@ static const char *receive_firmware(httpd_req_t *request)
     }
     size_t remaining = request->content_len;
     const char *failure = NULL;
+    int timeouts = 0;
     while (remaining > 0 && !failure) {
         int received = httpd_req_recv(request, buffer,
                                       remaining < DOWNLOAD_CHUNK_SIZE ? remaining
                                                                       : DOWNLOAD_CHUNK_SIZE);
-        if (received == HTTPD_SOCK_ERR_TIMEOUT) continue;
+        if (received == HTTPD_SOCK_ERR_TIMEOUT && ++timeouts < FIRMWARE_RECV_TIMEOUTS) continue;
         if (received <= 0) {
             failure = "Upload interrupted";
         } else if (fwrite(buffer, 1, received, file) != (size_t)received) {
             failure = "Unable to write the SD card";
         } else {
             remaining -= received;
+            timeouts = 0;
         }
     }
     free(buffer);
