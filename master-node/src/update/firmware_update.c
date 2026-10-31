@@ -37,6 +37,7 @@
 #define MASTER_UPDATED            "updated; restarting"
 #define MASTER_WRITE_BYTES        4096
 #define MASTER_CONFIRM_TIMEOUT_MS 60000
+#define MASTER_ANNOUNCE_MS        500
 
 static const char *TAG = "FirmwareUpdate";
 static QueueHandle_t reply_queue;
@@ -393,6 +394,23 @@ void firmware_update_get_status(firmware_update_status_t *status)
 }
 
 #if MASTER_CAN_ENABLED
+static void announce_task(void *argument)
+{
+    (void)argument;
+    while (true) {
+        node_identity_frame_t frame = {.protocol_hash = CAN_PROTOCOL_HASH};
+        memcpy(frame.elf_sha256, master_hash(), NODE_IDENTITY_HASH_LENGTH);
+        (void)can_master_send(CAN_ID_MASTER_IDENTITY, (const uint8_t *)&frame, sizeof(frame));
+        vTaskDelay(pdMS_TO_TICKS(MASTER_ANNOUNCE_MS));
+    }
+}
+
+esp_err_t firmware_update_start_announcing(void)
+{
+    return xTaskCreate(announce_task, "fw_announce", 3072, NULL, 5, NULL) == pdPASS
+         ? ESP_OK : ESP_ERR_NO_MEM;
+}
+
 static void send_abort(unsigned int id)
 {
     uint8_t payload[] = {(uint8_t)id, UPDATE_OP_ABORT};
@@ -661,6 +679,9 @@ void firmware_update_run(void)
             result = flash_node(id, &images[id]);
             if (strcmp(result, "updated") != 0) {
                 master_blocked = "skipped: a node update failed";
+            } else if (images[id].protocol_hash != CAN_PROTOCOL_HASH) {
+                /* The node goes back to its old slot until the master runs the new protocol. */
+                result = "staged; switches with the master";
             }
         }
         results[id] = result;

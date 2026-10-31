@@ -13,13 +13,14 @@ typedef struct {
     void (*on_bus_off)(void);
     void (*on_update_command)(const uint8_t *payload, uint8_t length);
     void (*on_update_data)(const uint8_t *payload, uint8_t length);
+    void (*on_master_identity)(const uint8_t *payload, uint8_t length);
 } can_node_callbacks_t;
 
 /**
  * @brief Set up the CAN controller and start the receive and recovery tasks.
  *
- * Receives only master commands (0x0A0-0x0A3). Callbacks may be NULL. START,
- * STOP and beacon callbacks run on the receive task; on_bus_off runs on the
+ * Receives only master commands (0x0A0-0x0A7). Callbacks may be NULL. All but
+ * on_bus_off run on the receive task; on_bus_off runs on the
  * recovery task, which then restarts the bus. Does not send the boot report;
  * call can_node_report_state() after.
  *

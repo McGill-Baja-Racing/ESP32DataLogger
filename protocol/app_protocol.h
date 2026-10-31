@@ -52,6 +52,12 @@ typedef enum {
     NODE_STATE_REASON_BEACON_SYNC = 5,
 } node_state_reason_t;
 
+/* Frozen in every protocol version: CAN_BITRATE, IDs 0x0A0-0x0A7 staying
+ * master-to-node, the update and identity frame IDs and layouts below, the
+ * update_op_t, update_reply_t and update_error_t values, and
+ * firmware_identity_t. A master and nodes on different protocols use them to
+ * update and to follow the master. */
+
 /* Node N replies on CAN_ID_NODE_UPDATE_BASE + N: u8 update_reply_t, then for
  * READ u32 offset | u8 tag, for ERROR u8 update_error_t. */
 #define CAN_ID_NODE_UPDATE_BASE     0x080
@@ -67,6 +73,10 @@ typedef enum {
  * 7i to 7i+6 of the chunk at the READ offset, which is
  * min(UPDATE_CHUNK_BYTES, image_size - offset) long. */
 #define CAN_ID_UPDATE_DATA          0x0A5
+
+/* The master sends its node_identity_frame_t periodically. A node boots
+ * whichever of its two app slots matches the master's protocol_hash. */
+#define CAN_ID_MASTER_IDENTITY      0x0A6
 
 typedef enum {
     UPDATE_OP_IDENTIFY = 1,
