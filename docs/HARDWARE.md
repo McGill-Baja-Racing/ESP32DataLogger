@@ -22,6 +22,7 @@ These GPIOs connect to a suitable CAN transceiver, not directly to CAN-H/CAN-L. 
 | Generic ADC | GPIO1 | Voltage in mV; calibrated ADC when available, approximate fallback otherwise |
 | Engine spark | GPIO3 | Conditioned digital rising edges, one revolution per spark, accepted 1000–6000 RPM intervals, 100 ms stopped timeout |
 | Bearing A/B | GPIO6/GPIO7 | SKF BMB-6202/032S2/UB108A, 32 pulses/revolution, four-edge decoding (128 counts/revolution) |
+| CVT thermistor / thermopile | GPIO3/GPIO2 | 100 kΩ NTC (β 3960) under a 3.3 V divider with 100 kΩ fixed; ZTP-148SR through INA126 (gain 247) |
 | MPU SDA/SCL | GPIO4/GPIO5 | I2C acceleration/gyro; addresses 0x68 or 0x69, ±8 g and ±2000 degrees/second |
 
 The [front](../sensor-node/src/sensors/front_brake.c) and [rear](../sensor-node/src/sensors/rear_brake.c) drivers define these pins and divider scales. Inspect the fitted harness and divider before flashing or rewiring. These are code-derived assumptions, not measured calibration results.

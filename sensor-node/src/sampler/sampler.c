@@ -250,7 +250,7 @@ static void send_task(void *argument)
 esp_err_t sampler_init(void)
 {
     sensors = sensor_registry(&sensor_count);
-#if NODE_FIXED_BRAKE_CONFIG || NODE_FIXED_ADC_CONFIG
+#if NODE_FIXED_BRAKE_CONFIG || NODE_FIXED_ADC_CONFIG || NODE_FIXED_CVT_TEMP_CONFIG
     esp_err_t error = adc_input_init();
     if (error != ESP_OK) {
         return error;

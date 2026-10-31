@@ -31,6 +31,10 @@ extern sensor_t mpu_gyro_y_sensor;
 extern sensor_t mpu_gyro_z_sensor;
 
 static sensor_t sensors[6];
+#elif NODE_FIXED_CVT_TEMP_CONFIG
+extern sensor_t cvt_belt_sensor;
+
+static sensor_t sensors[1];
 #else
 #error "Select a fixed sensor-node configuration"
 #endif
@@ -51,6 +55,8 @@ sensor_t *sensor_registry(size_t *count)
     sensors[3] = mpu_gyro_x_sensor;
     sensors[4] = mpu_gyro_y_sensor;
     sensors[5] = mpu_gyro_z_sensor;
+#elif NODE_FIXED_CVT_TEMP_CONFIG
+    sensors[0] = cvt_belt_sensor;
 #else
     sensors[0] = generic_adc_sensor;
 #endif

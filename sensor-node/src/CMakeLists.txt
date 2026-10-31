@@ -11,6 +11,7 @@ idf_component_register(
         "sensors/generic_adc.c"
         "sensors/engine_rpm.c"
         "sensors/mpu6500.c"
+        "sensors/ir_sensor.c"
         "time/time_sync.c"
     INCLUDE_DIRS
         "."
