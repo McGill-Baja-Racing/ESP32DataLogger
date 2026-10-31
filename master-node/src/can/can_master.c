@@ -143,9 +143,10 @@ static bool receive_callback(twai_node_handle_t node,
 /**
  * @brief Send one frame and wait until it is out.
  *
- * Used by can_master_send(). Only one frame is in flight at a time, so it
- * first waits for the previous one. Once the driver holds the frame, it goes
- * out even after a timeout, unless bus-off recovery discards it.
+ * Used by can_master_send(), and safe from any task. Only one frame is in
+ * flight at a time, so it first waits for the previous one; each wait gives
+ * up after 100 ms. Once the driver holds the frame, it goes out even after a
+ * timeout, unless bus-off recovery discards it.
  *
  * @param queued Set to true once the driver holds the frame.
  * @return ESP_OK once sent; errors as for can_master_send().
@@ -207,10 +208,12 @@ esp_err_t can_master_send(uint32_t id, const uint8_t *payload, uint8_t length)
  * @brief Send an empty command frame 5 times, 20 ms apart.
  *
  * An empty START or STOP is for all nodes. The repeats cover a node that
- * misses one copy; nodes act only on the first and acknowledge each.
+ * misses one copy; nodes act only on the first and acknowledge each. Blocks
+ * for at least 80 ms.
  *
  * @param id CAN_ID_START or CAN_ID_STOP.
- * @return ESP_OK if every copy was sent, otherwise the first error.
+ * @return ESP_OK if every copy was sent, otherwise the first error. Other
+ *         copies may still have gone out.
  */
 static esp_err_t send_command_burst(uint32_t id)
 {
@@ -320,7 +323,7 @@ static void recovery_task(void *argument)
                 (!recovering || generation != recovery_generation)) {
                 error = twai_node_recover(can_handle);
                 node_health_count(HEALTH_CAN_BUS_OFF, 1, 0, error);
-                recovering = (error == ESP_OK);
+                recovering = error == ESP_OK;
                 if (recovering) {
                     recovery_generation = generation;
                     recovery_warning_at = xTaskGetTickCount();

@@ -184,10 +184,10 @@ static bool targets_this_node(const can_message_t *message)
 /**
  * @brief Send one frame and wait until it is out.
  *
- * Shared by can_node_send() and can_node_queue(). Only one frame is in flight
- * at a time, so it first waits for the previous one. Once the driver holds
- * the frame, it goes out even after a timeout, unless bus-off recovery
- * discards it.
+ * Shared by can_node_send() and can_node_queue(), and safe from any task.
+ * Only one frame is in flight at a time, so it first waits for the previous
+ * one; each wait gives up after 50 ms. Once the driver holds the frame, it
+ * goes out even after a timeout, unless bus-off recovery discards it.
  *
  * @param queued Set to true once the driver holds the frame.
  * @return ESP_OK once sent; errors as for can_node_send().

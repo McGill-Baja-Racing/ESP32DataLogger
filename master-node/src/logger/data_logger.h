@@ -97,9 +97,7 @@ data_logger_rename_result_t data_logger_rename(const char *old_filename,
 /**
  * @brief Queue a sensor frame for the log file.
  *
- * Stamps it with UTC time from its timestamp, for the .utc side file. A full
- * queue drops the frame, adds it to data_logger_drop_count() and counts
- * HEALTH_SAMPLES_DROPPED.
+ * Only while running; see enqueue() in data_logger.c.
  *
  * @param message Received sensor frame.
  * @return false if the sample was not queued: not running, or queue full.
@@ -110,7 +108,7 @@ bool data_logger_enqueue(const can_message_t *message);
  * @brief Queue a health frame for the log file, like data_logger_enqueue().
  *
  * Also accepts for 200 ms after stop: a node sends events until it hears
- * STOP and counts a sent event as delivered.
+ * STOP and counts a sent event as delivered. See enqueue() in data_logger.c.
  *
  * @param message Received health frame.
  * @return false if the frame was not queued.

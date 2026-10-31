@@ -17,7 +17,7 @@ void time_sync_update(uint64_t master_time_us);
 /**
  * @brief Get the current time on the master's clock, in milliseconds.
  *
- * Before the first beacon it returns local time since boot instead.
+ * See time_sync_timestamp_ms_at(), called with the current local time.
  *
  * @return Master time in ms.
  */

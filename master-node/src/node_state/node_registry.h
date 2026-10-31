@@ -52,7 +52,7 @@ void node_registry_set_monitoring(bool enabled);
 /**
  * @brief Note a sensor frame: its node is alive and sending data.
  *
- * Finds the node from the CAN ID. Logs when an offline node comes back.
+ * Finds the node from the CAN ID; see record_frame() in node_registry.c.
  *
  * @param message Received sensor frame.
  */
@@ -61,7 +61,7 @@ void node_registry_record_sensor_frame(const can_message_t *message);
 /**
  * @brief Note a health frame: the node is alive, but this is not sensor data.
  *
- * Logs when an offline node comes back.
+ * See record_frame() in node_registry.c.
  *
  * @param node_id Node that sent the frame.
  */

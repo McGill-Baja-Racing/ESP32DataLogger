@@ -235,8 +235,9 @@ bool data_logger_stop(void)
 /**
  * @brief Queue a frame for writer_task with its UTC time.
  *
- * A full queue drops the frame, adds it to queue_drops and counts
- * HEALTH_SAMPLES_DROPPED.
+ * The UTC time comes from the frame's timestamp and goes to the .utc side
+ * file. A full queue drops the frame, adds it to queue_drops (see
+ * data_logger_drop_count()) and counts HEALTH_SAMPLES_DROPPED.
  *
  * @param message Frame to log.
  * @return true if queued.

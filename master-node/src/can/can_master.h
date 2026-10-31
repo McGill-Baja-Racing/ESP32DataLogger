@@ -34,10 +34,9 @@ esp_err_t can_master_init(can_message_handler_t message_handler);
 /**
  * @brief Send one standard-ID CAN frame and wait until it is on the bus.
  *
- * Safe from any task. One frame is in flight at a time, so this first waits
- * for the previous one; each wait gives up after 100 ms. A failure is counted
- * in master health. If the frame was handed to the driver but timed out, it
- * can still go out later, and is counted only if the driver aborts it.
+ * See transmit() in can_master.c. A failure is counted in master health,
+ * except for a frame the driver already holds: that one is counted only if
+ * the driver aborts it.
  *
  * @param id 11-bit CAN ID.
  * @param payload Copied; may be NULL when length is 0.
@@ -53,8 +52,7 @@ esp_err_t can_master_send(uint32_t id, const uint8_t *payload, uint8_t length);
 /**
  * @brief Tell all nodes to start sampling.
  *
- * Sends START to every node 5 times, 20 ms apart, so a node that misses one
- * copy still starts. Blocks for at least 80 ms.
+ * Sends CAN_ID_START; see send_command_burst() in can_master.c.
  *
  * @return ESP_OK if every copy was sent, otherwise the first error. Other
  *         copies may still have gone out.
@@ -64,7 +62,7 @@ esp_err_t can_master_start_nodes(void);
 /**
  * @brief Tell all nodes to stop sampling.
  *
- * Sends STOP the same way can_master_start_nodes() sends START.
+ * Sends CAN_ID_STOP; see send_command_burst() in can_master.c.
  *
  * @return ESP_OK if every copy was sent, otherwise the first error. Other
  *         copies may still have gone out.
