@@ -703,11 +703,14 @@ static const char *receive_firmware(httpd_req_t *request)
 
 static esp_err_t firmware_upload_handler(httpd_req_t *request)
 {
-    if (firmware_files_locked()) return firmware_busy_error(request);
     if (request->content_len > FIRMWARE_MAX_BYTES) {
         return send_json_error(request, "413 Content Too Large", "Image is larger than 4 MB");
     }
-    if (!firmware_update_lock_files()) return firmware_busy_error(request);
+    if (app_control_begin_upload() != APP_CONTROL_OK) return firmware_busy_error(request);
+    if (!firmware_update_lock_files()) {
+        app_control_end_upload();
+        return firmware_busy_error(request);
+    }
     char stored[24];
     const char *reason = receive_firmware(request);
     esp_err_t result = ESP_FAIL;
@@ -716,6 +719,7 @@ static esp_err_t firmware_upload_handler(httpd_req_t *request)
                                              &reason);
     }
     firmware_update_unlock_files();
+    app_control_end_upload();
     if (result == ESP_ERR_INVALID_ARG) {
         return send_json_error(request, "400 Bad Request", reason);
     }
@@ -759,7 +763,7 @@ static esp_err_t firmware_update_handler(httpd_req_t *request)
         return send_json_error(request, "409 Conflict", "Stop recording before updating");
     }
     if (result == APP_CONTROL_BUSY) {
-        return send_json_error(request, "409 Conflict", "An update is already running");
+        return send_json_error(request, "409 Conflict", "Firmware update or upload in progress");
     }
     if (result != APP_CONTROL_OK) {
         return send_json_error(request, "500 Internal Server Error", "Unable to start the update");

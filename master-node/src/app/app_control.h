@@ -71,16 +71,30 @@ app_control_result_t app_control_stop_logging(void);
  * @brief Start the firmware update task for sensor nodes and the master.
  *
  * @return APP_CONTROL_OK, CONFLICT unless the logger is idle, BUSY if an
- *         update is running, or FAILED if the lock was held for over 1 s or
- *         the task could not start.
+ *         update or upload is running, or FAILED if the lock was held for
+ *         over 1 s or the task could not start.
  */
 app_control_result_t app_control_update_firmware(void);
-bool app_control_firmware_busy(void);
 
 /**
  * @brief Whether a firmware update is running.
  */
 bool app_control_firmware_busy(void);
+
+/**
+ * @brief Claim the SD card for a firmware upload; logging cannot start until
+ *        app_control_end_upload().
+ *
+ * @return APP_CONTROL_OK, CONFLICT unless the logger is idle, BUSY if an
+ *         update or upload is running, or FAILED if the lock was held for
+ *         over 1 s.
+ */
+app_control_result_t app_control_begin_upload(void);
+
+/**
+ * @brief Release the claim taken by app_control_begin_upload().
+ */
+void app_control_end_upload(void);
 
 /**
  * @brief Give one viewer the live data lease, only while logging.

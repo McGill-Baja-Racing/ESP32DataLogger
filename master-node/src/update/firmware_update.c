@@ -18,6 +18,7 @@
 #include "freertos/queue.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
+#include "node_state/node_registry.h"
 #include "protocol/app_protocol.h"
 #include "sdkconfig.h"
 
@@ -501,16 +502,32 @@ static const char *flash_node(unsigned int id, const image_t *image)
     }
     return "failed: new image not confirmed";
 }
+
+/* True when node id will not end this run confirmed on protocol. */
+static bool off_protocol(unsigned int id, uint16_t protocol, int64_t asked_us)
+{
+    if (nodes[id].heard_us < asked_us) {
+        return (MASTER_EXPECTED_NODE_MASK & (1U << id)) != 0;
+    }
+    /* A trial image can still roll back to the old protocol. */
+    if (node_on_trial(id)) {
+        return true;
+    }
+    if (image_problem(&images[id], nodes[id].frame.elf_sha256)) {
+        return nodes[id].frame.protocol_hash != protocol;
+    }
+    return images[id].protocol_hash != protocol;
+}
 #endif
 
-static const char *update_master(bool node_failed)
+static const char *update_master(const char *blocked)
 {
     const char *problem = master_problem();
     if (problem) {
         return problem;
     }
-    if (node_failed) {
-        return "skipped: a node update failed";
+    if (blocked) {
+        return blocked;
     }
     const image_t *image = &images[0];
     const esp_partition_t *part = esp_ota_get_next_update_partition(NULL);
@@ -605,7 +622,7 @@ void firmware_update_run(void)
     }
     scan_images(-1);
 
-    bool node_failed = false;
+    const char *master_blocked = NULL;
 #if MASTER_CAN_ENABLED
     int64_t asked_us = esp_timer_get_time();
     (void)firmware_update_request_identity();
@@ -613,6 +630,18 @@ void firmware_update_run(void)
 
     /* Nodes flashed to a protocol the master will not run would be stranded. */
     uint16_t master_protocol = master_problem() ? CAN_PROTOCOL_HASH : images[0].protocol_hash;
+    bool stranded = false;
+    if (master_protocol != CAN_PROTOCOL_HASH) {
+        for (unsigned int id = 1; id < CAN_NODE_SLOT_COUNT; id++) {
+            if (firmware_update_is_slot(id) && off_protocol(id, master_protocol, asked_us)) {
+                stranded = true;
+            }
+        }
+    }
+    /* Decided before any flash so no node moves to a protocol the master will not install. */
+    if (stranded) {
+        master_protocol = CAN_PROTOCOL_HASH;
+    }
 
     for (unsigned int id = 1; id < CAN_NODE_SLOT_COUNT; id++) {
         if (!firmware_update_is_slot(id)) {
@@ -624,24 +653,32 @@ void firmware_update_run(void)
             result = "offline";
         } else if (!result && images[id].protocol_hash != master_protocol) {
             result = "skipped: protocol differs from master";
-            node_failed = true;
+            master_blocked = "skipped: a node update failed";
         } else if (!result) {
             ESP_LOGI(TAG, "Node %u: flashing %s", id, images[id].path);
             percent = 0;
             target = (int)id;
             result = flash_node(id, &images[id]);
             if (strcmp(result, "updated") != 0) {
-                node_failed = true;
+                master_blocked = "skipped: a node update failed";
             }
         }
         results[id] = result;
         ESP_LOGI(TAG, "Node %u: %s", id, result);
     }
+    if (stranded) {
+        master_blocked = "skipped: a node is not on the new protocol";
+    }
+#else
+    /* Without CAN the nodes cannot be checked. */
+    if (images[0].protocol_hash != CAN_PROTOCOL_HASH) {
+        master_blocked = "skipped: protocol change needs CAN";
+    }
 #endif
 
     percent = 0;
     target = 0;
-    results[0] = update_master(node_failed);
+    results[0] = update_master(master_blocked);
     ESP_LOGI(TAG, "Master: %s", results[0]);
     bool restart = strcmp(results[0], MASTER_UPDATED) == 0;
     if (restart) {
