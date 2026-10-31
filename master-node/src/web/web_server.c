@@ -706,7 +706,14 @@ static esp_err_t firmware_upload_handler(httpd_req_t *request)
     if (request->content_len > FIRMWARE_MAX_BYTES) {
         return send_json_error(request, "413 Content Too Large", "Image is larger than 4 MB");
     }
-    if (app_control_begin_upload() != APP_CONTROL_OK) return firmware_busy_error(request);
+    app_control_result_t claim = app_control_begin_upload();
+    if (claim == APP_CONTROL_CONFLICT) {
+        return send_json_error(request, "409 Conflict", "Stop recording before uploading");
+    }
+    if (claim == APP_CONTROL_BUSY) return firmware_busy_error(request);
+    if (claim != APP_CONTROL_OK) {
+        return send_json_error(request, "500 Internal Server Error", "Unable to start the upload");
+    }
     if (!firmware_update_lock_files()) {
         app_control_end_upload();
         return firmware_busy_error(request);
