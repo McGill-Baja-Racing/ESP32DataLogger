@@ -367,10 +367,11 @@ static bool checkpoint_file(void)
  * @brief Task that writes queued frames to the SD card.
  *
  * Writes in blocks of 100 records, and every 15 s writes what it has and
- * saves the files with checkpoint_file(). When stopping, it ends the run once
- * the queue is empty and 200 ms have passed since stop: it writes the rest,
- * closes both files and sets the state to LOGGER_IDLE. Frames that arrive
- * while idle are dropped.
+ * saves the files with checkpoint_file(). It saves even if that write fails,
+ * so a lost file is reopened, and keeps the unwritten records to retry at the
+ * next checkpoint. When stopping, it ends the run once the queue is empty and
+ * 200 ms have passed since stop: it writes the rest, closes both files and
+ * sets the state to LOGGER_IDLE. Frames that arrive while idle are dropped.
  */
 static void writer_task(void *argument)
 {
