@@ -46,6 +46,13 @@ static const char *TAG = "GpsReceiver";
 static TaskHandle_t gps_task_handle;
 static gps_sample_handler_t on_sample;
 
+/**
+ * @brief Pass one GPS value to the sample handler as a CAN-format frame.
+ *
+ * @param id CAN ID of the signal.
+ * @param value Sample value.
+ * @param timestamp_ms Master time in ms.
+ */
 static void emit_sample(uint32_t id, int32_t value, uint32_t timestamp_ms)
 {
     if (!on_sample) return;
@@ -57,14 +64,29 @@ static void emit_sample(uint32_t id, int32_t value, uint32_t timestamp_ms)
     on_sample(&sample);
 }
 
+/**
+ * @brief Tell whether a byte begins a new NMEA burst.
+ *
+ * @param received_us When the byte arrived.
+ * @param previous_byte_us When the byte before it arrived, or 0 for none.
+ * @return true for the first byte ever or a byte after GPS_BURST_GAP_US of
+ *         silence.
+ */
 static bool starts_new_burst(int64_t received_us, int64_t previous_byte_us)
 {
     bool first_byte_ever = previous_byte_us == 0;
     return first_byte_ever || received_us - previous_byte_us >= GPS_BURST_GAP_US;
 }
 
-/* Wait for the receiver to acknowledge a command, skipping the NMEA text it
- * keeps sending meanwhile. */
+/**
+ * @brief Wait for the receiver to acknowledge a command.
+ *
+ * Skips the NMEA text the receiver keeps sending meanwhile.
+ *
+ * @param ack Expected acknowledgement bytes.
+ * @param length Size of ack.
+ * @return false if it did not arrive within GPS_ACK_TIMEOUT_US.
+ */
 static bool wait_for_ack(const uint8_t *ack, size_t length)
 {
     size_t matched = 0;
@@ -81,10 +103,13 @@ static bool wait_for_ack(const uint8_t *ack, size_t length)
     return false;
 }
 
-/* Ask the receiver for RMC only, five times a second. The setting lives in the
- * receiver's RAM and is not saved, so it is sent on every boot. Without
- * acknowledgements the receiver keeps its 1 Hz default and everything else
- * still works. */
+/**
+ * @brief Ask the receiver for RMC only, five times a second.
+ *
+ * The setting lives in the receiver's RAM and is not saved, so it is sent on
+ * every boot. Without acknowledgements the receiver keeps its 1 Hz default
+ * and everything else still works.
+ */
 static void configure_update_rate(void)
 {
     uint8_t command[UBX_FRAME_MAX], ack[UBX_FRAME_MAX];
@@ -111,6 +136,13 @@ static void configure_update_rate(void)
     uart_flush_input(GPS_UART_NUM);
 }
 
+/**
+ * @brief Read NMEA sentences forever and act on each valid RMC.
+ *
+ * Feeds the first UTC time of each burst to the absolute clock, emits a
+ * sample for speed, latitude and longitude on each fix, and updates the GPS
+ * health flags. Lines that overflow the buffer or hold a NUL are dropped.
+ */
 static void read_sentences(void)
 {
     char line[GPS_NMEA_LINE_MAX] = {0};
@@ -170,6 +202,9 @@ static void read_sentences(void)
     }
 }
 
+/**
+ * @brief Task that configures the receiver, then reads it forever.
+ */
 static void gps_task(void *argument)
 {
     (void)argument;
