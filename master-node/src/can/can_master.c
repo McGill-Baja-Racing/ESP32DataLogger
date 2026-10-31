@@ -323,7 +323,7 @@ static void recovery_task(void *argument)
                 (!recovering || generation != recovery_generation)) {
                 error = twai_node_recover(can_handle);
                 node_health_count(HEALTH_CAN_BUS_OFF, 1, 0, error);
-                recovering = error == ESP_OK;
+                recovering = (error == ESP_OK);
                 if (recovering) {
                     recovery_generation = generation;
                     recovery_warning_at = xTaskGetTickCount();

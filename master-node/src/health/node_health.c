@@ -270,7 +270,7 @@ static void print_frame(const can_message_t *message)
 {
     uint32_t base = frame_base(message->id);
     if (base != CAN_ID_NODE_EVENT_BASE) {
-        int kind = base == CAN_ID_NODE_DIAGNOSTICS_BASE;
+        int kind = (base == CAN_ID_NODE_DIAGNOSTICS_BASE);
         unsigned node = message->id - base;
         uint32_t summary = (uint32_t)message->data;
         if (printed[kind][node] && summary == last_printed[kind][node]) return;
@@ -306,7 +306,7 @@ static bool check_sequence(unsigned node, const health_event_frame_t *event,
 bool node_health_handle_frame(const can_message_t *message)
 {
     uint32_t base = frame_base(message->id);
-    bool event_frame = base == CAN_ID_NODE_EVENT_BASE;
+    bool event_frame = (base == CAN_ID_NODE_EVENT_BASE);
     if (message->dlc < (event_frame ? 8 : NODE_HEALTH_PAYLOAD)) return false;
     can_message_t frame = *message;
     frame.dlc = 8;
@@ -395,7 +395,7 @@ static void health_task(void *argument)
             }
         }
         previous = now;
-        bool recording = data_logger_state() == LOGGER_RUNNING;
+        bool recording = (data_logger_state() == LOGGER_RUNNING);
         node_status_frame_t status = {
             .faults = faults,
             .health = health_for(faults, false),

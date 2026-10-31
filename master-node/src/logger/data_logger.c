@@ -139,7 +139,7 @@ data_logger_start_result_t data_logger_start(const char *filename)
     int utc_fd = log_file
                ? open(candidate_utc_path, O_WRONLY | O_CREAT | O_EXCL, 0666)
                : -1;
-    bool utc_created = utc_fd >= 0;
+    bool utc_created = (utc_fd >= 0);
     utc_file = utc_fd >= 0 ? fdopen(utc_fd, "wb") : NULL;
     if (!utc_file && utc_fd >= 0) close(utc_fd);
     int open_error = errno;
