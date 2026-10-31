@@ -45,6 +45,8 @@ typedef struct {
 static const char *TAG = "CAN";
 
 _Static_assert(CAN_NODE_ID_MASK & (1U << NODE_ID), "NODE_ID is not in CAN_NODE_ID_MASK");
+_Static_assert((CAN_ID_MASTER_IDENTITY & 0x7F8) == CAN_ID_STOP,
+               "the receive filter passes only 0x0A0-0x0A7");
 
 static QueueHandle_t rx_queue;
 static SemaphoreHandle_t tx_mutex;
@@ -299,6 +301,12 @@ static void dispatch_task(void *argument)
             unpack_payload(&message, payload);
             if (app_callbacks.on_update_data) {
                 app_callbacks.on_update_data(payload, message.dlc);
+            }
+        } else if (message.id == CAN_ID_MASTER_IDENTITY) {
+            uint8_t payload[8];
+            unpack_payload(&message, payload);
+            if (app_callbacks.on_master_identity) {
+                app_callbacks.on_master_identity(payload, message.dlc);
             }
         }
     }

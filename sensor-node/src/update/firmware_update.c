@@ -8,6 +8,7 @@
 #include "esp_app_desc.h"
 #include "esp_log.h"
 #include "esp_ota_ops.h"
+#include "esp_partition.h"
 #include "esp_system.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
@@ -33,11 +34,19 @@
 #define UPDATE_RETRY_MS           100
 #define UPDATE_RETRY_LIMIT        20
 #define UPDATE_CONFIRM_TIMEOUT_MS 30000
+/* Spans more than the master's 2 s identity poll, so one lost confirm frame cannot fail an update. */
+#define MASTER_SWITCH_ANNOUNCEMENTS 6
 
 static const char *TAG = "FirmwareUpdate";
 
+typedef enum {
+    INPUT_COMMAND,
+    INPUT_DATA,
+    INPUT_MASTER,
+} input_kind_t;
+
 typedef struct {
-    bool data;
+    input_kind_t kind;
     uint8_t length;
     uint8_t bytes[8];
 } update_input_t;
@@ -55,6 +64,10 @@ static uint32_t chunk_length;
 static uint32_t retries;
 static TickType_t requested_at;
 static atomic_bool on_trial;
+static atomic_bool master_heard;
+static uint16_t master_protocol;
+static unsigned int announcements;
+static bool switch_checked;
 
 const __attribute__((section(".rodata_custom_desc"))) firmware_identity_t firmware_identity = {
     .magic = FIRMWARE_IDENTITY_MAGIC,
@@ -94,7 +107,7 @@ void firmware_update_handle_command(const uint8_t *payload, uint8_t length)
         return;
     }
     if ((payload[1] == UPDATE_OP_BEGIN && length >= 6) || payload[1] == UPDATE_OP_ABORT) {
-        update_input_t input = {.data = false, .length = length};
+        update_input_t input = {.kind = INPUT_COMMAND, .length = length};
         memcpy(input.bytes, payload, length);
         (void)xQueueSend(input_queue, &input, 0);
     }
@@ -102,9 +115,24 @@ void firmware_update_handle_command(const uint8_t *payload, uint8_t length)
 
 void firmware_update_handle_data(const uint8_t *payload, uint8_t length)
 {
-    update_input_t input = {.data = true, .length = length};
+    update_input_t input = {.kind = INPUT_DATA, .length = length};
     memcpy(input.bytes, payload, length);
     (void)xQueueSend(input_queue, &input, 0);
+}
+
+void firmware_update_handle_master(const uint8_t *payload, uint8_t length)
+{
+    if (length != sizeof(node_identity_frame_t)) {
+        return;
+    }
+    update_input_t input = {.kind = INPUT_MASTER, .length = length};
+    memcpy(input.bytes, payload, length);
+    (void)xQueueSend(input_queue, &input, 0);
+}
+
+bool firmware_update_master_heard(void)
+{
+    return atomic_load(&master_heard);
 }
 
 static void send_reply(const uint8_t *payload, uint8_t length)
@@ -235,9 +263,68 @@ static void accept_chunk(void)
     }
 }
 
+static bool runs_protocol(const esp_partition_t *part, uint16_t protocol)
+{
+    firmware_identity_t identity;
+    esp_ota_img_states_t state;
+    if (!part ||
+        esp_partition_read(part, FIRMWARE_IDENTITY_OFFSET, &identity, sizeof(identity)) != ESP_OK) {
+        return false;
+    }
+    /* A trial ended by power loss, not by the image, may be retried; a crashed one would loop. */
+    if (esp_ota_get_state_partition(part, &state) == ESP_OK &&
+        (state == ESP_OTA_IMG_INVALID ||
+         (state == ESP_OTA_IMG_ABORTED && esp_reset_reason() != ESP_RST_POWERON))) {
+        return false;
+    }
+    return identity.magic == FIRMWARE_IDENTITY_MAGIC && identity.node_id == NODE_ID &&
+           identity.bench_only == 0 && identity.protocol_hash == protocol;
+}
+
+/* Counting starts only once confirmed, so the master sees the new image's identity before the
+ * node switches back. */
+static void follow_master(const uint8_t *bytes)
+{
+    node_identity_frame_t master;
+    memcpy(&master, bytes, sizeof(master));
+    atomic_store(&master_heard, true);
+    if (master.protocol_hash != master_protocol) {
+        master_protocol = master.protocol_hash;
+        announcements = 0;
+        switch_checked = false;
+    }
+    if (atomic_load(&on_trial) || receiving) {
+        announcements = 0;
+        return;
+    }
+    if (master_protocol == CAN_PROTOCOL_HASH || switch_checked ||
+        ++announcements < MASTER_SWITCH_ANNOUNCEMENTS) {
+        return;
+    }
+    switch_checked = true;
+    const esp_partition_t *other = esp_ota_get_next_update_partition(NULL);
+    if (!runs_protocol(other, master_protocol)) {
+        ESP_LOGE(TAG, "Master protocol %04x, this image %04x; no slot matches",
+                 master_protocol, CAN_PROTOCOL_HASH);
+        return;
+    }
+    esp_err_t error = esp_ota_set_boot_partition(other);
+    if (error != ESP_OK) {
+        ESP_LOGE(TAG, "Cannot boot %s: %s", other->label, esp_err_to_name(error));
+        return;
+    }
+    ESP_LOGW(TAG, "Master protocol %04x; restarting into %s", master_protocol, other->label);
+    vTaskDelay(pdMS_TO_TICKS(100));
+    esp_restart();
+}
+
 static void handle_input(const update_input_t *input)
 {
-    if (!input->data) {
+    if (input->kind == INPUT_MASTER) {
+        follow_master(input->bytes);
+        return;
+    }
+    if (input->kind == INPUT_COMMAND) {
         if (input->bytes[1] == UPDATE_OP_BEGIN) {
             begin_update(input->bytes);
         } else {
