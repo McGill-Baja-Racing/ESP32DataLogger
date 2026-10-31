@@ -341,8 +341,8 @@ static void writer_task(void *argument)
             now - last_checkpoint >= pdMS_TO_TICKS(LOG_FLUSH_INTERVAL_MS)) {
             if (count == 0 || write_records(records, utc, count)) {
                 count = 0;
-                (void)checkpoint_file();
             }
+            (void)checkpoint_file();
             last_checkpoint = now;
         }
         if (state == LOGGER_STOPPING && uxQueueMessagesWaiting(log_queue) == 0 &&
