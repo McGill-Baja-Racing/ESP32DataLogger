@@ -663,9 +663,11 @@ static esp_err_t firmware_status_handler(httpd_req_t *request)
         const firmware_slot_status_t *slot = &status.slots[id];
         length += snprintf(body + length, sizeof(body) - length,
                            "%s\"%u\":{\"known\":%s,\"hash\":\"%s\",\"on_trial\":%s,"
-                           "\"needs_update\":%s,\"image\":%s,\"result\":\"%s\"}",
+                           "\"wrong_protocol\":%s,\"needs_update\":%s,\"image\":%s,"
+                           "\"result\":\"%s\"}",
                            id == 0 ? "" : ",", id, slot->known ? "true" : "false", slot->hash,
                            slot->on_trial ? "true" : "false",
+                           slot->wrong_protocol ? "true" : "false",
                            slot->needs_update ? "true" : "false",
                            slot->image ? "true" : "false", slot->result ? slot->result : "");
         if (length >= (int)sizeof(body)) {
