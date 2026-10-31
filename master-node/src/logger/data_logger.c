@@ -51,6 +51,16 @@ bool data_logger_valid_filename(const char *filename)
     return true;
 }
 
+/**
+ * @brief Pick a free default log path.
+ *
+ * Waits up to 3 s for GPS time, then uses log_YYYY-MM-DD_HH-MM-SS.bin, adding
+ * _01, _02, ... if taken. Without GPS time it uses the first free
+ * log_NNNN.bin. A name is taken if its .bin or its .utc file exists.
+ *
+ * @param path Set to the full path under /sdcard.
+ * @param path_size Size of path.
+ */
 static void choose_default_log_path(char *path, size_t path_size)
 {
     TickType_t started = xTaskGetTickCount();
@@ -222,6 +232,15 @@ bool data_logger_stop(void)
     return true;
 }
 
+/**
+ * @brief Queue a frame for writer_task with its UTC time.
+ *
+ * A full queue drops the frame, adds it to queue_drops and counts
+ * HEALTH_SAMPLES_DROPPED.
+ *
+ * @param message Frame to log.
+ * @return true if queued.
+ */
 static bool enqueue(const can_message_t *message)
 {
     queued_sample_t sample = { .message = *message,
@@ -257,12 +276,30 @@ const char *data_logger_state_name(void)
            state == LOGGER_STOPPING ? "stopping" : "idle";
 }
 
-/* A lost log or UTC file stays a fault until the next run. Call with file_mutex held. */
+/**
+ * @brief Set HEALTH_SD_WRITE if a log or UTC file was lost during a run.
+ *
+ * A lost file stays a fault until the next run. Call with file_mutex held.
+ */
 static void update_sd_fault(void)
 {
     node_health_set(HEALTH_SD_WRITE, state != LOGGER_IDLE && (!log_file || !utc_file));
 }
 
+/**
+ * @brief Append records to the .bin file and their UTC times to the .utc file.
+ *
+ * The .utc file must stay record-for-record aligned with the .bin, so UTC is
+ * written only for records fully written to the .bin. If the .utc write fails
+ * or the .bin write is short, the .utc file is closed for the rest of the run;
+ * the .bin keeps logging. Flushes both, and a failed flush counts
+ * HEALTH_SD_WRITE.
+ *
+ * @param records CAN ID and data per record.
+ * @param utc UTC time in ms per record.
+ * @param count Number of records.
+ * @return false if the .bin write was short or the file is gone.
+ */
 static bool write_records(const int64_t records[][2], const int64_t *utc, size_t count)
 {
     size_t bytes = count * sizeof(records[0]);
@@ -296,6 +333,15 @@ static bool write_records(const int64_t records[][2], const int64_t *utc, size_t
     return true;
 }
 
+/**
+ * @brief Close and reopen both log files to save them.
+ *
+ * The file size on the card is only updated on close, so this keeps a power
+ * cut from losing more than the time since the last checkpoint.
+ *
+ * @return false if the .bin file could not be reopened; nothing is written
+ *         until a later checkpoint reopens it.
+ */
 static bool checkpoint_file(void)
 {
     if (xSemaphoreTake(file_mutex, portMAX_DELAY) != pdTRUE) return false;
@@ -316,6 +362,15 @@ static bool checkpoint_file(void)
     return true;
 }
 
+/**
+ * @brief Task that writes queued frames to the SD card.
+ *
+ * Writes in blocks of 100 records, and every 15 s writes what it has and
+ * saves the files with checkpoint_file(). When stopping, it ends the run once
+ * the queue is empty and 200 ms have passed since stop: it writes the rest,
+ * closes both files and sets the state to LOGGER_IDLE. Frames that arrive
+ * while idle are dropped.
+ */
 static void writer_task(void *argument)
 {
     (void)argument;

@@ -30,6 +30,12 @@ static registered_node_t nodes[CAN_NODE_SLOT_COUNT];
 static bool monitoring;
 static portMUX_TYPE registry_lock = portMUX_INITIALIZER_UNLOCKED;
 
+/**
+ * @brief Check whether a node is in MASTER_EXPECTED_NODE_MASK.
+ *
+ * @param id Node ID.
+ * @return true if the master expects this node and watches it.
+ */
 static bool is_configured_node(uint32_t id)
 {
     return id < 32 && (MASTER_EXPECTED_NODE_MASK & (1U << id)) != 0;
@@ -80,7 +86,15 @@ void node_registry_set_monitoring(bool enabled)
     portEXIT_CRITICAL(&registry_lock);
 }
 
-/* Any frame proves the node is alive; only sensor frames prove data flows. */
+/**
+ * @brief Mark a node alive after one of its frames arrives.
+ *
+ * Any frame proves the node is alive; only sensor frames prove data flows.
+ * Ignored while monitoring is off. Logs when an offline node comes back.
+ *
+ * @param id Node ID; 0 and out-of-range IDs are ignored.
+ * @param sensor_data true for a sensor frame.
+ */
 static void record_frame(uint8_t id, bool sensor_data)
 {
     if (id == 0 || id >= CAN_NODE_SLOT_COUNT) return;
@@ -113,6 +127,13 @@ void node_registry_record_health_frame(uint8_t node_id)
     record_frame(node_id, false);
 }
 
+/**
+ * @brief Task that marks silent nodes offline.
+ *
+ * Every 250 ms, while monitoring is on, it marks each expected node offline
+ * after 3 s with no frame and logs it. It then counts the newly offline nodes
+ * as HEALTH_NODE_OFFLINE, with a mask of all offline nodes as the subject.
+ */
 static void monitor_task(void *argument)
 {
     (void)argument;
