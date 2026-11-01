@@ -88,6 +88,7 @@ static void auto_start_task(void *argument)
 {
     (void)argument;
     vTaskDelay(pdMS_TO_TICKS(AUTO_START_DELAY_MS));
+    /* Refused, and not retried, while a resumed firmware update holds the claim. */
     (void)start_logging();
     vTaskDelete(NULL);
 }
@@ -114,7 +115,6 @@ void app_main(void)
         vTaskDelay(pdMS_TO_TICKS(50));
     }
     ESP_ERROR_CHECK_WITHOUT_ABORT(firmware_update_request_identity());
-    ESP_ERROR_CHECK(firmware_update_start_announcing());
 #endif
 
     serial_console_callbacks_t console = {
@@ -139,4 +139,6 @@ void app_main(void)
         ESP_LOGE(TAG, "Wi-Fi controls unavailable: %s; a new image stays on trial and rolls back",
                  esp_err_to_name(web_error));
     }
+    /* Node updates need only CAN, so a confirmed image with a leftover marker still updates nodes. */
+    ESP_ERROR_CHECK_WITHOUT_ABORT(app_control_resume_firmware_update());
 }

@@ -14,12 +14,12 @@
 
 static const char *TAG = "AppControl";
 static SemaphoreHandle_t lifecycle_mutex;
-static bool updating;
-static bool uploading;
+static bool firmware_claimed;
 
 esp_err_t app_control_init(void)
 {
     lifecycle_mutex = xSemaphoreCreateMutex();
+    firmware_claimed = firmware_update_resume_pending();
     return lifecycle_mutex ? ESP_OK : ESP_ERR_NO_MEM;
 }
 
@@ -35,10 +35,15 @@ app_control_result_t app_control_start_logging(const char *filename)
         xSemaphoreGive(lifecycle_mutex);
         return APP_CONTROL_CONFLICT;
     }
-    if (updating || uploading) {
-        ESP_LOGW(TAG, "Start rejected during firmware update or upload");
+    if (firmware_claimed || firmware_update_on_trial()) {
+        ESP_LOGW(TAG, "Start rejected during a firmware change or an unconfirmed image");
         xSemaphoreGive(lifecycle_mutex);
-        return APP_CONTROL_CONFLICT;
+        return APP_CONTROL_BUSY;
+    }
+    if (firmware_update_node_protocol_differs()) {
+        ESP_LOGW(TAG, "Start rejected: a node runs another protocol; update its firmware");
+        xSemaphoreGive(lifecycle_mutex);
+        return APP_CONTROL_NODE_PROTOCOL;
     }
     data_logger_start_result_t start_result = data_logger_prepare(filename);
     if (start_result != DATA_LOGGER_START_OK) {
@@ -107,8 +112,36 @@ app_control_result_t app_control_stop_logging(void)
     return APP_CONTROL_OK;
 }
 
+app_control_result_t app_control_claim_firmware(void)
+{
+    if (!lifecycle_mutex ||
+        xSemaphoreTake(lifecycle_mutex, pdMS_TO_TICKS(1000)) != pdTRUE) {
+        return APP_CONTROL_FAILED;
+    }
+    if (data_logger_state() != LOGGER_IDLE) {
+        ESP_LOGW(TAG, "Firmware change rejected while logger is %s; run stop first",
+                 data_logger_state_name());
+        xSemaphoreGive(lifecycle_mutex);
+        return APP_CONTROL_CONFLICT;
+    }
+    if (firmware_claimed) {
+        xSemaphoreGive(lifecycle_mutex);
+        return APP_CONTROL_BUSY;
+    }
+    firmware_claimed = true;
+    xSemaphoreGive(lifecycle_mutex);
+    return APP_CONTROL_OK;
+}
+
+void app_control_release_firmware(void)
+{
+    xSemaphoreTake(lifecycle_mutex, portMAX_DELAY);
+    firmware_claimed = false;
+    xSemaphoreGive(lifecycle_mutex);
+}
+
 /**
- * @brief Task that runs firmware_update_run(), then ends the update.
+ * @brief Task that runs firmware_update_run(), then releases the claim.
  *
  * A master that flashed itself restarts and never gets past the run.
  */
@@ -116,67 +149,37 @@ static void update_task(void *argument)
 {
     (void)argument;
     firmware_update_run();
-    xSemaphoreTake(lifecycle_mutex, portMAX_DELAY);
-    updating = false;
-    xSemaphoreGive(lifecycle_mutex);
+    app_control_release_firmware();
     vTaskDelete(NULL);
+}
+
+/**
+ * @brief Start update_task(); releases the claim if it cannot start.
+ */
+static bool start_update_task(void)
+{
+    if (xTaskCreate(update_task, "fw_update", 6144, NULL, 5, NULL) != pdPASS) {
+        app_control_release_firmware();
+        return false;
+    }
+    return true;
 }
 
 app_control_result_t app_control_update_firmware(void)
 {
-    if (!lifecycle_mutex ||
-        xSemaphoreTake(lifecycle_mutex, pdMS_TO_TICKS(1000)) != pdTRUE) {
-        return APP_CONTROL_FAILED;
+    app_control_result_t result = app_control_claim_firmware();
+    if (result != APP_CONTROL_OK) {
+        return result;
     }
-    if (data_logger_state() != LOGGER_IDLE) {
-        ESP_LOGW(TAG, "Update rejected while logger is %s; run stop first",
-                 data_logger_state_name());
-        xSemaphoreGive(lifecycle_mutex);
-        return APP_CONTROL_CONFLICT;
-    }
-    if (updating || uploading) {
-        xSemaphoreGive(lifecycle_mutex);
-        return APP_CONTROL_BUSY;
-    }
-    updating = true;
-    if (xTaskCreate(update_task, "fw_update", 6144, NULL, 5, NULL) != pdPASS) {
-        updating = false;
-        xSemaphoreGive(lifecycle_mutex);
-        return APP_CONTROL_FAILED;
-    }
-    xSemaphoreGive(lifecycle_mutex);
-    return APP_CONTROL_OK;
+    return start_update_task() ? APP_CONTROL_OK : APP_CONTROL_FAILED;
 }
 
-bool app_control_firmware_busy(void)
+esp_err_t app_control_resume_firmware_update(void)
 {
-    return updating;
-}
-
-app_control_result_t app_control_begin_upload(void)
-{
-    if (!lifecycle_mutex ||
-        xSemaphoreTake(lifecycle_mutex, pdMS_TO_TICKS(1000)) != pdTRUE) {
-        return APP_CONTROL_FAILED;
+    if (!firmware_update_resume_pending()) {
+        return ESP_OK;
     }
-    if (data_logger_state() != LOGGER_IDLE) {
-        xSemaphoreGive(lifecycle_mutex);
-        return APP_CONTROL_CONFLICT;
-    }
-    if (updating || uploading) {
-        xSemaphoreGive(lifecycle_mutex);
-        return APP_CONTROL_BUSY;
-    }
-    uploading = true;
-    xSemaphoreGive(lifecycle_mutex);
-    return APP_CONTROL_OK;
-}
-
-void app_control_end_upload(void)
-{
-    xSemaphoreTake(lifecycle_mutex, portMAX_DELAY);
-    uploading = false;
-    xSemaphoreGive(lifecycle_mutex);
+    return start_update_task() ? ESP_OK : ESP_ERR_NO_MEM;
 }
 
 app_control_result_t app_control_start_live_data(uint32_t *token)
