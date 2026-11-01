@@ -1,12 +1,11 @@
 #pragma once
 
-#include <stdbool.h>
 #include <stdint.h>
 
 #include "esp_err.h"
 
 /**
- * @brief Start the task that receives updates and follows the master.
+ * @brief Start the task that receives updates.
  *
  * Call before can_node_init(): its update callbacks feed this task. If the
  * running image is on trial, the task restarts the node 30 s after boot to
@@ -47,24 +46,6 @@ void firmware_update_handle_command(const uint8_t *payload, uint8_t length);
  * @param length Payload bytes, 0-8.
  */
 void firmware_update_handle_data(const uint8_t *payload, uint8_t length);
-
-/**
- * @brief Queue a master identity announcement for the update task.
- *
- * See follow_master() in firmware_update.c. Ignored unless it is a whole
- * node_identity_frame_t; a full queue drops it.
- *
- * @param payload CAN_ID_MASTER_IDENTITY payload.
- * @param length Payload bytes.
- */
-void firmware_update_handle_master(const uint8_t *payload, uint8_t length);
-
-/**
- * @brief Check whether a master identity announcement has arrived.
- *
- * @return true once the update task has handled one.
- */
-bool firmware_update_master_heard(void);
 
 /**
  * @brief Mark the running image as good, then report the new identity.

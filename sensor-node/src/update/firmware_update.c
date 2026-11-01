@@ -1,7 +1,6 @@
 #include "firmware_update.h"
 
 #include <inttypes.h>
-#include <stdatomic.h>
 #include <stdbool.h>
 #include <string.h>
 
@@ -34,15 +33,12 @@
 #define UPDATE_RETRY_MS           100
 #define UPDATE_RETRY_LIMIT        20
 #define UPDATE_CONFIRM_TIMEOUT_MS 30000
-/* Spans more than the master's 2 s identity poll, so one lost confirm frame cannot fail an update. */
-#define MASTER_SWITCH_ANNOUNCEMENTS 6
 
 static const char *TAG = "FirmwareUpdate";
 
 typedef enum {
     INPUT_COMMAND,
     INPUT_DATA,
-    INPUT_MASTER,
 } input_kind_t;
 
 typedef struct {
@@ -63,11 +59,6 @@ static uint32_t received;
 static uint32_t chunk_length;
 static uint32_t retries;
 static TickType_t requested_at;
-static atomic_bool on_trial;
-static atomic_bool master_heard;
-static uint16_t master_protocol;
-static unsigned int announcements;
-static bool switch_checked;
 
 const __attribute__((section(".rodata_custom_desc"))) firmware_identity_t firmware_identity = {
     .magic = FIRMWARE_IDENTITY_MAGIC,
@@ -80,6 +71,18 @@ _Static_assert(FIRMWARE_IDENTITY_OFFSET / UPDATE_CHUNK_BYTES ==
                (FIRMWARE_IDENTITY_OFFSET + sizeof(firmware_identity_t) - 1) / UPDATE_CHUNK_BYTES,
                "accept_chunk needs the identity inside one chunk");
 
+/**
+ * @brief Check whether the running image is on trial.
+ *
+ * @return true while the running partition is ESP_OTA_IMG_PENDING_VERIFY.
+ */
+static bool is_on_trial(void)
+{
+    esp_ota_img_states_t state;
+    return esp_ota_get_state_partition(esp_ota_get_running_partition(), &state) == ESP_OK &&
+           state == ESP_OTA_IMG_PENDING_VERIFY;
+}
+
 void firmware_update_report_identity(void)
 {
     node_identity_frame_t frame = {
@@ -87,7 +90,7 @@ void firmware_update_report_identity(void)
     };
     memcpy(frame.elf_sha256, esp_app_get_description()->app_elf_sha256,
            NODE_IDENTITY_HASH_LENGTH);
-    if (atomic_load(&on_trial)) {
+    if (is_on_trial()) {
         frame.flags |= NODE_IDENTITY_PENDING;
     }
     esp_err_t error = can_node_send(CAN_ID_NODE_IDENTITY_BASE + NODE_ID,
@@ -118,21 +121,6 @@ void firmware_update_handle_data(const uint8_t *payload, uint8_t length)
     update_input_t input = {.kind = INPUT_DATA, .length = length};
     memcpy(input.bytes, payload, length);
     (void)xQueueSend(input_queue, &input, 0);
-}
-
-void firmware_update_handle_master(const uint8_t *payload, uint8_t length)
-{
-    if (length != sizeof(node_identity_frame_t)) {
-        return;
-    }
-    update_input_t input = {.kind = INPUT_MASTER, .length = length};
-    memcpy(input.bytes, payload, length);
-    (void)xQueueSend(input_queue, &input, 0);
-}
-
-bool firmware_update_master_heard(void)
-{
-    return atomic_load(&master_heard);
 }
 
 /**
@@ -166,20 +154,10 @@ static void stop_receiving(void)
  */
 static void fail(update_error_t error)
 {
-    static const char *const names[UPDATE_ERROR_COUNT] = {
-        [UPDATE_ERROR_NONE] = "none",
-        [UPDATE_ERROR_RECORDING] = "recording",
-        [UPDATE_ERROR_TOO_LARGE] = "too large",
-        [UPDATE_ERROR_ON_TRIAL] = "on trial",
-        [UPDATE_ERROR_WRONG_IMAGE] = "wrong image",
-        [UPDATE_ERROR_FLASH] = "flash",
-        [UPDATE_ERROR_BAD_IMAGE] = "bad image",
-        [UPDATE_ERROR_TIMEOUT] = "timeout",
-    };
     stop_receiving();
     uint8_t reply[] = {UPDATE_REPLY_ERROR, error};
     send_reply(reply, sizeof(reply));
-    ESP_LOGW(TAG, "Update failed: %s", error < UPDATE_ERROR_COUNT ? names[error] : "unknown");
+    ESP_LOGW(TAG, "Update failed: error %d", error);
 }
 
 /**
@@ -235,7 +213,7 @@ static void begin_update(const uint8_t *bytes)
         fail(UPDATE_ERROR_TOO_LARGE);
         return;
     }
-    esp_err_t error = esp_ota_begin(update_partition, size, &ota_handle);
+    esp_err_t error = esp_ota_begin(update_partition, OTA_WITH_SEQUENTIAL_WRITES, &ota_handle);
     if (error != ESP_OK) {
         fail(error == ESP_ERR_OTA_ROLLBACK_INVALID_STATE ? UPDATE_ERROR_ON_TRIAL
                                                          : UPDATE_ERROR_FLASH);
@@ -246,7 +224,6 @@ static void begin_update(const uint8_t *bytes)
     image_size = size;
     offset = 0;
     retries = 0;
-    tag = NODE_ID & 7;
     request_chunk();
 }
 
@@ -270,7 +247,6 @@ static void finish_update(void)
     uint8_t reply[] = {UPDATE_REPLY_DONE};
     send_reply(reply, sizeof(reply));
     ESP_LOGI(TAG, "Update written; restarting");
-    vTaskDelay(pdMS_TO_TICKS(100));
     esp_restart();
 }
 
@@ -306,92 +282,12 @@ static void accept_chunk(void)
 }
 
 /**
- * @brief Check whether an app slot can boot this node on a protocol.
- *
- * @param part App partition, or NULL.
- * @param protocol Protocol hash to match.
- * @return false if part is NULL or unreadable, its trial failed, or its image
- *         is a bench-only build, for another node or for another protocol.
- */
-static bool runs_protocol(const esp_partition_t *part, uint16_t protocol)
-{
-    firmware_identity_t identity;
-    esp_ota_img_states_t state;
-    if (!part ||
-        esp_partition_read(part, FIRMWARE_IDENTITY_OFFSET, &identity, sizeof(identity)) != ESP_OK) {
-        return false;
-    }
-    /* A trial ended by power loss, not by the image, may be retried; a crashed one would loop. */
-    if (esp_ota_get_state_partition(part, &state) == ESP_OK &&
-        (state == ESP_OTA_IMG_INVALID ||
-         (state == ESP_OTA_IMG_ABORTED && esp_reset_reason() != ESP_RST_POWERON))) {
-        return false;
-    }
-    return identity.magic == FIRMWARE_IDENTITY_MAGIC && identity.node_id == NODE_ID &&
-           identity.bench_only == 0 && identity.protocol_hash == protocol;
-}
-
-/**
- * @brief Boot the other app slot if it matches the master's protocol.
- *
- * Once MASTER_SWITCH_ANNOUNCEMENTS announcements in a row carry a protocol
- * other than this image's, checks the other slot once and restarts into it
- * if runs_protocol(). Counting starts only once confirmed, so the master sees
- * the new image's identity before the node switches back. It also waits
- * while an update is being received.
- *
- * @param bytes node_identity_frame_t from the master.
- */
-static void follow_master(const uint8_t *bytes)
-{
-    node_identity_frame_t master;
-    memcpy(&master, bytes, sizeof(master));
-    atomic_store(&master_heard, true);
-    if (master.protocol_hash != master_protocol) {
-        master_protocol = master.protocol_hash;
-        announcements = 0;
-        switch_checked = false;
-    }
-    if (atomic_load(&on_trial) || receiving) {
-        announcements = 0;
-        return;
-    }
-    if (master_protocol == CAN_PROTOCOL_HASH || switch_checked ||
-        ++announcements < MASTER_SWITCH_ANNOUNCEMENTS) {
-        return;
-    }
-    switch_checked = true;
-    const esp_partition_t *other = esp_ota_get_next_update_partition(NULL);
-    if (!runs_protocol(other, master_protocol)) {
-        ESP_LOGE(TAG, "Master protocol %04x, this image %04x; no slot matches",
-                 master_protocol, CAN_PROTOCOL_HASH);
-        return;
-    }
-    esp_err_t error = esp_ota_set_boot_partition(other);
-    if (error != ESP_OK) {
-        ESP_LOGE(TAG, "Cannot boot %s: %s", other->label, esp_err_to_name(error));
-        return;
-    }
-    ESP_LOGW(TAG, "Master protocol %04x; restarting into %s", master_protocol, other->label);
-    vTaskDelay(pdMS_TO_TICKS(100));
-    esp_restart();
-}
-
-/**
  * @brief Handle one input on the update task.
  *
- * A data frame is kept only if it carries the current tag, an index inside
- * the chunk and the right length. Once every frame of the chunk is in, the
- * chunk is accepted.
- *
- * @param input Queued command, data frame or master announcement.
+ * @param input Queued command or data frame.
  */
 static void handle_input(const update_input_t *input)
 {
-    if (input->kind == INPUT_MASTER) {
-        follow_master(input->bytes);
-        return;
-    }
     if (input->kind == INPUT_COMMAND) {
         if (input->bytes[1] == UPDATE_OP_BEGIN) {
             begin_update(input->bytes);
@@ -445,7 +341,7 @@ static void update_task(void *argument)
             }
         }
         /* A new image that cannot reach the master must not stay installed. */
-        if (atomic_load(&on_trial) &&
+        if (is_on_trial() &&
             xTaskGetTickCount() >= pdMS_TO_TICKS(UPDATE_CONFIRM_TIMEOUT_MS)) {
             ESP_LOGE(TAG, "New image not confirmed; restarting to roll back");
             esp_restart();
@@ -455,9 +351,6 @@ static void update_task(void *argument)
 
 esp_err_t firmware_update_init(void)
 {
-    esp_ota_img_states_t state;
-    atomic_init(&on_trial, esp_ota_get_state_partition(esp_ota_get_running_partition(), &state) == ESP_OK &&
-                           state == ESP_OTA_IMG_PENDING_VERIFY);
     input_queue = xQueueCreate(UPDATE_QUEUE_LENGTH, sizeof(update_input_t));
     if (!input_queue) {
         return ESP_ERR_NO_MEM;
@@ -468,7 +361,7 @@ esp_err_t firmware_update_init(void)
 
 void firmware_update_confirm(void)
 {
-    if (!atomic_load(&on_trial)) {
+    if (!is_on_trial()) {
         return;
     }
     esp_err_t error = esp_ota_mark_app_valid_cancel_rollback();
@@ -476,7 +369,6 @@ void firmware_update_confirm(void)
         ESP_LOGW(TAG, "Confirm failed: %s", esp_err_to_name(error));
         return;
     }
-    atomic_store(&on_trial, false);
     ESP_LOGI(TAG, "New image confirmed");
     firmware_update_report_identity();
 }

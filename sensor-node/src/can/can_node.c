@@ -45,8 +45,6 @@ typedef struct {
 static const char *TAG = "CAN";
 
 _Static_assert(CAN_NODE_ID_MASK & (1U << NODE_ID), "NODE_ID is not in CAN_NODE_ID_MASK");
-_Static_assert((CAN_ID_MASTER_IDENTITY & 0x7F8) == CAN_ID_STOP,
-               "the receive filter passes only 0x0A0-0x0A7");
 
 static QueueHandle_t rx_queue;
 static SemaphoreHandle_t tx_mutex;
@@ -145,7 +143,7 @@ static bool receive_callback(twai_node_handle_t node,
 }
 
 /**
- * @brief Check whether a START or STOP command is for this node.
+ * @brief Check whether a master command is for this node.
  *
  * Byte 0 is the target node ID, 0xFF for all. No data also means all.
  *
@@ -248,9 +246,8 @@ node_state_t can_node_state(void)
  *
  * A beacon gives the master time to on_time_beacon, and starts or stops the
  * node if its recording flag disagrees with the node state. START and STOP
- * call their callback only on a state change, but every copy is acknowledged. Update
- * commands for this node, update data and master identity announcements go
- * to their callbacks.
+ * call their callback only on a state change, but every copy is acknowledged.
+ * Update commands for this node and update data go to their callbacks.
  */
 static void dispatch_task(void *argument)
 {
@@ -308,12 +305,6 @@ static void dispatch_task(void *argument)
             unpack_payload(&message, payload);
             if (app_callbacks.on_update_data) {
                 app_callbacks.on_update_data(payload, message.dlc);
-            }
-        } else if (message.id == CAN_ID_MASTER_IDENTITY) {
-            uint8_t payload[8];
-            unpack_payload(&message, payload);
-            if (app_callbacks.on_master_identity) {
-                app_callbacks.on_master_identity(payload, message.dlc);
             }
         }
     }

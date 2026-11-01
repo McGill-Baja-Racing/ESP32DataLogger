@@ -1,8 +1,9 @@
 """Shared PlatformIO pre-script for both firmwares.
 
 Hashes app_protocol.h without comments or whitespace so both firmwares agree
-when built from the same protocol, and copies each image to firmware/<env>.bin
-at the repo root for upload from the web page.
+when built from the same protocol, and copies each vehicle image to
+firmware/master.bin or firmware/node<N>.bin at the repo root for upload from
+the web page. Bench-only builds are not copied.
 """
 Import("env")
 import hashlib
@@ -17,11 +18,18 @@ text = "".join(text.split())
 protocol_hash = int(hashlib.sha256(text.encode()).hexdigest()[:4], 16)
 env.Append(CPPDEFINES=[("CAN_PROTOCOL_HASH", "0x%04X" % protocol_hash)])
 
+flags = env.GetProjectOption("build_flags", "")
+if not isinstance(flags, str):
+    flags = " ".join(flags)
+node_id = re.search(r"NODE_ID=(\d+)", flags)
+image_name = "node%s.bin" % node_id.group(1) if node_id else "master.bin"
+
 
 def copy_image(target, source, env):
     folder = root / "firmware"
     folder.mkdir(exist_ok=True)
-    shutil.copyfile(str(target[0]), folder / (env.subst("$PIOENV") + ".bin"))
+    shutil.copyfile(str(target[0]), folder / image_name)
 
 
-env.AddPostAction("$BUILD_DIR/${PROGNAME}.bin", copy_image)
+if not re.search(r"SENSOR_SERIAL_TEST=1\b|MASTER_CAN_ENABLED=0\b", flags):
+    env.AddPostAction("$BUILD_DIR/${PROGNAME}.bin", copy_image)
