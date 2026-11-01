@@ -13,7 +13,6 @@ typedef struct {
     void (*on_bus_off)(void);
     void (*on_update_command)(const uint8_t *payload, uint8_t length);
     void (*on_update_data)(const uint8_t *payload, uint8_t length);
-    void (*on_master_identity)(const uint8_t *payload, uint8_t length);
 } can_node_callbacks_t;
 
 /**

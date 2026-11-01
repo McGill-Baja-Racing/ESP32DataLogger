@@ -12,6 +12,7 @@ typedef enum {
     APP_CONTROL_BUSY,
     APP_CONTROL_INVALID_FILENAME,
     APP_CONTROL_FILENAME_EXISTS,
+    APP_CONTROL_NODE_PROTOCOL,
     APP_CONTROL_FAILED,
 } app_control_result_t;
 
@@ -34,6 +35,10 @@ typedef struct {
 /**
  * @brief Create the mutex that keeps start, stop and live data from racing.
  *
+ * Call after firmware_update_init(). If firmware_update_resume_pending(), the
+ * firmware is claimed from here, so nothing can start logging before
+ * app_control_resume_firmware_update() has updated the nodes.
+ *
  * @retval ESP_OK          Ready.
  * @retval ESP_ERR_NO_MEM  The mutex could not be created.
  */
@@ -48,11 +53,11 @@ esp_err_t app_control_init(void);
  *
  * @param filename Name on the SD card, or NULL for a default name; see
  *                 data_logger_start().
- * @return APP_CONTROL_OK, or why it did not start: not idle or a firmware
- *         update or upload is running (CONFLICT), bad name
- *         (INVALID_FILENAME), the file exists (FILENAME_EXISTS), or the file
- *         could not be created or another start or stop held the lock for
- *         over 1 s (FAILED).
+ * @return APP_CONTROL_OK, or why it did not start: not idle (CONFLICT), the
+ *         firmware is claimed or the running image is on trial (BUSY), an expected node runs another protocol
+ *         (NODE_PROTOCOL), bad name (INVALID_FILENAME), the file exists
+ *         (FILENAME_EXISTS), or the file could not be created or another
+ *         start or stop held the lock for over 1 s (FAILED).
  */
 app_control_result_t app_control_start_logging(const char *filename);
 
@@ -69,39 +74,40 @@ app_control_result_t app_control_start_logging(const char *filename);
 app_control_result_t app_control_stop_logging(void);
 
 /**
- * @brief Start the firmware update task for sensor nodes and the master.
+ * @brief Claim the firmware files and flash for one upload, delete or update.
  *
- * Returns once the task runs; see firmware_update_run(). Logging cannot
- * start until it ends.
+ * Until app_control_release_firmware(), logging cannot start and no other
+ * claim is given.
  *
- * @return APP_CONTROL_OK, CONFLICT unless the logger is idle, BUSY if an
- *         update or upload is running, or FAILED if the lock was held for
- *         over 1 s or the task could not start.
+ * @return APP_CONTROL_OK, CONFLICT unless the logger is idle, BUSY if already
+ *         claimed, or FAILED if the lock was held for over 1 s.
+ */
+app_control_result_t app_control_claim_firmware(void);
+
+/**
+ * @brief Release the claim taken by app_control_claim_firmware().
+ */
+void app_control_release_firmware(void);
+
+/**
+ * @brief Claim the firmware, then start a task that runs
+ *        firmware_update_run() and releases the claim.
+ *
+ * @return APP_CONTROL_OK once the task runs, the app_control_claim_firmware()
+ *         result, or FAILED if the task could not start.
  */
 app_control_result_t app_control_update_firmware(void);
 
 /**
- * @brief Check whether a firmware update is running.
+ * @brief Start the update task on the claim app_control_init() took, if
+ *        firmware_update_resume_pending().
  *
- * @return true from app_control_update_firmware() until the update ends.
- */
-bool app_control_firmware_busy(void);
-
-/**
- * @brief Mark a firmware upload as running.
+ * Call after firmware_update_confirm().
  *
- * Until app_control_end_upload(), logging and firmware updates cannot start.
- *
- * @return APP_CONTROL_OK, CONFLICT unless the logger is idle, BUSY if an
- *         update or upload is running, or FAILED if the lock was held for
- *         over 1 s.
+ * @retval ESP_OK          Nothing to resume, or the task is running.
+ * @retval ESP_ERR_NO_MEM  The task could not start; the claim is released.
  */
-app_control_result_t app_control_begin_upload(void);
-
-/**
- * @brief Release the claim taken by app_control_begin_upload().
- */
-void app_control_end_upload(void);
+esp_err_t app_control_resume_firmware_update(void);
 
 /**
  * @brief Give one viewer the live data lease, only while logging.

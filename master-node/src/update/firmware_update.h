@@ -20,6 +20,7 @@ typedef struct {
 } firmware_slot_status_t;
 
 typedef struct {
+    bool running;
     int target;
     unsigned int percent;
     firmware_slot_status_t slots[CAN_NODE_SLOT_COUNT];
@@ -52,17 +53,6 @@ void firmware_update_handle_identity(const can_message_t *message);
 esp_err_t firmware_update_request_identity(void);
 
 /**
- * @brief Start the task that announces the master's identity to the nodes.
- *
- * Every 500 ms it sends CAN_ID_MASTER_IDENTITY, never flagged as on trial.
- * Send errors are ignored. CAN builds only.
- *
- * @retval ESP_OK          The task is running.
- * @retval ESP_ERR_NO_MEM  The task could not be created.
- */
-esp_err_t firmware_update_start_announcing(void);
-
-/**
  * @brief Log the firmware hash of the master and each node.
  *
  * For the serial status command. Marks images on trial and slots whose stored
@@ -71,15 +61,16 @@ esp_err_t firmware_update_start_announcing(void);
 void firmware_update_print_identity(void);
 
 /**
- * @brief Restore interrupted image stores and scan FIRMWARE_DIR.
+ * @brief Read the stored images and whether an update is to be resumed.
  *
- * Needs the SD card mounted. If the running image is on trial, starts a timer
- * that restarts the master after 60 s to roll back, unless
+ * See firmware_update_resume_pending(). If FIRMWARE_DIR/resume is left by an
+ * image that rolled back, deletes it and reports the master update as
+ * failed. Needs the SD card mounted. If the running image is on trial,
+ * starts a timer that restarts the master after 60 s to roll back, unless
  * firmware_update_confirm() runs first.
  *
  * @retval ESP_OK          Ready.
- * @retval ESP_ERR_NO_MEM  The reply queue or the files lock could not be
- *                         created.
+ * @retval ESP_ERR_NO_MEM  The reply queue could not be created.
  * @return Other esp_timer errors.
  */
 esp_err_t firmware_update_init(void);
@@ -102,22 +93,45 @@ bool firmware_update_is_reply_frame(const can_message_t *message);
 void firmware_update_handle_reply(const can_message_t *message);
 
 /**
- * @brief Flash every node whose stored image differs, then the master.
+ * @brief Flash the master if its stored image differs, otherwise every node
+ *        whose stored image differs.
  *
- * Blocks for the whole update, so run it on its own task. Gives up at once
- * if the files lock is taken. Nodes that do not answer an identity request
- * within 500 ms are skipped. A node image is skipped if its protocol differs
- * from the one the master will run after this update. If the master image
- * changes the protocol but some node would not end up on it, the master keeps
- * its image and no node changes protocol. A node flashed to another protocol
- * keeps booting its old slot until the master switches. Any node failure
- * skips the master. Without CAN, only the master is updated and a protocol
- * change is refused.
+ * Blocks for the whole update, so run it on its own task, and only while
+ * holding app_control_claim_firmware(). After flashing itself, the master
+ * writes FIRMWARE_DIR/resume and restarts 2 s later; this does not return.
+ * On every boot with that marker, app_control_resume_firmware_update() runs
+ * this again; if the image is still on trial it only reports it as not
+ * confirmed, otherwise it updates the nodes. Nodes that do not answer an identity
+ * request within 500 ms are skipped, and so are node images for another
+ * protocol than the master's. A failed master update skips the nodes.
+ * Without CAN, only the master is updated.
  *
- * Progress and results show in firmware_update_get_status(). After flashing
- * itself, the master restarts 2 s later and this does not return.
+ * Progress and results show in firmware_update_get_status().
  */
 void firmware_update_run(void);
+
+/**
+ * @brief Check whether the running master image is on trial.
+ *
+ * @return true while the running partition is ESP_OTA_IMG_PENDING_VERIFY.
+ */
+bool firmware_update_on_trial(void);
+
+/**
+ * @brief Check whether the next firmware_update_run() resumes an update.
+ *
+ * @return true from firmware_update_init() until that run starts, if the
+ *         last update restarted the master and this is the image it installed.
+ */
+bool firmware_update_resume_pending(void);
+
+/**
+ * @brief Check whether an expected node runs another protocol than the master.
+ *
+ * @return true if a node in MASTER_EXPECTED_NODE_MASK last reported another
+ *         protocol_hash.
+ */
+bool firmware_update_node_protocol_differs(void);
 
 /**
  * @brief Mark the running image as good so it is not rolled back.
@@ -125,21 +139,6 @@ void firmware_update_run(void);
  * Does nothing unless the image is on trial. A failure is logged.
  */
 void firmware_update_confirm(void);
-
-/**
- * @brief Try to take the lock on the files in FIRMWARE_DIR, without waiting.
- *
- * firmware_update_store_image() and firmware_update_delete_image() need it
- * held by the caller; firmware_update_run() takes it itself.
- *
- * @return true if taken; release it with firmware_update_unlock_files().
- */
-bool firmware_update_lock_files(void);
-
-/**
- * @brief Release the lock taken by firmware_update_lock_files().
- */
-void firmware_update_unlock_files(void);
 
 /**
  * @brief Check whether an ID is a firmware slot.
@@ -152,39 +151,39 @@ bool firmware_update_is_slot(unsigned int id);
 /**
  * @brief Check an uploaded image and store it as the image of its node.
  *
- * Stores it as master.bin or node<N>.bin in FIRMWARE_DIR and deletes the
- * node's other images. The old image is kept as a .old backup until the new
- * one is in place, and put back if that fails. Needs the files lock held.
+ * Stores it as master.bin or node<N>.bin in FIRMWARE_DIR, replacing the
+ * slot's image. Call only while holding app_control_claim_firmware().
  *
  * @param temp_path Uploaded file; always gone afterwards.
- * @param stored_name Set to the stored file name on success.
- * @param stored_name_size Size of stored_name.
+ * @param stored_name Set to the stored file name on success; valid until the
+ *                    slot's image changes.
  * @param reason Set to why the image was refused, or NULL.
  * @retval ESP_OK               Stored.
  * @retval ESP_ERR_INVALID_ARG  Not a firmware image, a bench-only build, or
  *                              for an unknown node; see reason.
- * @retval ESP_FAIL             The file could not be renamed; the old image
- *                              stays.
+ * @retval ESP_FAIL             The file could not be renamed; the slot is
+ *                              left without an image.
  */
-esp_err_t firmware_update_store_image(const char *temp_path, char *stored_name,
-                                      size_t stored_name_size, const char **reason);
+esp_err_t firmware_update_store_image(const char *temp_path, const char **stored_name,
+                                      const char **reason);
 
 /**
- * @brief Delete every stored image of a slot.
+ * @brief Delete the stored image of a slot.
  *
- * Needs the files lock held.
+ * Call only while holding app_control_claim_firmware().
  *
  * @param node_id Slot accepted by firmware_update_is_slot(); not checked.
  * @retval ESP_OK             Deleted.
- * @retval ESP_ERR_NOT_FOUND  The last scan found no image for this slot.
+ * @retval ESP_ERR_NOT_FOUND  The slot has no image file.
  */
 esp_err_t firmware_update_delete_image(unsigned int node_id);
 
 /**
  * @brief Fill a status snapshot for /api/firmware and the serial console.
  *
- * Does not take a lock, so fields may change while it reads them. target is
- * the slot being flashed, or -1, and percent its progress. A node's slot is
+ * Does not take a lock, so fields may change while it reads them. running is
+ * true while firmware_update_run() runs. target is the slot being flashed, or
+ * -1, and percent its progress. A node's slot is
  * known once its identity has arrived; the master's always is. Results are
  * from the last firmware_update_run() and stay valid.
  *

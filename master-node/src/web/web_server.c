@@ -113,6 +113,19 @@ static esp_err_t send_json_error(httpd_req_t *request, const char *status,
     return httpd_resp_sendstr(request, body);
 }
 
+static esp_err_t send_claim_error(httpd_req_t *request, app_control_result_t result)
+{
+    if (result == APP_CONTROL_CONFLICT) {
+        return send_json_error(request, "409 Conflict", "Stop recording first");
+    }
+    if (result == APP_CONTROL_BUSY) {
+        return send_json_error(request, "409 Conflict",
+                               "A firmware upload, delete or update is running");
+    }
+    return send_json_error(request, "500 Internal Server Error",
+                           "Firmware is busy; try again");
+}
+
 static esp_err_t root_handler(httpd_req_t *request)
 {
     httpd_resp_set_type(request, "text/html; charset=utf-8");
@@ -173,6 +186,11 @@ static esp_err_t command_handler(httpd_req_t *request)
     if (result == APP_CONTROL_CONFLICT) {
         return send_json_error(request, "409 Conflict",
                                "Command is not valid in the current logger state");
+    }
+    if (result == APP_CONTROL_BUSY) return send_claim_error(request, result);
+    if (result == APP_CONTROL_NODE_PROTOCOL) {
+        return send_json_error(request, "409 Conflict",
+                               "A node runs another protocol; update its firmware first");
     }
     if (result == APP_CONTROL_INVALID_FILENAME) {
         return send_json_error(
@@ -633,7 +651,7 @@ static esp_err_t firmware_status_handler(httpd_req_t *request)
     char body[2048];
     int length = snprintf(body, sizeof(body),
                           "{\"updating\":%s,\"target\":%d,\"percent\":%u,\"slots\":{",
-                          app_control_firmware_busy() ? "true" : "false",
+                          status.running ? "true" : "false",
                           status.target, status.percent);
     for (unsigned int id = 0; id < CAN_NODE_SLOT_COUNT; id++) {
         if (!firmware_update_is_slot(id)) continue;
@@ -660,16 +678,6 @@ static esp_err_t firmware_status_handler(httpd_req_t *request)
     httpd_resp_set_type(request, "application/json");
     httpd_resp_set_hdr(request, "Cache-Control", "no-store");
     return httpd_resp_sendstr(request, body);
-}
-
-static bool firmware_files_locked(void)
-{
-    return data_logger_state() != LOGGER_IDLE || app_control_firmware_busy();
-}
-
-static esp_err_t firmware_busy_error(httpd_req_t *request)
-{
-    return send_json_error(request, "409 Conflict", "Firmware update in progress");
 }
 
 static const char *receive_firmware(httpd_req_t *request)
@@ -712,27 +720,19 @@ static esp_err_t firmware_upload_handler(httpd_req_t *request)
     if (request->content_len > FIRMWARE_MAX_BYTES) {
         return send_json_error(request, "413 Content Too Large", "Image is larger than 4 MB");
     }
-    app_control_result_t claim = app_control_begin_upload();
-    if (claim == APP_CONTROL_CONFLICT) {
-        return send_json_error(request, "409 Conflict", "Stop recording before uploading");
-    }
-    if (claim == APP_CONTROL_BUSY) return firmware_busy_error(request);
-    if (claim != APP_CONTROL_OK) {
-        return send_json_error(request, "500 Internal Server Error", "Unable to start the upload");
-    }
-    if (!firmware_update_lock_files()) {
-        app_control_end_upload();
-        return firmware_busy_error(request);
-    }
-    char stored[24];
+    app_control_result_t claim = app_control_claim_firmware();
+    if (claim != APP_CONTROL_OK) return send_claim_error(request, claim);
+    const char *stored = NULL;
     const char *reason = receive_firmware(request);
     esp_err_t result = ESP_FAIL;
     if (!reason) {
-        result = firmware_update_store_image(FIRMWARE_UPLOAD_PATH, stored, sizeof(stored),
-                                             &reason);
+        result = firmware_update_store_image(FIRMWARE_UPLOAD_PATH, &stored, &reason);
     }
-    firmware_update_unlock_files();
-    app_control_end_upload();
+    char body[48];
+    if (result == ESP_OK) {
+        snprintf(body, sizeof(body), "{\"stored\":\"%s\"}", stored);
+    }
+    app_control_release_firmware();
     if (result == ESP_ERR_INVALID_ARG) {
         return send_json_error(request, "400 Bad Request", reason);
     }
@@ -740,8 +740,6 @@ static esp_err_t firmware_upload_handler(httpd_req_t *request)
         return send_json_error(request, "500 Internal Server Error",
                                reason ? reason : "Unable to store the image");
     }
-    char body[48];
-    snprintf(body, sizeof(body), "{\"stored\":\"%s\"}", stored);
     httpd_resp_set_type(request, "application/json");
     return httpd_resp_sendstr(request, body);
 }
@@ -757,11 +755,10 @@ static esp_err_t firmware_delete_handler(httpd_req_t *request)
     if (*value == '\0' || *end != '\0' || !firmware_update_is_slot(node)) {
         return send_json_error(request, "400 Bad Request", "Unknown node");
     }
-    if (firmware_files_locked() || !firmware_update_lock_files()) {
-        return firmware_busy_error(request);
-    }
+    app_control_result_t claim = app_control_claim_firmware();
+    if (claim != APP_CONTROL_OK) return send_claim_error(request, claim);
     esp_err_t result = firmware_update_delete_image(node);
-    firmware_update_unlock_files();
+    app_control_release_firmware();
     if (result != ESP_OK) {
         return send_json_error(request, "404 Not Found", "No image for this node");
     }
@@ -772,15 +769,7 @@ static esp_err_t firmware_delete_handler(httpd_req_t *request)
 static esp_err_t firmware_update_handler(httpd_req_t *request)
 {
     app_control_result_t result = app_control_update_firmware();
-    if (result == APP_CONTROL_CONFLICT) {
-        return send_json_error(request, "409 Conflict", "Stop recording before updating");
-    }
-    if (result == APP_CONTROL_BUSY) {
-        return send_json_error(request, "409 Conflict", "Firmware update or upload in progress");
-    }
-    if (result != APP_CONTROL_OK) {
-        return send_json_error(request, "500 Internal Server Error", "Unable to start the update");
-    }
+    if (result != APP_CONTROL_OK) return send_claim_error(request, result);
     httpd_resp_set_status(request, "202 Accepted");
     httpd_resp_set_type(request, "application/json");
     return httpd_resp_sendstr(request, "{}");
