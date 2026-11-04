@@ -26,6 +26,7 @@
 #define CAN_ID_GPS_SPEED            0x700
 #define CAN_ID_GPS_LATITUDE         0x701
 #define CAN_ID_GPS_LONGITUDE        0x702
+#define CAN_ID_AIM_RPM              0x703 /* Normalized AiM record, not its wire ID (0x500). */
 
 #define CAN_MASTER_TIME_PERIOD_MS      100
 #define CAN_MASTER_TIME_RECORDING_FLAG (UINT64_C(1) << 63)

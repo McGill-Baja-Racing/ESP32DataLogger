@@ -90,10 +90,10 @@ static void choose_default_log_path(char *path, size_t path_size)
     }
 }
 
-data_logger_start_result_t data_logger_start(const char *filename)
+data_logger_start_result_t data_logger_prepare(const char *filename)
 {
-    if (state != LOGGER_IDLE) {
-        ESP_LOGW(TAG, "Logger is already active");
+    if (state != LOGGER_IDLE || log_file) {
+        ESP_LOGW(TAG, "Logger is already active or prepared");
         return DATA_LOGGER_START_ACTIVE;
     }
     char candidate_path[LOG_PATH_LENGTH];
@@ -142,11 +142,22 @@ data_logger_start_result_t data_logger_start(const char *filename)
     }
     snprintf(log_path, sizeof(log_path), "%s", candidate_path);
     snprintf(utc_path, sizeof(utc_path), "%s", candidate_utc_path);
-    xQueueReset(log_queue);
-    state = LOGGER_RUNNING;
     xSemaphoreGive(file_mutex);
-    ESP_LOGI(TAG, "Logging started: %s", log_path);
     return DATA_LOGGER_START_OK;
+}
+
+/* Called by recording control after preparation and before enabling recording. */
+void data_logger_clear_queue(void)
+{
+    configASSERT(state == LOGGER_IDLE);
+    xQueueReset(log_queue);
+}
+
+void data_logger_start(void)
+{
+    configASSERT(state == LOGGER_IDLE && log_file && utc_file);
+    state = LOGGER_RUNNING;
+    ESP_LOGI(TAG, "Logging started: %s", log_path);
 }
 
 data_logger_rename_result_t data_logger_rename(const char *old_filename,
@@ -168,7 +179,7 @@ data_logger_rename_result_t data_logger_rename(const char *old_filename,
     snprintf(old_utc_path, sizeof(old_utc_path), "%s.utc", old_path);
     snprintf(new_utc_path, sizeof(new_utc_path), "%s.utc", new_path);
 
-    if (state != LOGGER_IDLE &&
+    if ((state != LOGGER_IDLE || log_file) &&
         (strcmp(old_path, log_path) == 0 || strcmp(new_path, log_path) == 0)) {
         xSemaphoreGive(file_mutex);
         return DATA_LOGGER_RENAME_ACTIVE;

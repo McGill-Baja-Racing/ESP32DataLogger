@@ -1,4 +1,6 @@
 #include "live/live_data.h"
+#include "aim/aim_adapter.h"
+#include "protocol/app_protocol.h"
 
 #include <string.h>
 
@@ -24,6 +26,7 @@ static const live_signal_metadata_t signals[LIVE_DATA_SIGNAL_COUNT] = {
     {0x700, "gps_speed", "master_gps", "km/h_x100", 1},
     {0x701, "gps_latitude", "master_gps", "deg_e7", 1},
     {0x702, "gps_longitude", "master_gps", "deg_e7", 1},
+    {CAN_ID_AIM_RPM, "engine_rpm_aim", "aim_evo4s", "rpm", AIM_OUTPUT_RATE_HZ},
 };
 
 static live_sample_t latest[LIVE_DATA_SIGNAL_COUNT];

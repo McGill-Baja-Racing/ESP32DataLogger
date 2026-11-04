@@ -86,6 +86,10 @@ bytes `DC 05 00 00 E8 03 00 00`: little-endian 1500 followed by little-endian
 1000. The node ID is not in these bytes; the master maps this signal ID to node
 1. Follow the same sample into the [binary record and CSV](LOG_FORMAT.md).
 
+## AiM EVO4S external input
+
+Standard ID `0x500` at 1 Mbit/s carries four bytes: unsigned little-endian 16-bit RPM then unsigned 16-bit wrapping counter. The master accepts this independent source without DAQ node commands or clock synchronization. It creates local record `0x703` (`engine_rpm_aim`) using reception time and the normal value/timestamp layout. It is not a sensor-node ID and is never retransmitted. See [configuration and lifecycle](../master-node/docs/AIM_EVO4S.md).
+
 ## Changing this contract
 
 Both firmwares include the same [shared header](../protocol/app_protocol.h) at the repository root. It owns CAN bitrate (`CAN_BITRATE`), beacon period (`CAN_MASTER_TIME_PERIOD_MS`), command/signal IDs, state-report length, node mask/capacity, and sensor-to-node mappings. Both CMake components include the repository root; retain `#include "protocol/app_protocol.h"` in source files. Update `protocol_sensor_node_id()` for a new signal; `protocol_is_sensor_id()` derives acceptance from that mapping. Also update live/export metadata, offline decoding, and this table. IDs are occupied through `0x0BC`; choose a new ID only after checking the shared header and control/state ID ranges. Each concurrently deployed measurement source needs its own signal ID: distinct node IDs do not distinguish duplicated sensor IDs.
