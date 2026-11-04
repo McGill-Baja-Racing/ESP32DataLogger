@@ -374,29 +374,67 @@ static void record_summary(const can_message_t *message)
  * Skips node_offline, which the node list already shows live, and power-on
  * boots, which happen every run.
  *
- * @param text Filled with, for example,
- *             "warning: master can_tx subject 0xA2 count 5 ESP_ERR_TIMEOUT".
+ * @param text Filled with, for example, "warning: master: can_tx (ID 0xA2, 5 times)".
  * @return false when there is nothing to show.
  */
 static bool describe_problem(const summary_entry_t *entry, char *text, size_t size)
 {
-    const char *node;
-    char detail[NODE_HEALTH_TEXT_MAX];
-    node_health_describe(entry->id, entry->data, &node, detail, sizeof(detail));
-    if (frame_base(entry->id) == CAN_ID_NODE_STATUS_BASE) {
+    uint32_t base = frame_base(entry->id);
+    const char *node = node_names[entry->id - base];
+    if (base == CAN_ID_NODE_STATUS_BASE) {
         node_status_frame_t status;
         memcpy(&status, &entry->data, sizeof(status));
         if (status.health == NODE_HEALTH_OK) return false;
-        snprintf(text, size, "%s %s", node, detail);
+        size_t length = (size_t)snprintf(text, size, "%s: %s:", health_names[status.health], node);
+        /* Only a node with no working sensor is unhealthy without a fault. */
+        if (!status.faults && length < size) {
+            snprintf(text + length, size - length, " no working sensor");
+        }
+        const char *separator = " ";
+        for (int fault = 0; fault < HEALTH_STATUS_FAULT_BITS && length < size; fault++) {
+            if (!(status.faults & HEALTH_BIT(fault))) continue;
+            if (fault < HEALTH_FAULT_COUNT) {
+                length += (size_t)snprintf(text + length, size - length, "%s%s", separator,
+                                           code_names[fault]);
+            } else {
+                length += (size_t)snprintf(text + length, size - length, "%sfault_%d", separator,
+                                           fault);
+            }
+            separator = ", ";
+        }
         return true;
     }
     health_event_frame_t event;
     memcpy(&event, &entry->data, sizeof(event));
     if (event.code == HEALTH_NODE_OFFLINE) return false;
     if (event.code == HEALTH_BOOT && event.subject == ESP_RST_POWERON) return false;
+    char extra[48] = "";
+    if (event.code == HEALTH_BOOT) {
+        size_t reason_count = sizeof(reset_names) / sizeof(reset_names[0]);
+        snprintf(extra, sizeof(extra), "%s",
+                 event.subject < reason_count ? reset_names[event.subject] : "unknown reset");
+    } else if (event.code == HEALTH_ADC_UNCALIBRATED) {
+        snprintf(extra, sizeof(extra), "GPIO %u", (unsigned)event.subject);
+    } else if (event.code == HEALTH_EVENT_LOST) {
+        snprintf(extra, sizeof(extra), "from %s",
+                 event.subject < CAN_NODE_SLOT_COUNT ? node_names[event.subject] : "unknown node");
+    } else if (event.subject) {
+        snprintf(extra, sizeof(extra), "ID 0x%02X",
+                 (unsigned)protocol_health_subject_id(event.subject));
+    }
+    if (event.count > 1) {
+        size_t length = strlen(extra);
+        snprintf(extra + length, sizeof(extra) - length, "%s%u%s times", length ? ", " : "",
+                 event.count, event.count == HEALTH_EVENT_COUNT_MAX ? "+" : "");
+    }
     node_health_t level = event.code < HEALTH_FAULT_COUNT ? health_for(HEALTH_BIT(event.code), false)
                                                           : NODE_HEALTH_WARNING;
-    snprintf(text, size, "%s: %s %s", health_names[level], node, detail);
+    const char *code = event.code < HEALTH_CODE_COUNT ? code_names[event.code] : "unknown";
+    if (extra[0]) {
+        snprintf(text, size, "%s: %s: %s (%s)", health_names[level], node, code, extra);
+    } else {
+        snprintf(text, size, "%s: %s: %s", health_names[level], node, code);
+    }
     return true;
 }
 
