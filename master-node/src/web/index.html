@@ -33,7 +33,7 @@
       <button id="start">Start</button><button id="stop">Stop</button>
     </div>
     <div class="muted">Leave blank for a GPS date/time name. Start waits up to 3 seconds for GPS, then falls back to log_XXXX.bin.</div>
-    <div id="stats" class="muted"></div><div id="nodes" class="muted"></div><div id="error" class="error"></div>
+    <div id="stats" class="muted"></div><div id="nodes" class="muted"></div><div id="health" class="error" style="white-space:pre-line;min-height:0"></div><div id="error" class="error"></div>
   </section>
 
   <section class="card">
@@ -87,6 +87,7 @@ async function refreshStatus(){
     if(token&&(!s.live_enabled||s.logger_state!=='running')) endLive(false,'Live data stopped with the recording.');
     if(becameIdle)refreshLogs();
   }catch(e){$('error').textContent=e.message}
+  try{const r=await fetch('/api/health');if(!r.ok)throw 0;$('health').textContent=(await r.text()).replace(/_/g,' ')}catch(e){$('health').textContent='Health unavailable'}
 }
 async function logging(action){
   try{$('error').textContent='';let suffix='';if(action==='start'&&$('logName').value.trim()){const name=selectedLogName();$('logName').value=name;suffix=`?name=${encodeURIComponent(name)}`;}await json('/api/logging/'+action+suffix,{method:'POST'});await refreshStatus();await refreshLogs()}

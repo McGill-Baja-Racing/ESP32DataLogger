@@ -139,6 +139,15 @@ static esp_err_t status_handler(httpd_req_t *request)
     return httpd_resp_sendstr(request, body);
 }
 
+static esp_err_t health_handler(httpd_req_t *request)
+{
+    char text[2048];
+    node_health_list_problems(text, sizeof(text));
+    httpd_resp_set_type(request, "text/plain");
+    httpd_resp_set_hdr(request, "Cache-Control", "no-store");
+    return httpd_resp_sendstr(request, text);
+}
+
 static esp_err_t command_handler(httpd_req_t *request)
 {
     bool starting = strncmp(request->uri, "/api/logging/start", 18) == 0;
@@ -624,12 +633,13 @@ static esp_err_t start_http_server(void)
 {
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.stack_size = 8192;
-    config.max_uri_handlers = 12;
+    config.max_uri_handlers = 16;
     esp_err_t error = httpd_start(&server, &config);
     if (error != ESP_OK) return error;
     const httpd_uri_t handlers[] = {
         {.uri = "/", .method = HTTP_GET, .handler = root_handler},
         {.uri = "/api/status", .method = HTTP_GET, .handler = status_handler},
+        {.uri = "/api/health", .method = HTTP_GET, .handler = health_handler},
         {.uri = "/api/logging/start", .method = HTTP_POST, .handler = command_handler},
         {.uri = "/api/logging/stop", .method = HTTP_POST, .handler = command_handler},
         {.uri = "/api/logs", .method = HTTP_GET, .handler = logs_handler},

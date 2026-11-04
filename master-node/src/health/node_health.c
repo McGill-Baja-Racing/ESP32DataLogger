@@ -316,6 +316,117 @@ static void print_frame(const can_message_t *message)
     ESP_LOGI(TAG, "%s %s", node, text);
 }
 
+#define SUMMARY_LINES 24
+#define SUMMARY_SHOW_MS 60000
+/* Statuses arrive every second, so an older one is from a node gone quiet. */
+#define SUMMARY_STATUS_SHOW_MS 3000
+
+typedef struct {
+    uint32_t id; /* 0 = empty */
+    uint64_t data;
+    uint32_t at_ms;
+} summary_entry_t;
+static summary_entry_t summary[SUMMARY_LINES];
+static portMUX_TYPE summary_lock = portMUX_INITIALIZER_UNLOCKED;
+
+/**
+ * @brief Tell whether a frame replaces a remembered one.
+ *
+ * A status replaces the last status of its node; an event replaces the last
+ * one with the same node, code and subject.
+ */
+static bool same_entry(const summary_entry_t *entry, const can_message_t *message)
+{
+    if (entry->id != message->id) return false;
+    if (frame_base(message->id) == CAN_ID_NODE_STATUS_BASE) return true;
+    health_event_frame_t old;
+    health_event_frame_t current;
+    memcpy(&old, &entry->data, sizeof(old));
+    memcpy(&current, &message->data, sizeof(current));
+    return old.code == current.code && old.subject == current.subject;
+}
+
+/**
+ * @brief Remember a status or event frame for node_health_list_problems().
+ *
+ * Replaces the frame it supersedes, else the oldest one.
+ */
+static void record_summary(const can_message_t *message)
+{
+    if (frame_base(message->id) == CAN_ID_NODE_DIAGNOSTICS_BASE) return;
+    uint32_t now = now_ms();
+    portENTER_CRITICAL(&summary_lock);
+    summary_entry_t *slot = &summary[0];
+    for (size_t i = 0; i < SUMMARY_LINES; i++) {
+        if (same_entry(&summary[i], message)) {
+            slot = &summary[i];
+            break;
+        }
+        if (summary[i].at_ms < slot->at_ms) slot = &summary[i];
+    }
+    *slot = (summary_entry_t){message->id, message->data, now};
+    portEXIT_CRITICAL(&summary_lock);
+}
+
+/**
+ * @brief Describe a remembered status or event briefly, led by its severity.
+ *
+ * Skips node_offline, which the node list already shows live, and power-on
+ * boots, which happen every run.
+ *
+ * @param text Filled with, for example,
+ *             "warning: master can_tx subject 0xA2 count 5 ESP_ERR_TIMEOUT".
+ * @return false when there is nothing to show.
+ */
+static bool describe_problem(const summary_entry_t *entry, char *text, size_t size)
+{
+    const char *node;
+    char detail[NODE_HEALTH_TEXT_MAX];
+    node_health_describe(entry->id, entry->data, &node, detail, sizeof(detail));
+    if (frame_base(entry->id) == CAN_ID_NODE_STATUS_BASE) {
+        node_status_frame_t status;
+        memcpy(&status, &entry->data, sizeof(status));
+        if (status.health == NODE_HEALTH_OK) return false;
+        snprintf(text, size, "%s %s", node, detail);
+        return true;
+    }
+    health_event_frame_t event;
+    memcpy(&event, &entry->data, sizeof(event));
+    if (event.code == HEALTH_NODE_OFFLINE) return false;
+    if (event.code == HEALTH_BOOT && event.subject == ESP_RST_POWERON) return false;
+    node_health_t level = event.code < HEALTH_FAULT_COUNT ? health_for(HEALTH_BIT(event.code), false)
+                                                          : NODE_HEALTH_WARNING;
+    snprintf(text, size, "%s: %s %s", health_names[level], node, detail);
+    return true;
+}
+
+void node_health_list_problems(char *out, size_t size)
+{
+    summary_entry_t entries[SUMMARY_LINES];
+    portENTER_CRITICAL(&summary_lock);
+    memcpy(entries, summary, sizeof(entries));
+    portEXIT_CRITICAL(&summary_lock);
+    uint32_t now = now_ms();
+    size_t length = 0;
+    out[0] = '\0';
+    for (size_t i = 0; i < SUMMARY_LINES; i++) {
+        char text[NODE_HEALTH_TEXT_MAX];
+        uint32_t show_ms = frame_base(entries[i].id) == CAN_ID_NODE_STATUS_BASE
+                               ? SUMMARY_STATUS_SHOW_MS : SUMMARY_SHOW_MS;
+        if (!entries[i].id || now - entries[i].at_ms > show_ms ||
+            !describe_problem(&entries[i], text, sizeof(text))) {
+            continue;
+        }
+        size_t room = size - length;
+        size_t written = (size_t)snprintf(out + length, room, "%s\n", text);
+        if (written >= room) {
+            out[length] = '\0';
+            break;
+        }
+        length += written;
+    }
+}
+
 /* Used only from CAN dispatch. */
 static uint8_t last_sequence[CAN_NODE_SLOT_COUNT];
 static bool sequence_seen[CAN_NODE_SLOT_COUNT];
@@ -361,6 +472,7 @@ bool node_health_handle_frame(const can_message_t *message)
         memcpy(&event, &frame.data, sizeof(event));
         if (!check_sequence(node, &event, &missed)) return true;
     }
+    record_summary(&frame);
     if (print_queue) (void)xQueueSend(print_queue, &frame, 0);
     bool logged = data_logger_enqueue_health(&frame);
     /* The node counts a sent event as delivered, so a refused one is lost. */
