@@ -99,9 +99,10 @@ void node_health_set(health_code_t fault, bool active);
 /**
  * @brief List the problems to show on the web page, one per line.
  *
- * Lists each node's status while it is not ok and the latest event of each
- * node, code and subject for the last minute. Includes the master as node 0.
- * Events arrive only while recording, so at idle only statuses show.
+ * One line per node, the master included, whose latest status is under 3 s
+ * old and not ok, or that has restarted since power-on: its faults, the
+ * sensors that failed (named only while recording, when nodes send events)
+ * and its restarts, which show until the node is power-cycled.
  *
  * @param out Filled with the lines, each ending in a newline; empty if none.
  * @param size Size of out, above 0; lines that do not fit are left out.
