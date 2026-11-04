@@ -34,9 +34,9 @@ esp_err_t can_node_init(const can_node_callbacks_t *callbacks,
 /**
  * @brief Send one standard-ID CAN frame and wait until it is on the bus.
  *
- * See transmit() in can_node.c. A failure is counted in node health, except
- * for a frame the driver already holds: that one is counted only if the
- * driver aborts it.
+ * See transmit() in can_node.c. A failure is counted in node health as
+ * HEALTH_CAN_TX, except for a frame the driver already holds: it still goes
+ * out, or is dropped at bus-off, which counts as HEALTH_CAN_BUS_OFF instead.
  *
  * @param can_id 11-bit CAN ID.
  * @param payload Copied; may be NULL when length is 0.
@@ -53,7 +53,8 @@ esp_err_t can_node_send(uint32_t can_id, const uint8_t *payload, uint8_t length)
  * @brief Send one frame like can_node_send(), but succeed once the driver has it.
  *
  * See transmit() in can_node.c. A timeout after the driver took the frame is
- * not an error. Use where a later send is acceptable.
+ * not an error, but it may still block up to 200 ms. Use where a later send
+ * is acceptable.
  *
  * @param can_id 11-bit CAN ID.
  * @param payload Copied; may be NULL when length is 0.

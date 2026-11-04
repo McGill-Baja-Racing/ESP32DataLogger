@@ -108,27 +108,6 @@ static bool error_callback(twai_node_handle_t node,
 }
 
 /**
- * @brief Called by the CAN driver when a frame finishes sending.
- *
- * The hardware resends until success, so a failure is a frame aborted, as at
- * bus-off. Each one counts as HEALTH_CAN_TX.
- *
- * @param event The frame and whether it was sent.
- * @return false: no task to wake.
- */
-static bool tx_done_callback(twai_node_handle_t node,
-                             const twai_tx_done_event_data_t *event,
-                             void *context)
-{
-    (void)node;
-    (void)context;
-    if (!event->is_tx_success) {
-        node_health_count(HEALTH_CAN_TX, 1, event->done_tx_frame->header.id, ESP_FAIL);
-    }
-    return false;
-}
-
-/**
  * @brief Called by the CAN driver when a frame arrives.
  *
  * Copies the frame into rx_queue for dispatch_task. If the queue is full, the
@@ -237,8 +216,8 @@ esp_err_t can_node_send(uint32_t can_id, const uint8_t *payload, uint8_t length)
 {
     bool queued;
     esp_err_t error = transmit(can_id, payload, length, &queued);
-    /* A wait timeout after enqueue leaves the frame pending; its completion
-     * callback records a failure only if transmission actually aborts. */
+    /* A frame the driver holds still goes out after a timeout. One dropped at
+     * bus-off is not counted here; HEALTH_CAN_BUS_OFF covers it. */
     if (error != ESP_OK && !queued) {
         node_health_count(HEALTH_CAN_TX, 1, can_id, error);
     }
@@ -475,7 +454,6 @@ esp_err_t can_node_init(const can_node_callbacks_t *callbacks,
         .on_rx_done = receive_callback,
         .on_state_change = state_change_callback,
         .on_error = error_callback,
-        .on_tx_done = tx_done_callback,
     };
     error = twai_node_register_event_callbacks(can_handle, &driver_callbacks, NULL);
     if (error != ESP_OK) {

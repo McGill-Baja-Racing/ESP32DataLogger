@@ -34,9 +34,9 @@ esp_err_t can_master_init(can_message_handler_t message_handler);
 /**
  * @brief Send one standard-ID CAN frame and wait until it is on the bus.
  *
- * See transmit() in can_master.c. A failure is counted in master health,
- * except for a frame the driver already holds: that one is counted only if
- * the driver aborts it.
+ * See transmit() in can_master.c. A failure is counted in master health as
+ * HEALTH_CAN_TX, except for a frame the driver already holds: it still goes
+ * out, or is dropped at bus-off, which counts as HEALTH_CAN_BUS_OFF instead.
  *
  * @param id 11-bit CAN ID.
  * @param payload Copied; may be NULL when length is 0.
