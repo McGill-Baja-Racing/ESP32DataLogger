@@ -16,6 +16,7 @@ idf_component_register(
         "time/gps_time.c"
         "time/absolute_clock.c"
         "time/clock_discipline.c"
+        "update/firmware_update.c"
         "web/web_server.c"
         "web/index_html.S"
     INCLUDE_DIRS "." "../.."
@@ -32,4 +33,9 @@ idf_component_register(
         esp_event
         nvs_flash
         espressif__esp_hosted
+        app_update
+        esp_app_format
 )
+
+# Nothing references the image identity, so the linker would drop it.
+target_link_libraries(${COMPONENT_LIB} INTERFACE "-u firmware_identity")
