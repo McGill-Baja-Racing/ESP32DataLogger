@@ -32,7 +32,11 @@ typedef enum {
 #define DATA_LOGGER_FILENAME_MAX 44
 
 esp_err_t data_logger_init(void);
-data_logger_start_result_t data_logger_start(const char *filename);
+/* Open session files without admitting samples; caller holds the recording lock. */
+data_logger_start_result_t data_logger_prepare(const char *filename);
+/* After preparation: clear pending samples, then enable recording. */
+void data_logger_clear_queue(void);
+void data_logger_start(void);
 bool data_logger_stop(void);
 bool data_logger_valid_filename(const char *filename);
 data_logger_rename_result_t data_logger_rename(const char *old_filename,

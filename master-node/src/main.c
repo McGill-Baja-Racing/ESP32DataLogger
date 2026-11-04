@@ -1,4 +1,5 @@
 #include <inttypes.h>
+#include "aim/aim_adapter.h"
 
 #include "app/app_control.h"
 #include "can/can_master.h"
@@ -36,8 +37,18 @@ static void print_status(void)
 }
 
 #if MASTER_CAN_ENABLED
+/* Route external AiM data separately from our timestamped, DAQ-controlled nodes. */
 static void handle_can_message(const can_message_t *message)
 {
+    if (message->id == AIM_CAN_ID) {
+        can_message_t sample;
+        /* Dispatch holds the recording lock; keep health updates active while idle. */
+        if (aim_adapter_receive(message, &sample) && data_logger_state() == LOGGER_RUNNING) {
+            data_logger_enqueue(&sample);
+            live_data_record(&sample);
+        }
+        return;
+    }
     if (node_registry_is_state_frame(message)) {
         node_registry_update(message);
     } else if (protocol_is_sensor_id(message->id) && message->dlc == 8) {
@@ -77,11 +88,12 @@ void app_main(void)
     ESP_ERROR_CHECK(data_logger_init());
     ESP_ERROR_CHECK(live_data_init());
     ESP_ERROR_CHECK(node_registry_init());
+    /* The CAN dispatch task uses the recording lock as soon as it starts. */
+    ESP_ERROR_CHECK(app_control_init());
 #if MASTER_CAN_ENABLED
     ESP_ERROR_CHECK(can_master_init(handle_can_message));
 #endif
     ESP_ERROR_CHECK(gps_receiver_start(handle_gps_sample));
-    ESP_ERROR_CHECK(app_control_init());
 
 #if MASTER_CAN_ENABLED
     /* Force nodes idle before the console and automatic session can start. */

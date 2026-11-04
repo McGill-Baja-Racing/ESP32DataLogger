@@ -31,7 +31,7 @@ app_control_result_t app_control_start_logging(const char *filename)
         xSemaphoreGive(lifecycle_mutex);
         return APP_CONTROL_CONFLICT;
     }
-    data_logger_start_result_t start_result = data_logger_start(filename);
+    data_logger_start_result_t start_result = data_logger_prepare(filename);
     if (start_result != DATA_LOGGER_START_OK) {
         xSemaphoreGive(lifecycle_mutex);
         if (start_result == DATA_LOGGER_START_INVALID_NAME) {
@@ -45,6 +45,12 @@ app_control_result_t app_control_start_logging(const char *filename)
         }
         return APP_CONTROL_FAILED;
     }
+    /* Files are ready. Clear both queues under the recording lock before admission. */
+    data_logger_clear_queue();
+#if MASTER_CAN_ENABLED
+    can_master_clear_receive_queue();
+#endif
+    data_logger_start();
 #if MASTER_CAN_ENABLED
     node_registry_set_monitoring(true);
     time_beacon_set_recording(true);
@@ -108,6 +114,18 @@ app_control_result_t app_control_start_live_data(uint32_t *token)
     return result == LIVE_DATA_OK ? APP_CONTROL_OK : APP_CONTROL_FAILED;
 }
 
+/* CAN dispatch holds this same lock from dequeue through handler completion. */
+void app_control_lock_can_processing(void)
+{
+    (void)xSemaphoreTake(lifecycle_mutex, portMAX_DELAY);
+}
+
+void app_control_unlock_can_processing(void)
+{
+    xSemaphoreGive(lifecycle_mutex);
+}
+
+/* Collect logger, CAN, and source health for both web and serial status. */
 void app_control_get_status(app_status_t *status)
 {
     if (!status) return;
@@ -118,6 +136,7 @@ void app_control_get_status(app_status_t *status)
         &status->can_rx_errors, &status->can_tx_errors) == ESP_OK;
     status->log_drops = data_logger_drop_count();
     status->live_enabled = live_data_is_enabled();
+    aim_adapter_status(&status->aim);
     status->node_1 = node_registry_state_name(1);
     status->node_3 = node_registry_state_name(3);
     status->node_4 = node_registry_state_name(4);
@@ -125,6 +144,7 @@ void app_control_get_status(app_status_t *status)
     status->node_6 = node_registry_state_name(6);
 }
 
+/* Print the same status snapshot exposed by the web API. */
 void app_control_print_status(void)
 {
     app_status_t status;
@@ -132,6 +152,9 @@ void app_control_print_status(void)
     ESP_LOGI(TAG, "state=%s file=%s can_drops=%" PRIu32 " log_drops=%" PRIu32,
              data_logger_state_name(), status.current_file,
              status.can_drops, status.log_drops);
+    ESP_LOGI(TAG, "AiM=%s age_ms=%" PRId64 " valid=%" PRIu32 " malformed=%" PRIu32 " discontinuities=%" PRIu32,
+             status.aim.state, status.aim.last_frame_age_ms, status.aim.valid_frames,
+             status.aim.malformed_frames, status.aim.counter_discontinuities);
     ESP_LOGI(TAG, "nodes: 1=%s 3=%s 4=%s 5=%s 6=%s",
              status.node_1, status.node_3, status.node_4, status.node_5, status.node_6);
 }

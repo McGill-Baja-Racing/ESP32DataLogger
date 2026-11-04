@@ -29,6 +29,7 @@ SIGNAL_METADATA = {
     0x0B9: ("bearing_rpm", "encoder_node_4", "rpm"),
     0x0BA: ("generic_adc_voltage", "adc_node_6", "mV"),
     0x0BB: ("engine_rpm", "engine_node_5", "rpm"),
+    0x703: ("engine_rpm_aim", "aim_evo4s", "rpm"),
     0x0BC: ("engine_spark", "engine_node_5", "event"),
     0x700: ("gps_speed", "master_gps", "km/h"),
     0x701: ("gps_latitude", "master_gps", "deg_e7"),
