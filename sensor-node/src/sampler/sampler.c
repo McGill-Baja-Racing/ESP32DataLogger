@@ -118,7 +118,6 @@ void sampler_discard_pending(void)
     while (xQueueReceive(sample_queue, &discarded, 0) == pdTRUE) {
         node_health_count(HEALTH_SAMPLES_DROPPED, 1, discarded.can_id, ESP_OK);
     }
-    xQueueReset(sample_queue);
 }
 
 bool sampler_is_active(void)
