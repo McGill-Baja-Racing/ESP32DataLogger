@@ -3,6 +3,7 @@ idf_component_register(
         "main.c"
         "can/can_node.c"
         "health/node_health.c"
+        "../../protocol/health_counters.c"
         "sampler/sampler.c"
         "sensors/sensor_registry.c"
         "sensors/adc_input.c"

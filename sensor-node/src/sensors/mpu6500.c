@@ -87,8 +87,7 @@ static esp_err_t init_mpu(sensor_t *sensor)
         .glitch_ignore_cnt = 7,
         .flags.enable_internal_pullup = true,
     };
-    /* The sampler retries a failed init, so keep a bus or device made earlier. */
-    esp_err_t error = mpu.bus ? ESP_OK : i2c_new_master_bus(&bus_config, &mpu.bus);
+    esp_err_t error = i2c_new_master_bus(&bus_config, &mpu.bus);
     if (error != ESP_OK) {
         ESP_LOGE(TAG, "Could not create I2C bus on SDA GPIO%d/SCL GPIO%d: %s",
                  MPU_I2C_SDA_GPIO, MPU_I2C_SCL_GPIO,
@@ -119,8 +118,7 @@ static esp_err_t init_mpu(sensor_t *sensor)
         .device_address = mpu.address,
         .scl_speed_hz = MPU_I2C_CLOCK_HZ,
     };
-    error = mpu.device ? ESP_OK
-                       : i2c_master_bus_add_device(mpu.bus, &device_config, &mpu.device);
+    error = i2c_master_bus_add_device(mpu.bus, &device_config, &mpu.device);
     if (error != ESP_OK) {
         ESP_LOGE(TAG, "Could not attach MPU at 0x%02X: %s", mpu.address,
                  esp_err_to_name(error));
@@ -162,7 +160,7 @@ static esp_err_t init_mpu(sensor_t *sensor)
     return ESP_OK;
 }
 
-/* The other channels fail init with the device, so they are never sampled alone. */
+/* Without it the other channels would show ok while idle, not failed to start. */
 static esp_err_t check_mpu(sensor_t *sensor)
 {
     (void)sensor;

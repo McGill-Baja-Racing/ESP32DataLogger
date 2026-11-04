@@ -21,6 +21,8 @@
 #define CAN_ID_GENERIC_ADC          0x0BA
 #define CAN_ID_ENGINE_RPM           0x0BB
 #define CAN_ID_ENGINE_SPARK         0x0BC
+/* Sample IDs are below this. */
+#define CAN_ID_SENSOR_END           0x0C0
 
 /* Master-only log records, never sent on the bus. */
 #define CAN_ID_GPS_SPEED            0x700
@@ -59,16 +61,12 @@ typedef enum {
 /*
  * Node health. Health frames use the sample layout, a 4-byte payload then a
  * uint32 timestamp_ms on the master clock, so the master logs them like
- * samples. Every node, and the master as node 0, sends a status frame and a
- * diagnostics frame each second; nodes send only their payload and the
- * master stamps arrival. While recording it also sends one event
- * frame per counted fault since the previous one. Status bits say what is
- * wrong now; events say how often and why. An event's timestamp is its last
- * occurrence, so events counted while idle reach the next log with their real
- * time. Subjects are one byte: every CAN ID on the bus is below 0x100. Late,
- * dropped, bad-timestamp, CAN TX and CAN RX overflow faults are counted per
- * subject, so one report can hold several events with the same code. The
- * master finds lost event frames from gaps in each node's event sequence.
+ * samples. Each node, and the master as node 0, sends a status and a
+ * diagnostics frame each second; nodes send only the payload and the master
+ * stamps arrival. While recording, each node also sends one event frame per
+ * code and subject counted since the last one, stamped with its last
+ * occurrence. Subjects are one byte: every CAN ID on the bus is below 0x100.
+ * The master finds lost events from gaps in each node's event sequence.
  */
 #define NODE_STATUS_PERIOD_MS 1000
 
@@ -87,11 +85,7 @@ typedef enum {
 typedef enum {
     /* Faults. Status bit N is set while fault N holds or if it was
      * counted during the last status period. Each onset of a lasting
-     * fault is counted, except SENSOR_DEAD and NO_TIME_SYNC, which only
-     * the status shows. */
-    HEALTH_SENSOR_INIT,       /* event once: subject sensor CAN ID, error */
-    HEALTH_SENSOR_READ,       /* event: subject sensor CAN ID, failed reads, last error */
-    HEALTH_SENSOR_DEAD,       /* every read of a sensor failed */
+     * fault is counted, except NO_TIME_SYNC, which only the status shows. */
     HEALTH_SAMPLES_MISSED,    /* event: subject sensor CAN ID, sample periods skipped */
     HEALTH_SAMPLES_DROPPED,   /* event: subject CAN ID, samples or spark captures lost */
     HEALTH_BAD_TIMESTAMP,     /* event: subject CAN ID, negative master time */
@@ -108,8 +102,10 @@ typedef enum {
     HEALTH_EVENT_LOST,        /* master; event: subject node ID, event frames lost */
     HEALTH_FAULT_COUNT,
 
-    /* Events that are not faults. */
+    /* Events that are not faults; the status sensors field shows sensor problems. */
     HEALTH_BOOT = HEALTH_FAULT_COUNT,  /* subject: esp_reset_reason_t */
+    HEALTH_SENSOR_INIT,                /* sent once: subject sensor CAN ID, error */
+    HEALTH_SENSOR_READ,                /* subject sensor CAN ID, failed reads, last error */
     HEALTH_ADC_UNCALIBRATED,           /* subject: GPIO, raw conversion used */
     HEALTH_NODE_OFFLINE,               /* master; subject: bit N set while node N is offline */
     HEALTH_CODE_COUNT,
@@ -117,7 +113,8 @@ typedef enum {
 
 #define HEALTH_BIT(code) (1U << (code))
 
-#define HEALTH_STATUS_FAULT_BITS 24
+/* Bits from HEALTH_FAULT_COUNT up are spare. */
+#define HEALTH_STATUS_FAULT_BITS 17
 
 _Static_assert(HEALTH_FAULT_COUNT <= HEALTH_STATUS_FAULT_BITS, "faults must fit the status bits");
 _Static_assert(HEALTH_CODE_COUNT <= 32, "codes must fit the 5 event bits");
@@ -138,14 +135,35 @@ typedef enum {
 
 _Static_assert(HEALTH_ERROR_COUNT <= 16, "errors must fit the 4 event bits");
 
-/* Faults are bits 0-23, health bits 24-25 and mode bit 26. */
+/* Ordered by severity: health_for() takes the highest as the worst. */
+typedef enum {
+    SENSOR_STATE_OK = 0,
+    SENSOR_STATE_SOME_FAILED = 1,   /* some reads failed */
+    SENSOR_STATE_NO_READINGS = 2,   /* under 10 % of reads worked */
+    SENSOR_STATE_INIT_FAILED = 3,
+} sensor_state_t;
+
+/* A status holds the states of a node's first NODE_SENSOR_SLOTS sensors; see
+ * protocol_slot_sensor_id(). */
+#define NODE_SENSOR_SLOTS 6
+
+/* Faults are bits 0-16, health bits 17-18, mode bit 19 and sensors bits 20-31. */
 typedef struct __attribute__((packed)) {
     uint32_t faults : HEALTH_STATUS_FAULT_BITS;   /* HEALTH_BIT() of each fault */
     uint32_t health : 2;    /* node_health_t */
     uint32_t mode : 1;      /* node_mode_t */
-    uint32_t : 5;
+    uint32_t sensors : 2 * NODE_SENSOR_SLOTS;     /* sensor_state_t of slot N in bits 2N-2N+1 */
     uint32_t timestamp_ms;
 } node_status_frame_t;
+
+_Static_assert(HEALTH_STATUS_FAULT_BITS + 2 + 1 + 2 * NODE_SENSOR_SLOTS == 32,
+               "status fields must fill the 4-byte payload");
+
+static inline sensor_state_t node_status_sensor_state(const node_status_frame_t *status,
+                                                      unsigned slot)
+{
+    return (sensor_state_t)(status->sensors >> (2 * slot) & 0x3);
+}
 
 /* GCC packs bit-fields from bit 0 up: code is bits 0-4 of the first byte,
  * count the top 9 bits of the first uint32. */
@@ -179,10 +197,10 @@ _Static_assert(sizeof(node_diagnostics_frame_t) == 8, "diagnostics must fill one
  * master clock yet. */
 #define NODE_HEALTH_PAYLOAD 4
 
-static inline node_health_t health_for(uint32_t faults, bool no_sensor_works)
+static inline node_health_t health_for(uint32_t faults, sensor_state_t worst_sensor,
+                                       bool no_sensor_works)
 {
     const uint32_t error_faults =
-        HEALTH_BIT(HEALTH_SENSOR_INIT) | HEALTH_BIT(HEALTH_SENSOR_DEAD) |
         HEALTH_BIT(HEALTH_BAD_TIMESTAMP) | HEALTH_BIT(HEALTH_NO_TIME_SYNC) |
         HEALTH_BIT(HEALTH_CAN_PASSIVE) | HEALTH_BIT(HEALTH_CAN_BUS_OFF) |
         HEALTH_BIT(HEALTH_SD_WRITE) | HEALTH_BIT(HEALTH_GPS_NO_DATA) |
@@ -190,10 +208,10 @@ static inline node_health_t health_for(uint32_t faults, bool no_sensor_works)
     if (no_sensor_works) {
         return NODE_HEALTH_CRITICAL;
     }
-    if (faults & error_faults) {
+    if ((faults & error_faults) || worst_sensor >= SENSOR_STATE_NO_READINGS) {
         return NODE_HEALTH_ERROR;
     }
-    if (faults) {
+    if (faults || worst_sensor == SENSOR_STATE_SOME_FAILED) {
         return NODE_HEALTH_WARNING;
     }
     return NODE_HEALTH_OK;
@@ -222,6 +240,35 @@ static inline uint8_t protocol_sensor_node_id(uint32_t id)
 static inline bool protocol_is_sensor_id(uint32_t id)
 {
     return protocol_sensor_node_id(id) != 0;
+}
+
+/* Sample ID shown in slot N of a node's status, or 0: the node's Nth sample
+ * ID, lowest first. A new sample ID must go above the existing ones so no
+ * node's slots move. The spark has no slot: the engine RPM sensor sends it. */
+static inline uint32_t protocol_slot_sensor_id(uint8_t node, unsigned slot)
+{
+    if (node == 0) {
+        return 0;
+    }
+    for (uint32_t id = CAN_ID_FRONT_BRAKE; id < CAN_ID_SENSOR_END; id++) {
+        if (id != CAN_ID_ENGINE_SPARK && protocol_sensor_node_id(id) == node) {
+            if (slot == 0) {
+                return id;
+            }
+            slot--;
+        }
+    }
+    return 0;
+}
+
+/* Slot of a sample ID in node's status; NODE_SENSOR_SLOTS if it has none there. */
+static inline unsigned protocol_sensor_slot(uint8_t node, uint32_t id)
+{
+    unsigned slot = 0;
+    while (slot < NODE_SENSOR_SLOTS && protocol_slot_sensor_id(node, slot) != id) {
+        slot++;
+    }
+    return slot;
 }
 
 /* Health subjects are one byte, so health counts name the master-only GPS IDs

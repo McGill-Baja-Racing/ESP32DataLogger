@@ -409,7 +409,7 @@ typedef int httpd_req_t;
 #define ESP_FAIL -1
 typedef struct { const char *signal, *node, *units; } live_signal_metadata_t;
 static const live_signal_metadata_t *metadata_for(uint32_t id) { (void)id; return NULL; }
-#define NODE_HEALTH_TEXT_MAX 320
+#define NODE_HEALTH_TEXT_MAX 640
 static const char *node_health_describe(uint32_t id, uint64_t data, const char **node, char *text, size_t size) {
     (void)id; (void)data; (void)node; (void)text; (void)size; return NULL;
 }

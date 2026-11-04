@@ -33,9 +33,10 @@ static uint32_t owner_token;
 static int64_t lease_deadline_us;
 
 /**
- * @brief Find a signal's position in the table from its CAN ID.
+ * @brief Find a signal's table index from its CAN ID.
  *
- * @return The index, or -1 if the ID is not a known signal.
+ * @param can_id CAN ID of a sensor sample.
+ * @return The index, or -1 if unknown.
  */
 static int signal_index(uint32_t can_id)
 {
@@ -59,8 +60,7 @@ static void clear_locked(void)
 /**
  * @brief End the lease if its deadline has passed. Call with lock held.
  *
- * There is no timer: every call that checks the lease runs this first, so
- * an abandoned lease ends the next time one is made.
+ * There is no timer: every call that checks the lease runs this first.
  *
  * @param now_us Current esp_timer time.
  */

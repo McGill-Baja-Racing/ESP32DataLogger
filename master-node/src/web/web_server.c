@@ -633,7 +633,7 @@ static esp_err_t start_http_server(void)
 {
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.stack_size = 8192;
-    config.max_uri_handlers = 16;
+    config.max_uri_handlers = 12;
     esp_err_t error = httpd_start(&server, &config);
     if (error != ESP_OK) return error;
     const httpd_uri_t handlers[] = {

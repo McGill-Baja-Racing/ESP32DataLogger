@@ -42,48 +42,42 @@ esp_err_t app_control_init(void);
 /**
  * @brief Open a new log file, then tell the nodes to start sampling.
  *
- * The file opens first so no sample is lost. A failed START broadcast is
- * logged but still returns APP_CONTROL_OK: nodes also start from the
- * recording bit in the time beacon.
+ * A failed START broadcast is logged but still returns APP_CONTROL_OK, since
+ * the time beacon also starts nodes.
  *
  * @param filename Name on the SD card, or NULL for a default name; see
  *                 data_logger_start().
  * @return APP_CONTROL_OK, or why it did not start: not idle (CONFLICT), bad
- *         name (INVALID_FILENAME), the file exists (FILENAME_EXISTS), or the
- *         file could not be created or another start or stop held the lock
- *         for over 1 s (FAILED).
+ *         name (INVALID_FILENAME), file exists (FILENAME_EXISTS), or file
+ *         creation failed or the lock was held over 1 s (FAILED).
  */
 app_control_result_t app_control_start_logging(const char *filename);
 
 /**
- * @brief End live data, ask the logger to stop, then tell the nodes to stop.
+ * @brief End live data, stop the logger, then tell the nodes to stop.
  *
- * Returns once stopping has begun; the logger is LOGGER_STOPPING until it
- * has saved the queue. A failed STOP broadcast is logged but still returns
- * APP_CONTROL_OK.
+ * Returns once stopping begins; see data_logger_stop(). A failed STOP broadcast
+ * is logged but still returns APP_CONTROL_OK.
  *
- * @return APP_CONTROL_OK, CONFLICT if not running, or FAILED if the lock
- *         was held for over 1 s or the logger refused.
+ * @return APP_CONTROL_OK, CONFLICT if not running, or FAILED if the lock was
+ *         held over 1 s or the logger refused.
  */
 app_control_result_t app_control_stop_logging(void);
 
 /**
- * @brief Give one viewer the live data lease, only while logging.
- *
- * See live_data_start().
+ * @brief Give one viewer the live data lease, only while logging. See
+ * live_data_start().
  *
  * @param token Set to the viewer's token on success.
- * @return APP_CONTROL_OK, CONFLICT if not running, BUSY if another viewer
- *         holds the lease, or FAILED if token is NULL or the lock was held
- *         for over 1 s.
+ * @return APP_CONTROL_OK, CONFLICT if not running, BUSY if another viewer holds
+ *         the lease, or FAILED if token is NULL or the lock was held over 1 s.
  */
 app_control_result_t app_control_start_live_data(uint32_t *token);
 
 /**
  * @brief Fill a status snapshot for /api/status and the serial console.
  *
- * Does not take the lock, so fields may come from either side of a start
- * or stop. Strings are static and stay valid.
+ * Takes no lock, so fields may straddle a start or stop.
  *
  * @param status Snapshot to fill; NULL does nothing.
  */

@@ -15,13 +15,11 @@ typedef struct {
 /**
  * @brief Parse one line of text from the GPS.
  *
- * The GPS sends several kinds of lines; this reads the RMC line, which
- * carries time, position and speed. A value the GPS left out clears its
- * has_ flag.
+ * Reads only the RMC line, which carries time, position and speed. A value
+ * the GPS left out clears its has_ flag.
  *
- * @param line Line from the GPS, without the line ending.
- * @param fix  Set to the parsed values; cleared on failure.
- * @return false if the line is corrupted, is not an RMC line, or the GPS
- *         has no position yet.
+ * @param line Line without the line ending.
+ * @param fix Set to the parsed values; cleared on failure.
+ * @return false if the line is corrupted, not RMC, or has no position yet.
  */
 bool gps_rmc_parse(const char *line, gps_rmc_fix_t *fix);

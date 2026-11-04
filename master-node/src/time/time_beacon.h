@@ -15,10 +15,10 @@
 esp_err_t time_beacon_start(void);
 
 /**
- * @brief Set the recording flag carried by every following beacon.
+ * @brief Set the recording flag in every following beacon.
  *
- * A node whose state disagrees with the flag starts or stops, so a node that
- * missed START or STOP, or rebooted mid-run, catches up within one beacon.
+ * A node whose state disagrees with the flag starts or stops, so one that
+ * missed START or STOP, or rebooted, catches up within one beacon.
  *
  * @param recording true while a run is being logged.
  */

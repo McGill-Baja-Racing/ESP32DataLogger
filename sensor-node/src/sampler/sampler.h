@@ -5,46 +5,36 @@
 #include "esp_err.h"
 
 /**
- * @brief Initialize this node's sensors, the sample queue, and sampler tasks.
+ * @brief Init this node's sensors and start the sampler tasks.
  *
- * A sensor whose init fails does not fail this call; it is skipped and
- * retried on each sampler_start().
+ * A sensor whose init fails does not fail this call; it is never read.
  *
- * @retval ESP_OK                Sampler is ready but idle until sampler_start().
+ * @retval ESP_OK                Sampler is ready; samples are sent only after sampler_start().
  * @retval ESP_ERR_INVALID_SIZE  The registry has more than MAX_SENSORS sensors.
  * @retval ESP_ERR_NO_MEM        The queue or a task could not be created.
  */
 esp_err_t sampler_init(void);
 
 /**
- * @brief Start sampling. Called by main.c on CAN START.
- *
- * Clears queued samples, retries failed sensor inits, starts ready sensors,
- * and schedules their first sample for now. Sensors that still fail are
- * skipped. No-op if already active.
+ * @brief Clear queued samples and start sampling. Does nothing if already active.
  */
 void sampler_start(void);
 
 /**
- * @brief Stop sampling and sending. Called by main.c on CAN STOP.
- *
- * Drops queued samples. Sensors stay initialized; there is no stop callback.
- * No-op if already stopped.
+ * @brief Stop sampling and drop queued samples. Does nothing if already stopped.
  */
 void sampler_stop(void);
 
 /**
- * @brief Drop stale samples. Called by main.c when the CAN bus goes bus-off.
+ * @brief Drop queued samples, for example on bus-off.
  *
- * Empties the sample queue and counts each dropped sample in node health. On
- * the engine node it also clears buffered spark events. Sampling keeps running
- * if active.
+ * Counts each as dropped in node health. Sampling keeps running.
  */
 void sampler_discard_pending(void);
 
 /**
- * @brief Whether the sampler is recording, between sampler_start() and sampler_stop().
+ * @brief Check whether the sampler is recording.
  *
- * @return true while recording, false otherwise.
+ * @return true between sampler_start() and sampler_stop().
  */
 bool sampler_is_active(void);

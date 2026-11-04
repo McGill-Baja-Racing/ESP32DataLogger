@@ -41,16 +41,17 @@ NODE_STATUS_BASE = 0x0D0
 NODE_EVENT_BASE = 0x0E0
 NODE_DIAGNOSTICS_BASE = 0x0F0
 NODE_SLOT_COUNT = 7
-HEALTH_FAULT_COUNT = 17
-HEALTH_STATUS_FAULT_BITS = 24
+HEALTH_FAULT_COUNT = 14
+HEALTH_STATUS_FAULT_BITS = 17
+NODE_SENSOR_SLOTS = 6
 # The 8-bit event subject holds the master-only GPS IDs 0x700-0x702 as 0x70-0x72.
 HEALTH_SUBJECT_GPS_BASE = 0x70
 HEALTH_EVENT_COUNT_MAX = 0x1FF
 HEALTH_CODE_NAMES = [
-    "sensor_init", "sensor_read", "sensor_dead", "samples_missed", "samples_dropped",
-    "bad_timestamp", "no_time_sync", "can_tx", "can_rx_overflow", "can_no_ack",
-    "can_bus_error", "can_passive", "can_bus_off", "sd_write", "gps_no_data",
-    "gps_no_fix", "event_lost", "boot", "adc_uncalibrated", "node_offline",
+    "samples_missed", "samples_dropped", "bad_timestamp", "no_time_sync", "can_tx",
+    "can_rx_overflow", "can_no_ack", "can_bus_error", "can_passive", "can_bus_off",
+    "sd_write", "gps_no_data", "gps_no_fix", "event_lost",
+    "boot", "sensor_init", "sensor_read", "adc_uncalibrated", "node_offline",
 ]
 HEALTH_ERROR_NAMES = [
     "ESP_OK", "ESP_FAIL", "ESP_ERR_NO_MEM", "ESP_ERR_INVALID_ARG", "ESP_ERR_INVALID_STATE",
@@ -67,6 +68,14 @@ NODE_NAMES = [
     "master", "brake_node_1", "node_2", "mpu_node_3", "encoder_node_4", "engine_node_5",
     "adc_node_6",
 ]
+SENSOR_STATE_NAMES = ["ok", "some_readings_failed", "no_readings", "failed_to_start"]
+# Status sensor slots, as protocol_slot_sensor_id(): the node's sample IDs, lowest first, without the
+# engine spark (0x0BC), which the engine RPM sensor sends.
+SENSOR_IDS_BY_NODE = {
+    node: sorted(can_id for can_id, (_, name, _) in SIGNAL_METADATA.items()
+                 if name == NODE_NAMES[node] and can_id != 0x0BC)
+    for node in range(1, NODE_SLOT_COUNT)
+}
 
 
 # Payloads of node_status_frame_t, health_event_frame_t and node_diagnostics_frame_t in app_protocol.h.
@@ -75,6 +84,7 @@ class NodeStatus(ctypes.LittleEndianStructure):
         ("faults", ctypes.c_uint32, HEALTH_STATUS_FAULT_BITS),
         ("health", ctypes.c_uint32, 2),
         ("mode", ctypes.c_uint32, 1),
+        ("sensors", ctypes.c_uint32, 2 * NODE_SENSOR_SLOTS),
     ]
 
 
@@ -97,8 +107,8 @@ class NodeDiagnostics(ctypes.LittleEndianStructure):
     ]
 
 
-def name_or_unknown(names: list[str], index: int) -> str:
-    return names[index] if index < len(names) else "unknown"
+def name_or_unknown(names: list, index: int) -> str:
+    return (names[index] if index < len(names) else None) or "unknown"
 
 
 def describe_subject(code: int, subject: int) -> str:
@@ -123,7 +133,11 @@ def describe_health(can_id: int, packed: int) -> tuple[str, str, str] | None:
         # Faults newer than this decoder still show, by number.
         for f in range(HEALTH_STATUS_FAULT_BITS):
             if status.faults >> f & 1:
-                words.append(HEALTH_CODE_NAMES[f] if f < HEALTH_FAULT_COUNT else f"fault_{f}")
+                words.append((HEALTH_CODE_NAMES[f] if f < HEALTH_FAULT_COUNT else None) or f"fault_{f}")
+        for slot, can_id in enumerate(SENSOR_IDS_BY_NODE.get(node_id, [])[:NODE_SENSOR_SLOTS]):
+            state = status.sensors >> (2 * slot) & 0x3
+            if state:
+                words += [f"0x{can_id:02X}", SENSOR_STATE_NAMES[state]]
         signal = "node_status"
     elif NODE_EVENT_BASE <= can_id < NODE_EVENT_BASE + NODE_SLOT_COUNT:
         node_id = can_id - NODE_EVENT_BASE

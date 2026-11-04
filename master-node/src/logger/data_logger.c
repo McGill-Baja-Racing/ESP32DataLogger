@@ -52,14 +52,13 @@ bool data_logger_valid_filename(const char *filename)
 }
 
 /**
- * @brief Pick a free default log path.
+ * @brief Pick a free default log path, named by GPS date and time if available.
  *
- * Waits up to 3 s for GPS time, then uses log_YYYY-MM-DD_HH-MM-SS.bin, adding
- * _01, _02, ... if taken. Without GPS time it uses the first free
- * log_NNNN.bin. A name is taken if its .bin or its .utc file exists.
+ * Waits up to 3 s for GPS time, else uses log_NNNN.bin. A name is taken if its
+ * .bin or .utc file exists.
  *
- * @param path Set to the full path under /sdcard.
- * @param path_size Size of path.
+ * @param path Full path under /sdcard.
+ * @param path_size Size of the buffer in bytes.
  */
 static void choose_default_log_path(char *path, size_t path_size)
 {
@@ -233,11 +232,9 @@ bool data_logger_stop(void)
 }
 
 /**
- * @brief Queue a frame for writer_task with its UTC time.
+ * @brief Queue a frame with its UTC time for writer_task.
  *
- * The UTC time comes from the frame's timestamp and goes to the .utc side
- * file. A full queue drops the frame, adds it to queue_drops (see
- * data_logger_drop_count()) and counts HEALTH_SAMPLES_DROPPED.
+ * A full queue drops the frame and counts HEALTH_SAMPLES_DROPPED.
  *
  * @param message Frame to log.
  * @return true if queued.
@@ -254,17 +251,15 @@ static bool enqueue(const can_message_t *message)
     return true;
 }
 
-bool data_logger_enqueue(const can_message_t *message)
+void data_logger_enqueue(const can_message_t *message)
 {
-    return state == LOGGER_RUNNING && enqueue(message);
+    if (state != LOGGER_RUNNING) return;
+    (void)enqueue(message);
 }
 
 bool data_logger_enqueue_health(const can_message_t *message)
 {
-    bool accepting = state == LOGGER_RUNNING ||
-        (state == LOGGER_STOPPING &&
-         xTaskGetTickCount() - stop_tick < pdMS_TO_TICKS(LOG_STOP_GRACE_MS));
-    return accepting && enqueue(message);
+    return state != LOGGER_IDLE && enqueue(message);
 }
 
 logger_state_t data_logger_state(void) { return state; }
@@ -280,7 +275,7 @@ const char *data_logger_state_name(void)
 /**
  * @brief Set HEALTH_SD_WRITE if a log or UTC file was lost during a run.
  *
- * A lost file stays a fault until the next run. Call with file_mutex held.
+ * Call with file_mutex held.
  */
 static void update_sd_fault(void)
 {
@@ -290,10 +285,8 @@ static void update_sd_fault(void)
 /**
  * @brief Append records to the .bin file and their UTC times to the .utc file.
  *
- * The .utc file must stay record-for-record aligned with the .bin, so UTC is
- * written only for records fully written to the .bin. If the .utc write fails
- * or the .bin write is short, the .utc file is closed for the rest of the run;
- * the .bin keeps logging. Flushes both, and a failed flush counts
+ * The .utc must stay aligned with the .bin, so a failed .utc write or short
+ * .bin write closes the .utc for the rest of the run. A failed flush counts
  * HEALTH_SD_WRITE.
  *
  * @param records CAN ID and data per record.
@@ -320,7 +313,6 @@ static bool write_records(const int64_t records[][2], const int64_t *utc, size_t
         utc_file = NULL;
     }
     if (log_file && fflush(log_file) != 0) {
-        ESP_LOGE(TAG, "SD flush failed");
         node_health_count(HEALTH_SD_WRITE, 1, 0, ESP_FAIL);
     }
     update_sd_fault();
@@ -335,13 +327,9 @@ static bool write_records(const int64_t records[][2], const int64_t *utc, size_t
 }
 
 /**
- * @brief Close and reopen both log files to save them.
+ * @brief Close and reopen both log files so the card saves their size.
  *
- * The file size on the card is only updated on close, so this keeps a power
- * cut from losing more than the time since the last checkpoint.
- *
- * @return false if the .bin file could not be reopened; nothing is written
- *         until a later checkpoint reopens it.
+ * @return false if the .bin could not be reopened.
  */
 static bool checkpoint_file(void)
 {
@@ -366,12 +354,10 @@ static bool checkpoint_file(void)
 /**
  * @brief Task that writes queued frames to the SD card.
  *
- * Writes in blocks of 100 records, and every 15 s writes what it has and
- * saves the files with checkpoint_file(). It saves even if that write fails,
- * so a lost file is reopened, and keeps the unwritten records to retry at the
- * next checkpoint. When stopping, it ends the run once the queue is empty and
- * 200 ms have passed since stop: it writes the rest, closes both files and
- * sets the state to LOGGER_IDLE. Frames that arrive while idle are dropped.
+ * Writes 100-record blocks. Every 15 s it writes what it has and calls
+ * checkpoint_file(), keeping unwritten records if the write fails. After stop,
+ * once the queue is empty and 200 ms have passed, it writes the rest, closes
+ * both files and sets LOGGER_IDLE.
  */
 static void writer_task(void *argument)
 {
@@ -403,7 +389,7 @@ static void writer_task(void *argument)
             last_checkpoint = now;
         }
         if (state == LOGGER_STOPPING && uxQueueMessagesWaiting(log_queue) == 0 &&
-            now - stop_tick >= pdMS_TO_TICKS(LOG_STOP_GRACE_MS)) {
+            (int32_t)(now - stop_tick) >= (int32_t)pdMS_TO_TICKS(LOG_STOP_GRACE_MS)) {
             if (count > 0) {
                 (void)write_records(records, utc, count);
                 count = 0;

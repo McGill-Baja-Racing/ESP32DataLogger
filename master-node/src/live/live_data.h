@@ -34,7 +34,7 @@ typedef enum {
 } live_data_result_t;
 
 /**
- * @brief Start with no viewer and an empty cache.
+ * @brief Set up with no viewer and an empty cache.
  *
  * @retval ESP_OK Always.
  */
@@ -44,25 +44,24 @@ esp_err_t live_data_init(void);
  * @brief Get the table of known signals, also used by the CSV export.
  *
  * @param count Set to LIVE_DATA_SIGNAL_COUNT; may be NULL.
- * @return The table, in the same order as live_data_snapshot() samples.
+ * @return The table, in live_data_snapshot() order.
  */
 const live_signal_metadata_t *live_data_signals(size_t *count);
 
 /**
  * @brief Keep a frame as the latest value of its signal.
  *
- * Only while a viewer holds the lease. Ignores unknown IDs and frames shorter
- * than 8 bytes. Each kept frame increments the signal's sequence.
+ * Does nothing unless a viewer holds the lease. Ignores unknown IDs and
+ * frames shorter than 8 bytes.
  *
- * @param message Received sensor or GPS frame.
+ * @param message Sensor or GPS frame.
  */
 void live_data_record(const can_message_t *message);
 
 /**
  * @brief Give the live data lease to one viewer and clear the cache.
  *
- * The lease ends LIVE_DATA_LEASE_SECONDS after the last
- * live_data_snapshot(), so a viewer that stops polling frees it.
+ * The lease ends LIVE_DATA_LEASE_SECONDS after the last live_data_snapshot().
  *
  * @param token Set to the viewer's token, never 0.
  * @return LIVE_DATA_OK, BUSY if another viewer holds the lease, or DISABLED
@@ -73,11 +72,11 @@ live_data_result_t live_data_start(uint32_t *token);
 /**
  * @brief Copy the latest value of every signal and renew the lease.
  *
- * @param token     Token from live_data_start().
- * @param samples   Filled in live_data_signals() order; valid is false for
- *                  a signal with no frame since start.
- * @param capacity  Size of samples; at least LIVE_DATA_SIGNAL_COUNT.
- * @param count     Set to LIVE_DATA_SIGNAL_COUNT.
+ * @param token Token from live_data_start().
+ * @param samples Filled in live_data_signals() order; valid is false for a
+ *                signal with no frame yet.
+ * @param capacity Size of samples; at least LIVE_DATA_SIGNAL_COUNT.
+ * @param count Set to LIVE_DATA_SIGNAL_COUNT.
  * @return LIVE_DATA_OK, DISABLED if no lease is held or an argument is bad,
  *         or INVALID_TOKEN if another viewer holds the lease.
  */
@@ -94,7 +93,7 @@ live_data_result_t live_data_snapshot(uint32_t token, live_sample_t *samples,
 live_data_result_t live_data_stop(uint32_t token);
 
 /**
- * @brief End any lease and clear the cache, as when recording stops.
+ * @brief End any lease and clear the cache.
  */
 void live_data_force_stop(void);
 

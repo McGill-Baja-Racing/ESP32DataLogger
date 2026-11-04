@@ -34,81 +34,72 @@ typedef enum {
 /**
  * @brief Create the sample queue and start the SD writer task.
  *
- * The writer saves samples in blocks of 100 records. Every 15 s it closes and
- * reopens the files, so a power cut loses at most the last 15 s.
+ * Files are saved every 15 s, so a power cut loses at most the last 15 s.
  *
  * @retval ESP_OK          The writer is running, idle until data_logger_start().
- * @retval ESP_ERR_NO_MEM  The queue, mutex or task could not be created.
+ * @retval ESP_ERR_NO_MEM  Creating the queue, mutex or task failed.
  */
 esp_err_t data_logger_init(void);
 
 /**
  * @brief Open a new log file and its .utc side file, and start logging.
  *
- * With no name, it waits up to 3 s for GPS time and picks
- * log_YYYY-MM-DD_HH-MM-SS.bin, adding _01, _02, ... if taken; without GPS
- * time it picks the next free log_NNNN.bin. Clears samples left in the queue.
+ * With no name, it waits up to 3 s for GPS time to name the file by date, else
+ * uses log_NNNN.bin. Clears samples left in the queue.
  *
  * @param filename Name on the SD card, or NULL for a default name.
- * @return DATA_LOGGER_START_OK, or why it did not start: already logging
- *         (ACTIVE), bad name (INVALID_NAME), the .bin or .utc file exists
- *         (EXISTS), or a file could not be created (OPEN_FAILED).
+ * @return DATA_LOGGER_START_OK, or why it did not start.
  */
 data_logger_start_result_t data_logger_start(const char *filename);
 
 /**
- * @brief Ask the writer to finish the log and close it.
+ * @brief Ask the writer to finish and close the log.
  *
- * Returns at once; the state is LOGGER_STOPPING until the writer has saved
- * every queued sample, waited 200 ms for late health events, and closed both
- * files. Then it is LOGGER_IDLE.
+ * Returns at once. The state stays LOGGER_STOPPING until the queue is saved and
+ * both files are closed, at least 200 ms.
  *
- * @return true if logging was running, false otherwise.
+ * @return true if logging was running.
  */
 bool data_logger_stop(void);
 
 /**
  * @brief Check whether a log file name is allowed.
  *
- * Allowed: letters, digits, _ and -, then .bin, at most
- * DATA_LOGGER_FILENAME_MAX characters in total. No folders.
+ * Letters, digits, _ and -, then .bin, at most DATA_LOGGER_FILENAME_MAX
+ * characters. No folders.
  *
  * @param filename Name to check; NULL is invalid.
- * @return true if the name is allowed.
+ * @return true if allowed.
  */
 bool data_logger_valid_filename(const char *filename);
 
 /**
- * @brief Rename a log file on the SD card, with its .utc side file.
+ * @brief Rename a log file and its .utc side file.
  *
- * If the side file cannot be renamed, the .bin is renamed back. Renaming a
- * file to its own name succeeds and does nothing.
+ * Renaming a file to its own name succeeds and does nothing.
  *
  * @param old_filename Current name, without /sdcard/.
  * @param new_filename New name, without /sdcard/.
- * @return DATA_LOGGER_RENAME_OK, or why it failed: a bad name (INVALID_NAME),
- *         either name is the log being written (ACTIVE), no such file
- *         (NOT_FOUND), the new .bin or .utc already exists (EXISTS), or the
- *         SD card refused (FAILED).
+ * @return DATA_LOGGER_RENAME_OK, or why it failed.
  */
 data_logger_rename_result_t data_logger_rename(const char *old_filename,
                                                const char *new_filename);
 
 /**
- * @brief Queue a sensor frame for the log file.
+ * @brief Queue a sensor frame for the log file; ignored unless running.
  *
- * Only while running; see enqueue() in data_logger.c.
+ * See enqueue() in data_logger.c.
  *
  * @param message Received sensor frame.
- * @return false if the sample was not queued: not running, or queue full.
  */
-bool data_logger_enqueue(const can_message_t *message);
+void data_logger_enqueue(const can_message_t *message);
 
 /**
- * @brief Queue a health frame for the log file, like data_logger_enqueue().
+ * @brief Queue a health frame like data_logger_enqueue(), but also while
+ * stopping.
  *
- * Also accepts for 200 ms after stop: a node sends events until it hears
- * STOP and counts a sent event as delivered. See enqueue() in data_logger.c.
+ * A node keeps sending events until it hears STOP, so stopping lasts at least
+ * 200 ms.
  *
  * @param message Received health frame.
  * @return false if the frame was not queued.
@@ -123,7 +114,7 @@ bool data_logger_enqueue_health(const can_message_t *message);
 logger_state_t data_logger_state(void);
 
 /**
- * @brief Get the logger state as text for status output.
+ * @brief Get the logger state as text.
  *
  * @return "idle", "running" or "stopping".
  */
@@ -132,7 +123,7 @@ const char *data_logger_state_name(void);
 /**
  * @brief Get the full path of the current or last log file.
  *
- * Kept after stop, and updated if that file is renamed.
+ * Kept after stop and updated on rename.
  *
  * @return For example "/sdcard/log_0001.bin", or "none" before the first run.
  */
@@ -141,6 +132,6 @@ const char *data_logger_path(void);
 /**
  * @brief Count frames dropped because the log queue was full.
  *
- * @return Frames dropped since boot; never reset.
+ * @return Frames dropped since boot.
  */
 uint32_t data_logger_drop_count(void);

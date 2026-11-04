@@ -20,11 +20,10 @@ void time_beacon_set_recording(bool enabled)
 /**
  * @brief Task that sends a time beacon about every 100 ms.
  *
- * Each beacon is CAN_ID_MASTER_TIME: microseconds since master boot in bits
- * 0-62, little-endian, and the recording flag in bit 63. Nodes use the time to
- * stamp samples on the master clock. Send timeouts are not logged; other
- * send errors are logged when the error changes, and at most every 5 s while
- * it repeats. Logs once when sending works again.
+ * CAN_ID_MASTER_TIME carries microseconds since boot in bits 0-62
+ * (little-endian) and the recording flag in bit 63. Send timeouts are not
+ * logged; other errors are logged on change and at most every 5 s, and once
+ * when sending recovers.
  */
 static void beacon_task(void *argument)
 {

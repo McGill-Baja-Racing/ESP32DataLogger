@@ -49,8 +49,8 @@ static gps_sample_handler_t on_sample;
 /**
  * @brief Pass one GPS value to the sample handler as a CAN-format frame.
  *
- * @param id CAN ID of the signal.
- * @param value Sample value.
+ * @param id Log ID, such as CAN_ID_GPS_SPEED.
+ * @param value Scaled value.
  * @param timestamp_ms Master time in ms.
  */
 static void emit_sample(uint32_t id, int32_t value, uint32_t timestamp_ms)
@@ -65,12 +65,11 @@ static void emit_sample(uint32_t id, int32_t value, uint32_t timestamp_ms)
 }
 
 /**
- * @brief Tell whether a byte begins a new NMEA burst.
+ * @brief Tell whether a byte starts a new burst of sentences.
  *
  * @param received_us When the byte arrived.
- * @param previous_byte_us When the byte before it arrived, or 0 for none.
- * @return true for the first byte ever or a byte after GPS_BURST_GAP_US of
- *         silence.
+ * @param previous_byte_us When the previous byte arrived, or 0 for none.
+ * @return true for the first byte or one after GPS_BURST_GAP_US of silence.
  */
 static bool starts_new_burst(int64_t received_us, int64_t previous_byte_us)
 {
@@ -81,7 +80,7 @@ static bool starts_new_burst(int64_t received_us, int64_t previous_byte_us)
 /**
  * @brief Wait for the receiver to acknowledge a command.
  *
- * Skips the NMEA text the receiver keeps sending meanwhile.
+ * Skips the sentences the receiver sends meanwhile.
  *
  * @param ack Expected acknowledgement bytes.
  * @param length Size of ack.
@@ -106,9 +105,8 @@ static bool wait_for_ack(const uint8_t *ack, size_t length)
 /**
  * @brief Ask the receiver for RMC only, five times a second.
  *
- * The setting lives in the receiver's RAM and is not saved, so it is sent on
- * every boot. Without acknowledgements the receiver keeps its 1 Hz default
- * and everything else still works.
+ * Not saved by the receiver, so it is sent on every boot. Without
+ * acknowledgements the receiver stays at 1 Hz.
  */
 static void configure_update_rate(void)
 {
@@ -137,11 +135,10 @@ static void configure_update_rate(void)
 }
 
 /**
- * @brief Read NMEA sentences forever and act on each valid RMC.
+ * @brief Read sentences forever and act on each valid RMC.
  *
- * Feeds the first UTC time of each burst to the absolute clock, emits a
- * sample for speed, latitude and longitude on each fix, and updates the GPS
- * health flags. Lines that overflow the buffer or hold a NUL are dropped.
+ * Sends the first UTC time of each burst to the absolute clock, emits speed,
+ * latitude and longitude samples per fix, and updates the GPS health flags.
  */
 static void read_sentences(void)
 {
@@ -203,7 +200,7 @@ static void read_sentences(void)
 }
 
 /**
- * @brief Task that configures the receiver, then reads it forever.
+ * @brief Task that configures the receiver, then reads it.
  */
 static void gps_task(void *argument)
 {

@@ -74,13 +74,9 @@ static esp_err_t init_engine_rpm(sensor_t *sensor)
 {
     engine_rpm_context_t *context = sensor->context;
 
-    /* The sampler retries a failed init, so keep a queue made earlier. */
+    context->events = xQueueCreate(256, sizeof(spark_capture_t));
     if (!context->events) {
-        QueueHandle_t events = xQueueCreate(256, sizeof(spark_capture_t));
-        if (!events) {
-            return ESP_ERR_NO_MEM;
-        }
-        context->events = events;
+        return ESP_ERR_NO_MEM;
     }
 
     esp_err_t error = gpio_reset_pin(ENGINE_RPM_GPIO);
@@ -123,7 +119,9 @@ void engine_rpm_discard_pending(void)
 {
     engine_rpm_context_t *context = &engine;
     portENTER_CRITICAL(&context->lock);
-    xQueueReset(context->events);
+    if (context->events) {
+        xQueueReset(context->events);
+    }
     context->last_spark_us = 0;
     context->last_zero_us = esp_timer_get_time();
     context->dropped = 0;
