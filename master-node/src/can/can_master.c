@@ -172,12 +172,15 @@ void can_master_clear_receive_queue(void)
 static void dispatch_next_message(void)
 {
     can_message_t message;
+    // Try and get can processing Lock
     app_control_lock_can_processing();
 
+    // ONCE lock aquired, try to fetch and decode queue data
     if (xQueueReceive(rx_queue, &message, 0) == pdTRUE && application_handler) {
         application_handler(&message);
     }
 
+    // Release lock
     app_control_unlock_can_processing();
 }
 
@@ -186,7 +189,7 @@ static void dispatch_task(void *argument)
     (void)argument;
     can_message_t message;
     while (true) {
-
+        
         // Wait without the recording lock and without removing the frame to prevent race conditions.
         if (xQueuePeek(rx_queue, &message, portMAX_DELAY) == pdTRUE) {
             dispatch_next_message();

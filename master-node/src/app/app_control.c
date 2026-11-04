@@ -45,7 +45,7 @@ app_control_result_t app_control_start_logging(const char *filename)
         }
         return APP_CONTROL_FAILED;
     }
-    /* Files are ready. Clear both queues under the recording lock before admission. */
+    /* Files are ready. Clear both queues under the recording lock before we restart recording. */
     data_logger_clear_queue();
 #if MASTER_CAN_ENABLED
     can_master_clear_receive_queue();

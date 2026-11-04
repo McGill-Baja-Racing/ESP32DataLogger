@@ -146,7 +146,7 @@ data_logger_start_result_t data_logger_prepare(const char *filename)
     return DATA_LOGGER_START_OK;
 }
 
-/* Called by recording control after preparation and before enabling admission. */
+/* Called by recording control after preparation and before enabling recording. */
 void data_logger_clear_queue(void)
 {
     configASSERT(state == LOGGER_IDLE);
