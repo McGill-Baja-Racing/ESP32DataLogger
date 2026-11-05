@@ -8,9 +8,7 @@
 #include "sampler/sampler.h"
 #include "time/time_sync.h"
 
-#ifndef SENSOR_SERIAL_TEST
-#define SENSOR_SERIAL_TEST 0
-#endif
+#include "protocol/node_config.h"
 
 #define SENSOR_STARTUP_DELAY_MS 3000
 
