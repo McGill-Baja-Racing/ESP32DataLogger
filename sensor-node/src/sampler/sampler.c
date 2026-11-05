@@ -14,10 +14,7 @@
 #include "sensors/sensor.h"
 #include "sensors/engine_rpm.h"
 #include "time/time_sync.h"
-
-#ifndef SENSOR_SERIAL_TEST
-#define SENSOR_SERIAL_TEST 0
-#endif
+#include <limits.h>
 
 /*
  * Generic sampling pipeline
@@ -159,7 +156,7 @@ static void sample_task(void *argument)
         continue;
 #endif
         int64_t now = esp_timer_get_time();
-        int64_t next_due = now + 1000000;
+        int64_t next_due = INT_MAX; // Find sampling task due next
         for (size_t i = 0; i < sensor_count; i++) {
             sensor_t *sensor = &sensors[i];
             if (now >= sensor->next_sample_us) {
@@ -177,7 +174,7 @@ static void sample_task(void *argument)
                     enqueue_latest(&sample);
                 }
             }
-            if (sensor->next_sample_us < next_due) {
+            if (sensor->next_sample_us < next_due) { // Find earliest sampling time
                 next_due = sensor->next_sample_us;
             }
         }
@@ -250,12 +247,6 @@ static void send_task(void *argument)
 esp_err_t sampler_init(void)
 {
     sensors = sensor_registry(&sensor_count);
-#if NODE_FIXED_BRAKE_CONFIG || NODE_FIXED_ADC_CONFIG
-    esp_err_t error = adc_input_init();
-    if (error != ESP_OK) {
-        return error;
-    }
-#endif
     for (size_t i = 0; i < sensor_count; i++) {
         if (sensors[i].init) {
             esp_err_t error = sensors[i].init(&sensors[i]);
