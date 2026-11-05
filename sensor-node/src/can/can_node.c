@@ -403,6 +403,12 @@ esp_err_t can_node_init(const can_node_callbacks_t *callbacks,
     if (error != ESP_OK) {
         return error;
     }
+    /* Sensor nodes only consume the master command range 0x0A0-0x0A3. */
+    twai_mask_filter_config_t filter = {.id = CAN_ID_STOP, .mask = 0x7FC};
+    error = twai_node_config_mask_filter(can_handle, 0, &filter);
+    if (error != ESP_OK) {
+        return error;
+    }
     twai_event_callbacks_t driver_callbacks = {
         .on_rx_done = receive_callback,
         .on_state_change = state_change_callback,

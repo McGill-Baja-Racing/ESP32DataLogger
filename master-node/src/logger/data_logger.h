@@ -98,8 +98,8 @@ void data_logger_enqueue(const can_message_t *message);
  * @brief Queue a health frame like data_logger_enqueue(), but also while
  * stopping.
  *
- * A node keeps sending events until it hears STOP, so stopping lasts at least
- * 200 ms.
+ * Accepted while running and during the 200 ms stop grace period. The writer
+ * closes admission before its final queue drain.
  *
  * @param message Received health frame.
  * @return false if the frame was not queued.

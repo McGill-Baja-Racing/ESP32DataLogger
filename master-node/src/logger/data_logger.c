@@ -29,6 +29,8 @@
 static const char *TAG = "DataLogger";
 static QueueHandle_t log_queue;
 static SemaphoreHandle_t file_mutex;
+/* Guards health_admission_open and the corresponding queue insertion. */
+static SemaphoreHandle_t health_admission_mutex;
 static FILE *log_file;
 static FILE *utc_file;
 static char utc_path[LOG_PATH_LENGTH + 8];
@@ -36,6 +38,7 @@ typedef struct { can_message_t message; int64_t utc_ms; } queued_sample_t;
 static char log_path[LOG_PATH_LENGTH];
 static volatile logger_state_t state = LOGGER_IDLE;
 static volatile TickType_t stop_tick;
+static bool health_admission_open;
 static atomic_uint queue_drops;
 
 bool data_logger_valid_filename(const char *filename)
@@ -157,7 +160,10 @@ data_logger_start_result_t data_logger_start(const char *filename)
     snprintf(log_path, sizeof(log_path), "%s", candidate_path);
     snprintf(utc_path, sizeof(utc_path), "%s", candidate_utc_path);
     xQueueReset(log_queue);
+    xSemaphoreTake(health_admission_mutex, portMAX_DELAY);
+    health_admission_open = true;
     state = LOGGER_RUNNING;
+    xSemaphoreGive(health_admission_mutex);
     node_health_set(HEALTH_SD_WRITE, false);
     xSemaphoreGive(file_mutex);
     ESP_LOGI(TAG, "Logging started: %s", log_path);
@@ -259,7 +265,12 @@ void data_logger_enqueue(const can_message_t *message)
 
 bool data_logger_enqueue_health(const can_message_t *message)
 {
-    return state != LOGGER_IDLE && enqueue(message);
+    bool queued = false;
+    if (xSemaphoreTake(health_admission_mutex, portMAX_DELAY) == pdTRUE) {
+        if (health_admission_open) queued = enqueue(message);
+        xSemaphoreGive(health_admission_mutex);
+    }
+    return queued;
 }
 
 logger_state_t data_logger_state(void) { return state; }
@@ -388,8 +399,17 @@ static void writer_task(void *argument)
             (void)checkpoint_file();
             last_checkpoint = now;
         }
-        if (state == LOGGER_STOPPING && uxQueueMessagesWaiting(log_queue) == 0 &&
-            (int32_t)(now - stop_tick) >= (int32_t)pdMS_TO_TICKS(LOG_STOP_GRACE_MS)) {
+        bool close_log = false;
+        if (state == LOGGER_STOPPING &&
+            (int32_t)(now - stop_tick) >= (int32_t)pdMS_TO_TICKS(LOG_STOP_GRACE_MS) &&
+            xSemaphoreTake(health_admission_mutex, portMAX_DELAY) == pdTRUE) {
+            if (state == LOGGER_STOPPING) {
+                health_admission_open = false;
+                close_log = uxQueueMessagesWaiting(log_queue) == 0;
+            }
+            xSemaphoreGive(health_admission_mutex);
+        }
+        if (close_log) {
             if (count > 0) {
                 (void)write_records(records, utc, count);
                 count = 0;
@@ -413,7 +433,8 @@ esp_err_t data_logger_init(void)
 {
     log_queue = xQueueCreate(LOG_QUEUE_LENGTH, sizeof(queued_sample_t));
     file_mutex = xSemaphoreCreateMutex();
-    if (!log_queue || !file_mutex) return ESP_ERR_NO_MEM;
+    health_admission_mutex = xSemaphoreCreateMutex();
+    if (!log_queue || !file_mutex || !health_admission_mutex) return ESP_ERR_NO_MEM;
     return xTaskCreate(writer_task, "sd_writer", 6144, NULL, 10, NULL) == pdPASS
          ? ESP_OK : ESP_ERR_NO_MEM;
 }
