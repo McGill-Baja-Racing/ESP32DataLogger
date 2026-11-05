@@ -24,9 +24,14 @@ static esp_err_t read_pressure(sensor_t *sensor, int32_t *value)
     return ESP_OK;
 }
 
+static esp_err_t init_rear_brake(sensor_t *sensor){
+    return adc_input_init();
+}
+
 sensor_t rear_brake_sensor = {
     .name = "rear_brake_pressure",
     .can_id = CAN_ID_REAR_BRAKE,
     .period_us = 10000,
+    .init = init_rear_brake,
     .read = read_pressure,
 };

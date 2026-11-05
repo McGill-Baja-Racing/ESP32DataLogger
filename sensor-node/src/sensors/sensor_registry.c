@@ -31,6 +31,11 @@ extern sensor_t mpu_gyro_y_sensor;
 extern sensor_t mpu_gyro_z_sensor;
 
 static sensor_t sensors[6];
+#elif NODE_FIXED_FRONT_SHOCK_CONFIG || NODE_FIXED_REAR_SHOCK_CONFIG
+extern sensor_t lin_pot_1_sensor;
+extern sensor_t lin_pot_2_sensor;
+
+static sensor_t sensors[2];
 #else
 #error "Select a fixed sensor-node configuration"
 #endif
@@ -51,6 +56,9 @@ sensor_t *sensor_registry(size_t *count)
     sensors[3] = mpu_gyro_x_sensor;
     sensors[4] = mpu_gyro_y_sensor;
     sensors[5] = mpu_gyro_z_sensor;
+#elif NODE_FIXED_FRONT_SHOCK_CONFIG || NODE_FIXED_REAR_SHOCK_CONFIG
+    sensors[0] = lin_pot_1_sensor;
+    sensors[1] = lin_pot_2_sensor;
 #else
     sensors[0] = generic_adc_sensor;
 #endif

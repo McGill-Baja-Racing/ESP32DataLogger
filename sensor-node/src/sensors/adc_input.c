@@ -14,7 +14,7 @@ static bool configured[5];
 
 esp_err_t adc_input_init(void)
 {
-    if (adc_handle) {
+    if (adc_handle) { // prevents multiple initialization
         return ESP_OK;
     }
     adc_oneshot_unit_init_cfg_t config = {.unit_id = ADC_UNIT_1};

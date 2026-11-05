@@ -19,10 +19,15 @@ static esp_err_t read_voltage_mv(sensor_t *sensor, int32_t *value)
     return error;
 }
 
+static esp_err_t init_generic_adc(sensor_t *sensor){
+    return adc_input_init();
+}
+
 sensor_t generic_adc_sensor = {
     .name = "generic_adc_voltage",
     .can_id = CAN_ID_GENERIC_ADC,
     .period_us = 10000, /* 100 Hz */
+    .init = init_generic_adc,
     .read = read_voltage_mv,
 };
 
