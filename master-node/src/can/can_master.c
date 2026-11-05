@@ -8,6 +8,7 @@
 #include "esp_log.h"
 #include "esp_twai.h"
 #include "esp_twai_onchip.h"
+#include "health/node_health.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/semphr.h"
@@ -36,6 +37,13 @@ static twai_frame_t tx_frame;
 static uint8_t tx_payload[8];
 static bool tx_pending;
 
+/**
+ * @brief Count each bus-off and flag HEALTH_CAN_PASSIVE while error-passive or
+ * bus-off.
+ *
+ * @param event Old and new error state.
+ * @return false: no task to wake.
+ */
 static bool state_change_callback(twai_node_handle_t node,
                                   const twai_state_change_event_data_t *event,
                                   void *context)
@@ -45,9 +53,44 @@ static bool state_change_callback(twai_node_handle_t node,
     if (event->new_sta == TWAI_ERROR_BUS_OFF) {
         atomic_fetch_add(&bus_off_generation, 1);
     }
+    node_health_set(HEALTH_CAN_PASSIVE,
+                    event->new_sta == TWAI_ERROR_PASSIVE ||
+                    event->new_sta == TWAI_ERROR_BUS_OFF);
     return false;
 }
 
+/**
+ * @brief Count a missing ACK as HEALTH_CAN_NO_ACK and other bus errors as
+ * HEALTH_CAN_BUS_ERROR.
+ *
+ * Lost arbitration is not counted.
+ *
+ * @param event Error flags.
+ * @return false: no task to wake.
+ */
+static bool error_callback(twai_node_handle_t node,
+                           const twai_error_event_data_t *event,
+                           void *context)
+{
+    (void)node;
+    (void)context;
+    /* CRC errors set no flag, and a frame that loses arbitration is resent. */
+    if (event->err_flags.ack_err) {
+        node_health_count(HEALTH_CAN_NO_ACK, 1, 0, ESP_OK);
+    } else if (!event->err_flags.arb_lost) {
+        node_health_count(HEALTH_CAN_BUS_ERROR, 1, 0, ESP_OK);
+    }
+    return false;
+}
+
+/**
+ * @brief Queue a received frame for dispatch_task.
+ *
+ * A full queue drops the frame and counts HEALTH_CAN_RX_OVERFLOW.
+ *
+ * @param node Driver handle.
+ * @return true if dispatch_task should run now.
+ */
 static bool receive_callback(twai_node_handle_t node,
                              const twai_rx_done_event_data_t *event,
                              void *context)
@@ -67,6 +110,7 @@ static bool receive_callback(twai_node_handle_t node,
         }
         if (xQueueSendFromISR(rx_queue, &message, &task_woken) != pdPASS) {
             rx_drops++;
+            node_health_count(HEALTH_CAN_RX_OVERFLOW, 1, message.id, ESP_OK);
         }
     }
     return task_woken == pdTRUE;
@@ -75,9 +119,11 @@ static bool receive_callback(twai_node_handle_t node,
 esp_err_t can_master_send(uint32_t id, const uint8_t *payload, uint8_t length)
 {
     if (length > 8 || (length > 0 && !payload)) {
+        node_health_count(HEALTH_CAN_TX, 1, id, ESP_ERR_INVALID_ARG);
         return ESP_ERR_INVALID_ARG;
     }
     if (!tx_mutex || xSemaphoreTake(tx_mutex, pdMS_TO_TICKS(100)) != pdTRUE) {
+        node_health_count(HEALTH_CAN_TX, 1, id, ESP_ERR_TIMEOUT);
         return ESP_ERR_TIMEOUT;
     }
     esp_err_t error;
@@ -85,6 +131,7 @@ esp_err_t can_master_send(uint32_t id, const uint8_t *payload, uint8_t length)
         error = twai_node_transmit_wait_all_done(can_handle, CAN_TX_WAIT_MS);
         if (error != ESP_OK) {
             xSemaphoreGive(tx_mutex);
+            node_health_count(HEALTH_CAN_TX, 1, id, error);
             return error;
         }
         tx_pending = false;
@@ -100,16 +147,24 @@ esp_err_t can_master_send(uint32_t id, const uint8_t *payload, uint8_t length)
     };
     error = twai_node_transmit(can_handle, &tx_frame, CAN_TX_WAIT_MS);
     if (error == ESP_OK) {
-        tx_pending = true;
-        error = twai_node_transmit_wait_all_done(can_handle, CAN_TX_WAIT_MS);
-        if (error == ESP_OK) {
-            tx_pending = false;
-        }
+        /* A frame the driver holds goes out even after this wait gives up. */
+        tx_pending = (twai_node_transmit_wait_all_done(can_handle, CAN_TX_WAIT_MS) != ESP_OK);
+    } else {
+        node_health_count(HEALTH_CAN_TX, 1, id, error);
     }
     xSemaphoreGive(tx_mutex);
     return error;
 }
 
+/**
+ * @brief Send an empty START or STOP frame 5 times, 20 ms apart.
+ *
+ * Blocks for at least 80 ms. Nodes act on the first copy; the rest cover a
+ * missed one.
+ *
+ * @param id CAN_ID_START or CAN_ID_STOP.
+ * @return ESP_OK if every copy was sent, else the first error.
+ */
 static esp_err_t send_command_burst(uint32_t id)
 {
     esp_err_t first_error = ESP_OK;
@@ -155,6 +210,9 @@ esp_err_t can_master_error_counts(uint32_t *rx_errors, uint32_t *tx_errors)
     return error;
 }
 
+/**
+ * @brief Task that passes each received frame to the application handler.
+ */
 static void dispatch_task(void *argument)
 {
     (void)argument;
@@ -167,6 +225,12 @@ static void dispatch_task(void *argument)
     }
 }
 
+/**
+ * @brief Name a CAN error state for logs.
+ *
+ * @param state Driver error state.
+ * @return "active", "warning", "passive", "bus-off" or "unknown".
+ */
 static const char *state_name(twai_error_state_t state)
 {
     switch (state) {
@@ -178,6 +242,12 @@ static const char *state_name(twai_error_state_t state)
     }
 }
 
+/**
+ * @brief Task that logs CAN state changes and recovers from bus-off.
+ *
+ * Polls every 250 ms. Each bus-off starts recovery and counts
+ * HEALTH_CAN_BUS_OFF.
+ */
 static void recovery_task(void *argument)
 {
     (void)argument;
@@ -202,7 +272,8 @@ static void recovery_task(void *argument)
             if (status.state == TWAI_ERROR_BUS_OFF &&
                 (!recovering || generation != recovery_generation)) {
                 error = twai_node_recover(can_handle);
-                recovering = error == ESP_OK;
+                node_health_count(HEALTH_CAN_BUS_OFF, 1, 0, error);
+                recovering = (error == ESP_OK);
                 if (recovering) {
                     recovery_generation = generation;
                     recovery_warning_at = xTaskGetTickCount();
@@ -241,12 +312,15 @@ esp_err_t can_master_init(can_message_handler_t message_handler)
         .io_cfg = {.tx = CAN_TX_GPIO, .rx = CAN_RX_GPIO},
         .bit_timing = {.bitrate = CAN_BITRATE},
         .tx_queue_depth = CAN_TX_QUEUE_DEPTH,
+        /* The default 0 sends once: a frame losing arbitration would vanish. */
+        .fail_retry_cnt = -1,
     };
     esp_err_t error = twai_new_node_onchip(&config, &can_handle);
     if (error != ESP_OK) return error;
     twai_event_callbacks_t callbacks = {
         .on_rx_done = receive_callback,
         .on_state_change = state_change_callback,
+        .on_error = error_callback,
     };
     error = twai_node_register_event_callbacks(can_handle, &callbacks, NULL);
     if (error != ESP_OK) return error;

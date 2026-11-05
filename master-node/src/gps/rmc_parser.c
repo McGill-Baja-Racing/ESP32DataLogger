@@ -4,8 +4,16 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* Validate the whole numeric field before conversion: strtod alone accepts
- * signs, exponents, NaN, infinity, and numeric prefixes followed by garbage. */
+/**
+ * @brief Read a plain number such as 12 or 12.34.
+ *
+ * Checks the text first because strtod alone accepts signs, exponents, NaN,
+ * infinity and trailing garbage.
+ *
+ * @param text Digits with an optional fraction, no sign or exponent.
+ * @param value Set only on success.
+ * @return false if the text is not a plain number.
+ */
 static bool decimal(const char *text, double *value)
 {
     const char *p = text;
@@ -21,6 +29,18 @@ static bool decimal(const char *text, double *value)
     return true;
 }
 
+/**
+ * @brief Convert a GPS latitude or longitude to degrees x 1e7.
+ *
+ * The GPS writes degrees then minutes, such as 4530.12 for 45 degrees 30.12
+ * minutes. South and west are negative.
+ *
+ * @param text Value as the GPS writes it, such as 4530.12.
+ * @param hemisphere "N", "S", "E" or "W".
+ * @param latitude true for a latitude, false for a longitude.
+ * @param result Degrees x 1e7, set only on success.
+ * @return false if the value is malformed or out of range.
+ */
 static bool coordinate(const char *text, const char *hemisphere, bool latitude,
                        int32_t *result)
 {
@@ -45,8 +65,16 @@ static bool coordinate(const char *text, const char *hemisphere, bool latitude,
     return true;
 }
 
-/* Split once, preserving empty fields and rejecting truncation. Check all
- * fields, including optional ones, rather than silently shortening input. */
+/**
+ * @brief Check an RMC line and split it at the commas.
+ *
+ * Keeps the first 10 values, empty ones included. A value too long for
+ * fields is rejected.
+ *
+ * @param line One NMEA sentence, such as "$GPRMC,...*5A".
+ * @param fields Zeroed by the caller.
+ * @return false if the line is corrupted, not RMC, or has no position yet.
+ */
 static bool fields_from_rmc(const char *line, char fields[10][24])
 {
     if (!line || line[0] != '$') return false;
@@ -77,7 +105,13 @@ static bool fields_from_rmc(const char *line, char fields[10][24])
            strcmp(fields[0] + 2, "RMC") == 0 && strcmp(fields[2], "A") == 0;
 }
 
-/* Fixed-width decimal fields have already been bounded by the caller. */
+/**
+ * @brief Read a fixed number of digits.
+ *
+ * @param text Must hold at least count characters.
+ * @param count How many characters to read.
+ * @return The value, or -1 if a character is not a digit.
+ */
 static int digits(const char *text, unsigned count)
 {
     int value = 0;
@@ -88,11 +122,25 @@ static int digits(const char *text, unsigned count)
     return value;
 }
 
+/**
+ * @brief Check for a Gregorian leap year.
+ *
+ * @param year Full year, such as 2028.
+ * @return true if the year has 366 days.
+ */
 static bool leap_year(int year)
 {
     return year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
 }
 
+/**
+ * @brief Convert the GPS time and date to Unix time in ms.
+ *
+ * @param time Such as 123519.50 for 12:35:19.50.
+ * @param date Such as 310526 for 31 May 2026; years 2020 to 2099.
+ * @param utc_ms Unix time in ms, set only on success.
+ * @return false if either value is malformed or out of range.
+ */
 static bool parse_utc(const char *time, const char *date, int64_t *utc_ms)
 {
     size_t length = strlen(time);

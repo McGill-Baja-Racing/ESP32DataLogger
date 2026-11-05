@@ -119,7 +119,9 @@ void engine_rpm_discard_pending(void)
 {
     engine_rpm_context_t *context = &engine;
     portENTER_CRITICAL(&context->lock);
-    xQueueReset(context->events);
+    if (context->events) {
+        xQueueReset(context->events);
+    }
     context->last_spark_us = 0;
     context->last_zero_us = esp_timer_get_time();
     context->dropped = 0;

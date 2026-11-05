@@ -7,6 +7,8 @@ idf_component_register(
         "gps/gps_receiver.c"
         "gps/rmc_parser.c"
         "gps/ubx_config.c"
+        "health/node_health.c"
+        "../../protocol/health_counters.c"
         "logger/data_logger.c"
         "live/live_data.c"
         "node_state/node_registry.c"

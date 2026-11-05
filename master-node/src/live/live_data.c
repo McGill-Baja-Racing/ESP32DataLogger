@@ -32,6 +32,12 @@ static bool enabled;
 static uint32_t owner_token;
 static int64_t lease_deadline_us;
 
+/**
+ * @brief Find a signal's table index from its CAN ID.
+ *
+ * @param can_id CAN ID of a sensor sample.
+ * @return The index, or -1 if unknown.
+ */
 static int signal_index(uint32_t can_id)
 {
     for (size_t i = 0; i < LIVE_DATA_SIGNAL_COUNT; i++) {
@@ -40,6 +46,9 @@ static int signal_index(uint32_t can_id)
     return -1;
 }
 
+/**
+ * @brief Drop the lease and clear the cache. Call with lock held.
+ */
 static void clear_locked(void)
 {
     enabled = false;
@@ -48,6 +57,13 @@ static void clear_locked(void)
     memset(latest, 0, sizeof(latest));
 }
 
+/**
+ * @brief End the lease if its deadline has passed. Call with lock held.
+ *
+ * There is no timer: every call that checks the lease runs this first.
+ *
+ * @param now_us Current esp_timer time.
+ */
 static void expire_locked(int64_t now_us)
 {
     if (enabled && now_us >= lease_deadline_us) clear_locked();

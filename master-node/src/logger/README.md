@@ -8,7 +8,7 @@ Read the [master source map](../README.md) and its concurrency vocabulary first.
 
 Starting from `LOGGER_IDLE` validates/selects a name and exclusively creates the binary and UTC files before entering `LOGGER_RUNNING`. Companion-open failure prevents a successful session start. Only after that does application policy enable recording beacons and send START.
 
-Stop changes the logger to `LOGGER_STOPPING`, rejecting further enqueue attempts. Application policy ends live viewing, clears beacon/monitoring state, and sends STOP. The writer asynchronously drains accepted samples, writes the partial block, closes both files, and sets `LOGGER_IDLE`. A successful stop request is not yet permission to remove power; wait for idle.
+Stop changes the logger to `LOGGER_STOPPING`, rejecting samples while accepting late health frames during the grace period. Application policy ends live viewing, clears beacon/monitoring state, and sends STOP. The writer atomically closes health admission before its final drain, writes the partial block, closes both files, and sets `LOGGER_IDLE`. A successful stop request is not yet permission to remove power; wait for idle.
 
 ## Buffering and failure behavior
 
