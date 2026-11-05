@@ -379,53 +379,60 @@ static void writer_task(void *argument)
     queued_sample_t sample;
     TickType_t last_checkpoint = xTaskGetTickCount();
     while (true) {
+
+        if (state == LOGGER_IDLE) { //check state here to prevent unqueuing sample before looking at state
+            // Fix CPU Starvation: Sleep for 100ms when idle so other tasks can run
+            vTaskDelay(pdMS_TO_TICKS(100));
+            last_checkpoint = xTaskGetTickCount();
+        }else{
         /* A frame queued while the file was closing belongs to no run. */
-        if (xQueueReceive(log_queue, &sample, pdMS_TO_TICKS(100)) == pdTRUE &&
-            state != LOGGER_IDLE) {
-            records[count][0] = sample.message.id;
-            records[count][1] = (int64_t)sample.message.data;
-            utc[count] = sample.utc_ms;
-            if (++count == LOG_RECORDS_PER_BLOCK) {
-                (void)write_records(records, utc, count);
-                count = 0;
+            if (xQueueReceive(log_queue, &sample, pdMS_TO_TICKS(100)) == pdTRUE) { 
+                records[count][0] = sample.message.id;
+                records[count][1] = (int64_t)sample.message.data;
+                utc[count] = sample.utc_ms;
+                if (++count == LOG_RECORDS_PER_BLOCK) {
+                    (void)write_records(records, utc, count);
+                    count = 0;
+                }
             }
+              TickType_t now = xTaskGetTickCount();
+            if (state == LOGGER_RUNNING &&
+                now - last_checkpoint >= pdMS_TO_TICKS(LOG_FLUSH_INTERVAL_MS)) {
+                if (count >0 || write_records(records, utc, count)) {
+                    count = 0;
+                }
+                (void)checkpoint_file();
+                last_checkpoint = now;
+            }
+            bool close_log = false;
+            if (state == LOGGER_STOPPING &&
+                (int32_t)(now - stop_tick) >= (int32_t)pdMS_TO_TICKS(LOG_STOP_GRACE_MS) &&
+                xSemaphoreTake(health_admission_mutex, portMAX_DELAY) == pdTRUE) {
+                if (state == LOGGER_STOPPING) {
+                    health_admission_open = false;
+                    close_log = uxQueueMessagesWaiting(log_queue) == 0;
+                }
+                xSemaphoreGive(health_admission_mutex);
+            }
+            if (close_log) {
+                if (count > 0) {
+                    (void)write_records(records, utc, count);
+                    count = 0;
+                }
+                if (xSemaphoreTake(file_mutex, portMAX_DELAY) == pdTRUE) {
+                    if (log_file) fclose(log_file);
+                    log_file = NULL;
+                    if (utc_file) fclose(utc_file);
+                    utc_file = NULL;
+                    xSemaphoreGive(file_mutex);
+                }
+                state = LOGGER_IDLE;
+                node_health_set(HEALTH_SD_WRITE, false);
+                ESP_LOGI(TAG, "Logging stopped and file closed");
+            }
+
         }
-        TickType_t now = xTaskGetTickCount();
-        if (state == LOGGER_RUNNING &&
-            now - last_checkpoint >= pdMS_TO_TICKS(LOG_FLUSH_INTERVAL_MS)) {
-            if (count == 0 || write_records(records, utc, count)) {
-                count = 0;
-            }
-            (void)checkpoint_file();
-            last_checkpoint = now;
-        }
-        bool close_log = false;
-        if (state == LOGGER_STOPPING &&
-            (int32_t)(now - stop_tick) >= (int32_t)pdMS_TO_TICKS(LOG_STOP_GRACE_MS) &&
-            xSemaphoreTake(health_admission_mutex, portMAX_DELAY) == pdTRUE) {
-            if (state == LOGGER_STOPPING) {
-                health_admission_open = false;
-                close_log = uxQueueMessagesWaiting(log_queue) == 0;
-            }
-            xSemaphoreGive(health_admission_mutex);
-        }
-        if (close_log) {
-            if (count > 0) {
-                (void)write_records(records, utc, count);
-                count = 0;
-            }
-            if (xSemaphoreTake(file_mutex, portMAX_DELAY) == pdTRUE) {
-                if (log_file) fclose(log_file);
-                log_file = NULL;
-                if (utc_file) fclose(utc_file);
-                utc_file = NULL;
-                xSemaphoreGive(file_mutex);
-            }
-            state = LOGGER_IDLE;
-            node_health_set(HEALTH_SD_WRITE, false);
-            ESP_LOGI(TAG, "Logging stopped and file closed");
-        }
-        if (state == LOGGER_IDLE) last_checkpoint = now;
+ 
     }
 }
 
