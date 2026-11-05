@@ -398,7 +398,7 @@ static void writer_task(void *argument)
               TickType_t now = xTaskGetTickCount();
             if (state == LOGGER_RUNNING &&
                 now - last_checkpoint >= pdMS_TO_TICKS(LOG_FLUSH_INTERVAL_MS)) {
-                if (count >0 || write_records(records, utc, count)) {
+                if (count >0 | write_records(records, utc, count)) {
                     count = 0;
                 }
                 (void)checkpoint_file();
