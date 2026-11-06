@@ -2,7 +2,9 @@
 
 A screen in the cockpit that shows the driver live values from the car's CAN bus: speed, engine RPM, and warnings such as low brake pressure or low fuel.
 
-**Status:** project start. There are two small programs: one proves the shared CAN protocol header builds here, and a [display test](#display-test) draws "BAJA 2026" on the screen. Nothing reads CAN yet.
+**Status:** the screens are drawn, but nothing reads CAN yet. The program shows the driver view with hardcoded values taken from the designs. The [components](docs/COMPONENTS.md) for the driver and workshop views are ready to be fed with live data.
+
+![Driver view, design 1](docs/screenshots/design-1.png)
 
 Read the [project introduction](../README.md) first if you are new to the DAQ, and the [CAN protocol](../docs/PROTOCOL.md) for what each frame means.
 
@@ -62,38 +64,61 @@ Our current module has an **8 MHz crystal**, an **NXP TJA1050 transceiver** (mar
 - **Listen-only mode:** use it first, so the display cannot disturb the DAQ.
 - **Frame loss:** the bus carries roughly 1000 frames per second and the MCP2515 has only two receive buffers. Measure drops on the bench with `ip -s -d link show can0`.
 
-## Build
+## Code layout
 
-The program needs a C compiler and `make`. From this folder:
+| Path | What it is |
+|---|---|
+| [`src/ui/`](src/ui) | The component library: RPM bar, brake bars, fuel gauge, alerts, trends... See [Components](docs/COMPONENTS.md) |
+| [`src/views/driver_view.c`](src/views/driver_view.c) | The driver view layout, as in the designs |
+| [`src/views/demo_screens.c`](src/views/demo_screens.c) | The designs and the workshop views, filled with hardcoded values |
+| [`src/main.c`](src/main.c) | The driver display program |
+| [`src/gallery.c`](src/gallery.c) | Shows every demo screen in turn, to check them on the panel |
+| [`src/snapshot.c`](src/snapshot.c) | Renders the demo screens to PNG files on a laptop |
+| [`src/display_poc.c`](src/display_poc.c) | The first screen test: "BAJA 2026" and a red border |
+
+The CAN reader will include the shared [`protocol/app_protocol.h`](../protocol/app_protocol.h). Nothing uses it yet.
+
+## Check the screens on a laptop
+
+No Pi needed. On macOS or Linux, with a C compiler, `make`, `git` and zlib:
 
 ```bash
-make
-./build/driver-display
+./deploy.sh --fetch-only   # downloads LVGL into third_party/, which git ignores
+make snapshots
 ```
 
-It prints a few values from the shared header. The Makefile adds the repository root to the include path, so source files use the same `#include "protocol/app_protocol.h"` as the firmware.
+The PNG files land in `build/snapshots/`. The first build compiles LVGL, which takes about a minute.
 
-To build on the Pi, copy `protocol/` and `driver-display/` together, because the project needs the header.
+## Run on the Pi
 
-## Display test
-
-[`src/display_poc.c`](src/display_poc.c) fills the screen with black, writes "BAJA 2026" in the middle and draws a red border on the outermost pixels. It needs the Pi and the screen, and no CAN hardware.
-
-The Pi has no internet, so run this from a laptop that does:
+The Pi has no internet, so build from a laptop that does:
 
 ```bash
 ./deploy.sh
 ```
 
-It downloads LVGL and the libdrm headers into `third_party/`, which git ignores, copies them to `~/driver-display` on the Pi and builds there. The first build takes about 4 minutes. Later builds only recompile the test. After changing `src/lv_conf.h`, delete `~/driver-display/build` on the Pi so that LVGL rebuilds.
+It downloads LVGL and the libdrm headers into `third_party/`, copies the project to `~/driver-display` on the Pi and builds there. The first build takes about 4 minutes, and later ones only recompile what changed.
 
-Plug in and power the screen, then run:
+Plug in and power the screen, then run one of these:
+
+| Command | Shows |
+|---|---|
+| `ssh -t baja ./driver-display/build/driver-display` | The driver view, as design 1. Add `2` or `3` for the other designs |
+| `ssh -t baja ./driver-display/build/gallery` | Every demo screen, 4 seconds each. Add a number to change the delay |
+| `ssh -t baja ./driver-display/build/display-poc` | "BAJA 2026" and a red border, to check the picture fits the panel |
+
+Press Ctrl+C to stop. Only one program can use the screen at a time.
+
+## Start at power-up
+
+On the Pi, from `~/driver-display`. Both commands ask for the Pi's password:
 
 ```bash
-ssh -t baja ./driver-display/build/display-poc
+make autostart-on    # start the driver display at every power-up, and now
+make autostart-off   # stop it and remove it from startup
 ```
 
-The program prints the resolution it picked, which should be `1024x600`. The test passes if the text is centred and all four sides of the red border are visible. Press Ctrl+C to stop.
+`autostart-on` installs a systemd service, `driver-display`, which runs `build/driver-display` and restarts it if it stops. While it runs, stop it with `sudo systemctl stop driver-display` before starting another program on the screen. After a new `./deploy.sh`, restart it with `sudo systemctl restart driver-display`.
 
 ## Research
 

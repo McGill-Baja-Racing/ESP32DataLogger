@@ -1,0 +1,16 @@
+# Starts the driver display at power-up. Installed by "make autostart-on", which
+# replaces the @...@ values.
+[Unit]
+Description=Baja driver display
+After=systemd-user-sessions.service
+
+[Service]
+User=@USER@
+ExecStart=@PROGRAM@
+# The screen can take a moment to appear after boot, and a crash should not leave
+# the driver without a display.
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

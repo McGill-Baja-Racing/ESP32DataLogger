@@ -1,8 +1,9 @@
 #!/bin/sh
 # Run from a laptop with internet. The Pi has none, so this downloads LVGL and the
-# libdrm headers here, copies everything to the Pi and builds the display test there.
+# libdrm headers here, copies everything to ~/driver-display on the Pi and builds there.
 #
 # Usage: ./deploy.sh [ssh-host]    (default host: baja)
+#        ./deploy.sh --fetch-only  (only download, to build on this computer)
 set -eu
 cd "$(dirname "$0")"
 
@@ -26,19 +27,36 @@ if [ ! -f third_party/libdrm/include/xf86drm.h ]; then
     rm -rf "$tmp"
 fi
 
-# The Pi's clock can be wrong, so "tar -m" stamps files with the Pi's own time.
-# Otherwise make would see the sources as newer than what it just built.
-copy_to_pi() {
-    COPYFILE_DISABLE=1 tar -cf - --no-xattrs "$@" |
-        ssh "$HOST" 'mkdir -p driver-display && tar -xmf - -C driver-display'
-}
-
-# Copying LVGL again would rebuild all of it, which takes minutes on the Pi.
-if ! ssh "$HOST" test -f driver-display/third_party/lvgl/lvgl.h; then
-    copy_to_pi third_party/libdrm third_party/lvgl/src third_party/lvgl/include \
-        third_party/lvgl/lvgl.h third_party/lvgl/lvgl_private.h third_party/lvgl/lv_version.h
+if [ "$HOST" = "--fetch-only" ]; then
+    exit 0
 fi
-copy_to_pi Makefile src
 
-ssh "$HOST" 'make -C driver-display -j4 display-poc'
-echo "Built. To run it: ssh -t $HOST ./driver-display/build/display-poc"
+# Only files whose content changed are replaced on the Pi, and they get the Pi's
+# time. make then rebuilds exactly what changed, even though the Pi's clock is wrong.
+COPYFILE_DISABLE=1 tar -cf - --no-xattrs Makefile src systemd third_party/libdrm \
+    third_party/lvgl/src third_party/lvgl/include third_party/lvgl/lvgl.h \
+    third_party/lvgl/lvgl_private.h third_party/lvgl/lv_version.h |
+    ssh "$HOST" 'set -e
+        rm -rf .driver-display-upload
+        mkdir .driver-display-upload
+        tar -xmf - -C .driver-display-upload
+        cd .driver-display-upload
+        changed=0
+        for f in $(find . -type f); do
+            if ! cmp -s "$f" "../driver-display/$f"; then
+                mkdir -p "../driver-display/$(dirname "$f")"
+                cp "$f" "../driver-display/$f"
+                changed=$((changed + 1))
+            fi
+        done
+        cd ..
+        rm -rf .driver-display-upload
+        echo "$changed files updated on the Pi"'
+
+ssh "$HOST" 'make -C driver-display -j4 --no-print-directory'
+
+echo "Built. To run it: ssh -t $HOST ./driver-display/build/driver-display"
+if ssh "$HOST" systemctl is-active --quiet driver-display; then
+    echo "Autostart is on, so the old version is still running. Restart it with:"
+    echo "  ssh -t $HOST sudo systemctl restart driver-display"
+fi
