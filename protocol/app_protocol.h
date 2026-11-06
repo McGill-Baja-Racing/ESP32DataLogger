@@ -21,6 +21,8 @@
 #define CAN_ID_GENERIC_ADC          0x0BA
 #define CAN_ID_ENGINE_RPM           0x0BB
 #define CAN_ID_ENGINE_SPARK         0x0BC
+#define CAN_ID_SHOCK_DISPLACEMENT   0x0BD   /* micrometres (um), 0 = fully compressed */
+
 
 /* Master-only log records, never sent on the bus. */
 #define CAN_ID_GPS_SPEED            0x700
