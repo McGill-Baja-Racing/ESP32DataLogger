@@ -60,6 +60,7 @@ Every accepted CAN sensor frame has exactly eight bytes:
 | Node 3 | `0x0B6`–`0x0B8` | Angular velocity X/Y/Z, milli-degrees/second | 100 Hz each |
 | Node 4 | `0x0B9` | Signed gearbox bearing RPM | 50 Hz, nominal 100 ms averaging window |
 | Node 6 | `0x0BA` | Voltage, mV | 100 Hz |
+| Node 6 | `0x0BD` | Shock displacement, µm | 100 Hz |
 | Node 5 | `0x0BB` | Engine RPM | Valid consecutive spark intervals; zero on stopped timeout |
 | Node 5 | `0x0BC` | Spark event, value `1` | Detected rising edges |
 | Master GPS | `0x700` | Speed, km/h × 100 | Valid GPS telemetry updates |
