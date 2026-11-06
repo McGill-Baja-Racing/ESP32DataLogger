@@ -69,6 +69,7 @@ static inline uint8_t protocol_sensor_node_id(uint32_t id)
         case CAN_ID_BEARING_ENCODER: return 4;
         case CAN_ID_ENGINE_RPM:
         case CAN_ID_ENGINE_SPARK:   return 5;
+        case CAN_ID_SHOCK_DISPLACEMENT:
         case CAN_ID_GENERIC_ADC:    return 6;
         default:                    return 0;
     }
