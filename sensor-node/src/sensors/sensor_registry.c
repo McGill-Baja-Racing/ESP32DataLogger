@@ -20,8 +20,9 @@ extern sensor_t engine_rpm_sensor;
 static sensor_t sensors[1];
 #elif NODE_FIXED_ADC_CONFIG
 extern sensor_t generic_adc_sensor;
+extern sensor_t shock_pot_sensor;
 
-static sensor_t sensors[1];
+static sensor_t sensors[2];
 #elif NODE_FIXED_MPU_CONFIG
 extern sensor_t mpu_accel_x_sensor;
 extern sensor_t mpu_accel_y_sensor;
@@ -53,6 +54,7 @@ sensor_t *sensor_registry(size_t *count)
     sensors[5] = mpu_gyro_z_sensor;
 #else
     sensors[0] = generic_adc_sensor;
+    sensors[1] = shock_pot_sensor;
 #endif
     *count = sizeof(sensors) / sizeof(sensors[0]);
     return sensors;
