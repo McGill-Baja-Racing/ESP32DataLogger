@@ -146,11 +146,18 @@ static esp_err_t status_handler(httpd_req_t *request)
 
 static esp_err_t health_handler(httpd_req_t *request)
 {
-    char text[2048];
-    node_health_list_problems(text, sizeof(text));
+    /* Keep the full report off the HTTP task's stack. */
+    char *text = malloc(NODE_HEALTH_PROBLEMS_MAX);
+    if (!text) {
+        return httpd_resp_send_err(request, HTTPD_500_INTERNAL_SERVER_ERROR,
+                                   "Cannot allocate health report");
+    }
+    node_health_list_problems(text, NODE_HEALTH_PROBLEMS_MAX);
     httpd_resp_set_type(request, "text/plain");
     httpd_resp_set_hdr(request, "Cache-Control", "no-store");
-    return httpd_resp_sendstr(request, text);
+    esp_err_t result = httpd_resp_sendstr(request, text);
+    free(text);
+    return result;
 }
 
 static esp_err_t command_handler(httpd_req_t *request)

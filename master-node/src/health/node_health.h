@@ -24,6 +24,9 @@ esp_err_t node_health_init(void);
 /* Fits the longest status and panel lines: every fault bit, six sensors and a restart. */
 #define NODE_HEALTH_TEXT_MAX 640
 
+/* One maximum-length line per node, including newlines and the final terminator. */
+#define NODE_HEALTH_PROBLEMS_MAX (CAN_NODE_SLOT_COUNT * NODE_HEALTH_TEXT_MAX + 1)
+
 /**
  * @brief Check whether a frame is a node's status, event or diagnostics frame.
  *
@@ -93,7 +96,8 @@ bool node_health_handle_frame(const can_message_t *message);
  * with no recent status shows as not responding.
  *
  * @param out Filled with newline-ended lines; empty if none.
- * @param size Size of out, above 0; lines that do not fit are left out.
+ * @param size Size of out, above 0; use NODE_HEALTH_PROBLEMS_MAX for every node.
+ *             Lines that do not fit are left out.
  */
 void node_health_list_problems(char *out, size_t size);
 

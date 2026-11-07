@@ -319,6 +319,128 @@ int main(void)
 }
 '''
 
+HEALTH_RESPONSE_HARNESS = r'''
+#include <assert.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdio.h>
+#include "health/node_health.h"
+#include "live/live_data.h"
+#include "aim/aim_adapter.h"
+#include "node_state/node_registry.h"
+#define ESP_OK 0
+#define ESP_FAIL -1
+typedef int portMUX_TYPE;
+#define portMUX_INITIALIZER_UNLOCKED 0
+#define portENTER_CRITICAL(m) ((void)(m))
+#define portEXIT_CRITICAL(m) ((void)(m))
+static uint32_t now_ms(void) { return 10000; }
+''' + cut(MASTER / 'src/live/live_data.c', 'static const live_signal_metadata_t signals[',
+          'static live_sample_t latest[') \
+    + cut(MASTER / 'src/live/live_data.c', 'const live_signal_metadata_t *live_data_signals(',
+          'void live_data_record(') \
+    + cut(MASTER / 'src/health/node_health.c', 'static const char *const code_names',
+          '/* Used only from CAN dispatch. */') + r'''
+typedef int httpd_req_t;
+#define HTTPD_500_INTERNAL_SERVER_ERROR 500
+static char response[16384];
+static bool allocation_fails, send_fails;
+static unsigned allocations, response_status;
+void *test_malloc(size_t size) {
+    if (allocation_fails) return NULL;
+    void *memory = malloc(size);
+    if (memory) allocations++;
+    return memory;
+}
+void test_free(void *memory) {
+    assert(memory && allocations);
+    allocations--;
+    free(memory);
+}
+esp_err_t httpd_resp_set_type(httpd_req_t *request, const char *type) {
+    (void)request; assert(!strcmp(type, "text/plain")); return ESP_OK;
+}
+esp_err_t httpd_resp_set_hdr(httpd_req_t *request, const char *name, const char *value) {
+    (void)request;
+    assert(!strcmp(name, "Cache-Control") && !strcmp(value, "no-store"));
+    return ESP_OK;
+}
+esp_err_t httpd_resp_sendstr(httpd_req_t *request, const char *text) {
+    (void)request;
+    assert(strlen(text) < sizeof(response));
+    strcpy(response, text);
+    response_status = 200;
+    return send_fails ? ESP_FAIL : ESP_OK;
+}
+esp_err_t httpd_resp_send_err(httpd_req_t *request, int status, const char *message) {
+    (void)request; (void)message;
+    response_status = status;
+    return ESP_OK;
+}
+#define malloc test_malloc
+#define free test_free
+''' + cut(MASTER / 'src/web/web_server.c', 'static esp_err_t health_handler(',
+          'static esp_err_t command_handler(') + r'''
+#undef malloc
+#undef free
+
+int main(void) {
+    httpd_req_t request = 0;
+    unsigned nodes_reported = 0;
+    for (unsigned node = 0; node < CAN_NODE_SLOT_COUNT; node++) {
+        if (node && !(CAN_NODE_ID_MASK & (1U << node))) continue;
+        node_summary_t *entry = &summary[node];
+        entry->status_seen = true;
+        entry->status.timestamp_ms = now_ms();
+        entry->status.health = NODE_HEALTH_CRITICAL;
+        entry->status.faults = (1U << HEALTH_FAULT_COUNT) - 1;
+        entry->diagnostics.resets = 255;
+        entry->diagnostics.reset_reason = 5; /* interrupt_watchdog */
+        for (unsigned slot = 0; slot < NODE_SENSOR_SLOTS; slot++) {
+            entry->status.sensors |= (slot % 2 ? SENSOR_STATE_SOME_FAILED :
+                                      SENSOR_STATE_NO_READINGS) << (2 * slot);
+        }
+        nodes_reported++;
+    }
+    assert(health_handler(&request) == ESP_OK && response_status == 200);
+    assert(strlen(response) > 2048 && allocations == 0);
+    unsigned lines = 0;
+    for (const char *p = response; *p; p++) if (*p == '\n') lines++;
+    assert(lines == nodes_reported);
+    for (unsigned node = 0; node < CAN_NODE_SLOT_COUNT; node++) {
+        if (node && !(CAN_NODE_ID_MASK & (1U << node))) continue;
+        char name[64];
+        snprintf(name, sizeof(name), "%s:", node_names[node]);
+        assert(strstr(response, name));
+    }
+    char complete[sizeof(response)];
+    node_health_list_problems(complete, sizeof(complete));
+    assert(!strcmp(response, complete));
+
+    /* A failed network send must still release the response buffer. */
+    send_fails = true;
+    assert(health_handler(&request) == ESP_FAIL && allocations == 0);
+    send_fails = false;
+    allocation_fails = true;
+    assert(health_handler(&request) == ESP_OK);
+    assert(response_status == 500 && allocations == 0);
+    allocation_fails = false;
+
+    /* Healthy and missing-node responses remain well-formed. */
+    for (unsigned node = 0; node < CAN_NODE_SLOT_COUNT; node++) {
+        summary[node] = (node_summary_t){.status_seen = true};
+        summary[node].status.timestamp_ms = now_ms();
+    }
+    assert(health_handler(&request) == ESP_OK && response[0] == '\0');
+    summary[8].status_seen = false;
+    assert(health_handler(&request) == ESP_OK);
+    assert(!strcmp(response, "critical: rear_shock_node_8: not responding\n"));
+    assert(allocations == 0);
+    printf("OK\n");
+    return 0;
+}
+'''
+
 
 def compile_and_run(source, include, stubs=None):
     with tempfile.TemporaryDirectory() as directory:
@@ -361,6 +483,9 @@ class NodeHealthTest(unittest.TestCase):
 
     def test_shock_health_routing_and_offline_mask(self):
         self.check(ROUTING_HARNESS, MASTER / 'src', {'esp_err.h': ESP_ERR_STUB})
+
+    def test_health_response_keeps_all_nodes(self):
+        self.check(HEALTH_RESPONSE_HARNESS, MASTER / 'src', {'esp_err.h': ESP_ERR_STUB})
 
 
 if __name__ == '__main__':
