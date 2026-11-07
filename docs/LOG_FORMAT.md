@@ -29,10 +29,10 @@ UTC adds eight bytes per sample. If companion writing fails, later UTC entries a
 Download a completed session with `format=csv`, for example `/api/logs/download?name=log_0001.bin&format=csv`.
 
 ```text
-sample_index,can_id,can_id_hex,signal,node,timestamp_ms,absolute_time_utc,value,units,raw_data
+sample_index,can_id,can_id_hex,signal,node,timestamp_ms,absolute_time_utc,value,units,raw_data,detail
 ```
 
-UTC uses an ISO calendar timestamp ending in `Z`. GPS speed is converted to km/h; coordinates remain integer degrees × 10⁷ in the full CSV. Other values preserve their integer signal scale. `raw_data` is the unsigned packed payload.
+UTC uses an ISO calendar timestamp ending in `Z`. GPS speed is converted to km/h; coordinates remain integer degrees × 10⁷ in the full CSV. Other values preserve their integer signal scale. `raw_data` is the unsigned packed payload. `detail` is blank for measurements and describes node health status, events, and diagnostics. Health records use the same 16-byte binary layout; their lower four payload bytes are packed fields rather than a measurement. See [node health](PROTOCOL.md#node-health).
 
 ## Worked front brake record
 
@@ -47,7 +47,7 @@ UTC entry (8 bytes):00 00 00 00 00 00 00 00
 The payload is `(1000 << 32) | 1500`, or decimal `4294967297500`. The UTC entry belongs in the separate companion, not in the 16-byte binary record. The browser full-CSV row is:
 
 ```csv
-0,177,0x0B1,front_brake_pressure,brake_node_1,1000,,1500,psi,4294967297500
+0,177,0x0B1,front_brake_pressure,brake_node_1,1000,,1500,psi,4294967297500,
 ```
 
 The empty cell between `1000` and `1500` is unavailable absolute time. The offline decoder emits the same sample without that column. The [wire example](PROTOCOL.md#worked-front-brake-example) explains the payload fields. Powertrain export does not emit a row for this brake sample alone: its rows require engine and eligible bearing samples.

@@ -12,7 +12,14 @@ typedef struct {
     bool has_utc;
 } gps_rmc_fix_t;
 
-/* Checksum-valid active RMC, without CR/LF. Reject malformed telemetry;
- * missing telemetry and invalid UTC are represented by the availability flags.
- * Output is cleared on failure. The UART reader bounds sentence length. */
+/**
+ * @brief Parse one line of text from the GPS.
+ *
+ * Reads only the RMC line, which carries time, position and speed. A value
+ * the GPS left out clears its has_ flag.
+ *
+ * @param line Line without the line ending.
+ * @param fix Set to the parsed values; cleared on failure.
+ * @return false if the line is corrupted, not RMC, or has no position yet.
+ */
 bool gps_rmc_parse(const char *line, gps_rmc_fix_t *fix);

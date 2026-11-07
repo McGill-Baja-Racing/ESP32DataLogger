@@ -76,5 +76,6 @@ int main(void) {
                 with self.subTest(can_enabled=enabled):
                     subprocess.run(['cc', '-std=c11', '-Wall', '-Wextra', '-Werror',
                                     f'-DMASTER_CAN_ENABLED={enabled}', '-I'+str(tmp),
-                                    '-I'+str(ROOT/'src'), str(tmp/'test.c'), '-o', str(tmp/'test')], check=True)
+                                    '-I'+str(ROOT/'src'), '-I'+str(ROOT.parent),
+                                    str(tmp/'test.c'), '-o', str(tmp/'test')], check=True)
                     subprocess.run([str(tmp/'test')], check=True)

@@ -18,6 +18,7 @@ class AimTests(unittest.TestCase):
 #include <string.h>
 #include "aim/aim_adapter.h"
 #include "protocol/app_protocol.h"
+#define ESP_OK 0
 static unsigned logged, live, handled;
 static bool locked, queued, recording;
 static int rx_queue;
@@ -37,6 +38,11 @@ static void data_logger_enqueue(const can_message_t *s) { assert(locked);assert(
 static void live_data_record(const can_message_t *s) { (void)s;assert(locked);live++; }
 static aim_tracker_t app_tracker;
 bool aim_adapter_receive(const can_message_t *f,can_message_t *s) { return aim_decode(&app_tracker,f,s); }
+static bool node_health_is_frame(const can_message_t *s) { (void)s;return false; }
+static uint8_t node_health_node_id(const can_message_t *s) { (void)s;return 0; }
+static void node_registry_record_health_frame(uint8_t node) { (void)node; }
+static bool node_health_handle_frame(const can_message_t *s) { (void)s;return false; }
+static void node_health_count(health_code_t c,uint32_t n,uint32_t id,int e) { (void)c;(void)n;(void)id;(void)e; }
 static bool node_registry_is_state_frame(const can_message_t *s) { (void)s;return false; }
 static void node_registry_update(const can_message_t *s) { (void)s; }
 static void node_registry_record_sensor_frame(const can_message_t *s) { (void)s; }

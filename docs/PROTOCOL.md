@@ -42,7 +42,7 @@ Measure accuracy for applications that depend on tight timing.
 | 1 | Reason: boot `1`, stop `2`, start `3`, CAN recovery `4`, beacon synchronization `5` |
 | 2 | ESP reset reason for a boot report; otherwise zero |
 
-State frames are control information, not logged sensor samples. During recording, sensor traffic supplies liveness; there are no separate heartbeat frames. The expected-node mask currently enables nodes 1, 3, 4, 5, 7, and 8. A configured node is offline after three seconds without sensor traffic. Node 6 is accepted but not enabled in that mask by default.
+State frames are control information, not logged sensor samples. During recording, sensor and health traffic supply liveness. The expected-node mask enables nodes 1, 3, 4, 5, 7, and 8. A configured node is offline after three seconds without either kind of traffic; a responding node without recent sensor data shows `waiting`. Node 6 is accepted but not enabled in that mask by default.
 
 ## Sensor samples
 
@@ -91,6 +91,29 @@ bytes `DC 05 00 00 E8 03 00 00`: little-endian 1500 followed by little-endian
 ## AiM EVO4S external input
 
 Standard ID `0x500` at 1 Mbit/s carries four bytes: unsigned little-endian 16-bit RPM then unsigned 16-bit wrapping counter. The master accepts this independent source without DAQ node commands or clock synchronization. It creates local record `0x703` (`engine_rpm_aim`) using reception time and the normal value/timestamp layout. It is not a sensor-node ID and is never retransmitted. See [configuration and lifecycle](../master-node/docs/AIM_EVO4S.md).
+
+## Node health
+
+Flash the master and sensor nodes from this integration together. Every node sends
+four-byte status and diagnostics payloads at 1 Hz on `0x0D0 + node` and
+`0x0F0 + node`. The master adds its arrival timestamp to make eight-byte log
+records. While recording, nodes also send eight-byte events on `0x0E0 + node`,
+with the time of the last occurrence. Master health is logged locally as node 0.
+The web health panel uses `/api/health`; AiM connection status stays separate.
+
+Status packs faults, health level, mode, and six sensor states. Events pack code,
+error, an eight-bit subject, sequence, count, and timestamp; the exact bit layout
+is in the shared header. Sensor slots follow each node's CAN IDs in ascending
+order, excluding engine spark. Both shock nodes have two slots. Subject aliases
+`0x70`–`0x72` represent GPS IDs `0x700`–`0x702`; `0x73` and `0x74` represent
+AiM wire ID `0x500` and normalized RPM ID `0x703`. This preserves those IDs in
+drop/overflow diagnostics without changing the event layout.
+
+For `node_offline` events, the subject is an offline-node mask: bits 1–7 retain
+nodes 1–7, and the previously unused bit 0 represents node 8. The master is never
+an offline subject. The firmware CSV exporter and offline decoder use the same
+mapping. After STOP, normal samples stop entering the log immediately; health
+admission closes after a 200 ms grace period, before the final queue drain.
 
 ## Changing this contract
 

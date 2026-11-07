@@ -1,9 +1,10 @@
 #pragma once
 
 #include "can/can_master.h"
+#include "protocol/app_protocol.h"
 
 /* Incoming wire ID; decoded samples use the master-only CAN_ID_AIM_RPM. */
-#define AIM_CAN_ID 0x500
+#define AIM_CAN_ID CAN_ID_AIM_WIRE
 
 /* Nominal display rate only; reception is not limited to this frequency. */
 #ifndef AIM_OUTPUT_RATE_HZ

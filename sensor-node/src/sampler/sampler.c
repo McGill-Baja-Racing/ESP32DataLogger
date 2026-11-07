@@ -10,6 +10,7 @@
 #include "freertos/task.h"
 
 #include "can/can_node.h"
+#include "health/node_health.h"
 #include "sensors/adc_input.h"
 #include "sensors/sensor.h"
 #include "sensors/engine_rpm.h"
@@ -24,6 +25,7 @@
  */
 
 #define SAMPLE_QUEUE_LENGTH 64
+#define SAMPLER_IDLE_POLL_MS 20
 #define SERIAL_LOG_SLOT_COUNT 16
 
 typedef struct {
@@ -37,13 +39,16 @@ static const char *TAG = "Sampler";
 static QueueHandle_t sample_queue;
 static sensor_t *sensors;
 static size_t sensor_count;
+/* A sensor whose init failed is never read. */
+static bool sensor_ready[MAX_SENSORS];
 static volatile bool active;
 
 static void arm_schedule(void)
 {
-    int64_t now = esp_timer_get_time();
+    /* sample_task sees START up to one idle poll late; reads due before then would count as missed. */
+    int64_t first_us = esp_timer_get_time() + SAMPLER_IDLE_POLL_MS * 1000;
     for (size_t i = 0; i < sensor_count; i++) {
-        sensors[i].next_sample_us = now;
+        sensors[i].next_sample_us = first_us;
     }
 }
 
@@ -76,7 +81,10 @@ void sampler_discard_pending(void)
 #if NODE_FIXED_ENGINE_CONFIG
     engine_rpm_discard_pending();
 #endif
-    xQueueReset(sample_queue);
+    sample_t discarded;
+    while (xQueueReceive(sample_queue, &discarded, 0) == pdTRUE) {
+        node_health_count(HEALTH_SAMPLES_DROPPED, 1, discarded.can_id, ESP_OK);
+    }
 }
 
 bool sampler_is_active(void)
@@ -84,6 +92,14 @@ bool sampler_is_active(void)
     return active;
 }
 
+/**
+ * @brief Queue a sample for send_task without blocking.
+ *
+ * If the queue is full, the oldest sample is dropped and counted in node
+ * health.
+ *
+ * @param sample Copied.
+ */
 static void enqueue_latest(sample_t *sample)
 {
     if (xQueueSend(sample_queue, sample, 0) == pdTRUE) {
@@ -91,11 +107,21 @@ static void enqueue_latest(sample_t *sample)
     }
     /* Prefer current measurements when the queue cannot keep up. */
     sample_t discarded;
-    (void)xQueueReceive(sample_queue, &discarded, 0);
+    if (xQueueReceive(sample_queue, &discarded, 0) == pdTRUE) {
+        node_health_count(HEALTH_SAMPLES_DROPPED, 1, discarded.can_id, ESP_OK);
+    }
     (void)xQueueSend(sample_queue, sample, 0);
 }
 
 #if NODE_FIXED_ENGINE_CONFIG
+/**
+ * @brief Queue the spark and RPM samples of one engine event.
+ *
+ * Both samples are queued or neither. A full queue drops the event and counts
+ * it in node health, as does a negative timestamp.
+ *
+ * @param event Event from engine_rpm_next_event().
+ */
 static void enqueue_engine_event(const engine_event_t *event)
 {
     sample_t sample = {
@@ -104,6 +130,9 @@ static void enqueue_engine_event(const engine_event_t *event)
         .timestamp_ms = time_sync_timestamp_ms_at(event->timestamp_us),
         .value = event->engine_rpm,
     };
+    if (sample.timestamp_ms < 0) {
+        node_health_count(HEALTH_BAD_TIMESTAMP, 1, CAN_ID_ENGINE_RPM, ESP_OK);
+    }
     bool has_rpm = !event->spark || event->engine_rpm > 0;
 #if SENSOR_SERIAL_TEST
     /* Bench output uses the same value and throttling as every sensor. */
@@ -116,6 +145,14 @@ static void enqueue_engine_event(const engine_event_t *event)
      * queue pressure cannot split a spark from its RPM measurement. */
     if (uxQueueSpacesAvailable(sample_queue) < count) {
         ESP_LOGW(TAG, "Spark/RPM output queue full; event lost");
+        if (event->spark) {
+            node_health_count(HEALTH_SAMPLES_DROPPED, 1,
+                              CAN_ID_ENGINE_SPARK, ESP_OK);
+        }
+        if (has_rpm) {
+            node_health_count(HEALTH_SAMPLES_DROPPED, 1,
+                              CAN_ID_ENGINE_RPM, ESP_OK);
+        }
         return;
     }
     if (event->spark) {
@@ -134,16 +171,23 @@ static void enqueue_engine_event(const engine_event_t *event)
 }
 #endif
 
+/**
+ * @brief Task that reads the sensors while recording and queues the samples.
+ */
 static void sample_task(void *argument)
 {
     (void)argument;
     while (true) {
         if (!active) {
-            vTaskDelay(pdMS_TO_TICKS(20));
+            vTaskDelay(pdMS_TO_TICKS(SAMPLER_IDLE_POLL_MS));
             continue;
         }
 
 #if NODE_FIXED_ENGINE_CONFIG
+        if (!sensor_ready[0]) {
+            vTaskDelay(pdMS_TO_TICKS(SAMPLER_IDLE_POLL_MS));
+            continue;
+        }
         engine_event_t event;
         if (engine_rpm_next_event(&event) && active) {
             enqueue_engine_event(&event);
@@ -151,6 +195,7 @@ static void sample_task(void *argument)
         uint32_t dropped = engine_rpm_dropped_events();
         if (dropped) {
             ESP_LOGW(TAG, "Spark capture overflow: %" PRIu32 " events lost", dropped);
+            node_health_count(HEALTH_SAMPLES_DROPPED, dropped, CAN_ID_ENGINE_SPARK, ESP_OK);
         }
         continue;
 #endif
@@ -158,6 +203,9 @@ static void sample_task(void *argument)
         int64_t next_due = now + 1000000;
         for (size_t i = 0; i < sensor_count; i++) {
             sensor_t *sensor = &sensors[i];
+            if (!sensor_ready[i]) {
+                continue;
+            }
             if (now >= sensor->next_sample_us) {
                 /* Hardware-specific work is confined to the sensor callback. */
                 sample_t sample = {
@@ -166,8 +214,17 @@ static void sample_task(void *argument)
                     .timestamp_ms = time_sync_timestamp_ms(),
                 };
                 esp_err_t error = sensor->read(sensor, &sample.value);
+                node_health_sensor_read(i, error);
+                uint32_t periods = 0;
                 while (sensor->next_sample_us <= now) {
                     sensor->next_sample_us += sensor->period_us;
+                    periods++;
+                }
+                if (sample.timestamp_ms < 0) {
+                    node_health_count(HEALTH_BAD_TIMESTAMP, 1, sensor->can_id, ESP_OK);
+                }
+                if (periods > 1) {
+                    node_health_count(HEALTH_SAMPLES_MISSED, periods - 1, sensor->can_id, ESP_OK);
                 }
                 if (error == ESP_OK) {
                     enqueue_latest(&sample);
@@ -187,6 +244,12 @@ static void sample_task(void *argument)
     }
 }
 
+/**
+ * @brief Task that sends queued samples over CAN.
+ *
+ * Discards samples if sampling has stopped. A failed send is logged and the
+ * sample is lost. Serial test builds print samples instead.
+ */
 static void send_task(void *argument)
 {
     (void)argument;
@@ -246,15 +309,19 @@ static void send_task(void *argument)
 esp_err_t sampler_init(void)
 {
     sensors = sensor_registry(&sensor_count);
+    if (sensor_count > MAX_SENSORS) {
+        return ESP_ERR_INVALID_SIZE;
+    }
     for (size_t i = 0; i < sensor_count; i++) {
-        if (sensors[i].init) {
-            esp_err_t error = sensors[i].init(&sensors[i]);
-            if (error != ESP_OK) {
-                return error;
-            }
+        esp_err_t error = ESP_OK;
+        if (error == ESP_OK && sensors[i].init) {
+            error = sensors[i].init(&sensors[i]);
         }
-        ESP_LOGI(TAG, "%s: CAN=0x%03" PRIX32 " period=%" PRIu32 "us",
-                 sensors[i].name, sensors[i].can_id, sensors[i].period_us);
+        sensor_ready[i] = (error == ESP_OK);
+        node_health_sensor_init(i, sensors[i].can_id, error);
+        ESP_LOGI(TAG, "%s: CAN=0x%03" PRIX32 " period=%" PRIu32 "us init=%s",
+                 sensors[i].name, sensors[i].can_id, sensors[i].period_us,
+                 esp_err_to_name(error));
     }
 
     sample_queue = xQueueCreate(SAMPLE_QUEUE_LENGTH, sizeof(sample_t));
