@@ -42,7 +42,7 @@ Measure accuracy for applications that depend on tight timing.
 | 1 | Reason: boot `1`, stop `2`, start `3`, CAN recovery `4`, beacon synchronization `5` |
 | 2 | ESP reset reason for a boot report; otherwise zero |
 
-State frames are control information, not logged sensor samples. During recording, sensor traffic supplies liveness; there are no separate heartbeat frames. The expected-node mask currently enables nodes 1, 3, 4, and 5. A configured node is offline after three seconds without sensor traffic. Node 6 is accepted but not enabled in that mask by default.
+State frames are control information, not logged sensor samples. During recording, sensor traffic supplies liveness; there are no separate heartbeat frames. The expected-node mask currently enables nodes 1, 3, 4, 5, 7, and 8. A configured node is offline after three seconds without sensor traffic. Node 6 is accepted but not enabled in that mask by default.
 
 ## Sensor samples
 
@@ -62,6 +62,8 @@ Every accepted CAN sensor frame has exactly eight bytes:
 | Node 6 | `0x0BA` | Voltage, mV | 100 Hz |
 | Node 5 | `0x0BB` | Engine RPM | Valid consecutive spark intervals; zero on stopped timeout |
 | Node 5 | `0x0BC` | Spark event, value `1` | Detected rising edges |
+| Node 7 | `0x0BD`, `0x0BE` | Front linear pot 1 and 2, mm | 100 Hz each |
+| Node 8 | `0x0BF`, `0x0C9` | Rear linear pot 1 and 2, mm | 100 Hz each |
 | Master GPS | `0x700` | Speed, km/h × 100 | Valid GPS telemetry updates |
 | Master GPS | `0x701`, `0x702` | Latitude/longitude, degrees × 10⁷ | Valid GPS telemetry updates |
 
@@ -92,8 +94,8 @@ Standard ID `0x500` at 1 Mbit/s carries four bytes: unsigned little-endian 16-bi
 
 ## Changing this contract
 
-Both firmwares include the same [shared header](../protocol/app_protocol.h) at the repository root. It owns CAN bitrate (`CAN_BITRATE`), beacon period (`CAN_MASTER_TIME_PERIOD_MS`), command/signal IDs, state-report length, node mask/capacity, and sensor-to-node mappings. Both CMake components include the repository root; retain `#include "protocol/app_protocol.h"` in source files. Update `protocol_sensor_node_id()` for a new signal; `protocol_is_sensor_id()` derives acceptance from that mapping. Also update live/export metadata, offline decoding, and this table. IDs are occupied through `0x0BC`; choose a new ID only after checking the shared header and control/state ID ranges. Each concurrently deployed measurement source needs its own signal ID: distinct node IDs do not distinguish duplicated sensor IDs.
+Both firmwares include the same [shared header](../protocol/app_protocol.h) at the repository root. It owns CAN bitrate (`CAN_BITRATE`), beacon period (`CAN_MASTER_TIME_PERIOD_MS`), command/signal IDs, state-report length, node mask/capacity, and sensor-to-node mappings. Both CMake components include the repository root; retain `#include "protocol/app_protocol.h"` in source files. Update `protocol_sensor_node_id()` for a new signal; `protocol_is_sensor_id()` derives acceptance from that mapping. Also update live/export metadata, offline decoding, and this table. Sensor IDs occupy `0x0B1`–`0x0BF` and `0x0C9`; state reports occupy `0x0C1`–`0x0C8`. The rear second pot uses `0x0C9` to avoid the brake state report at `0x0C1`; choose a new ID only after checking the shared header and control/state ID ranges. Each concurrently deployed measurement source needs its own signal ID: distinct node IDs do not distinguish duplicated sensor IDs.
 
-`CAN_NODE_ID_MASK` lists supported node IDs (currently 1, 3, 4, 5, and 6); `CAN_NODE_SLOT_COUNT` is 7, allowing indices 0–6. Sensor builds reject a `NODE_ID` absent from the mask. The mask must fit the slot count, and the master expected-node mask must be a subset of supported nodes. Supporting a node and enabling its monitoring are separate steps; see the extension guide for status/UI changes.
+`CAN_NODE_ID_MASK` lists supported node IDs (currently 1, 3, 4, 5, 6, 7, and 8); `CAN_NODE_SLOT_COUNT` is 9, allowing indices 0–8. Sensor builds reject a `NODE_ID` absent from the mask. The mask must fit the slot count, and the master expected-node mask must be a subset of supported nodes. Supporting a node and enabling its monitoring are separate steps; see the extension guide for status/UI changes.
 
 Build all firmware profiles when shared contracts change and perform a physical CAN test. [Adding sensors](../sensor-node/docs/ADDING_SENSORS_AND_NODES.md) gives the procedure; [Testing](TESTING.md) gives acceptance checks. The [log format](LOG_FORMAT.md) specifies how these samples are stored.

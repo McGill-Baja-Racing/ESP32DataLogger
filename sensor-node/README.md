@@ -13,11 +13,15 @@ A PlatformIO environment selects a fixed set of sensor drivers when firmware is 
 | `NodeEncoder` | 4 | Signed gearbox bearing RPM |
 | `NodeEngine` | 5 | Engine RPM and spark events |
 | `NodeADC` | 6 | Optional generic voltage input |
+| `NodeFrontShock` | 7 | Two front linear pots on GPIO 0 and 1, displacement in mm |
+| `NodeRearShock` | 8 | Two rear linear pots on GPIO 0 and 1, displacement in mm |
 | `NodeEngineBench` | 5 | Engine RPM printed locally; CAN disabled |
 
 Most measurements are periodic: the scheduler reads them at a configured interval. Engine capture is event-driven: input edges are timestamped as they happen, and valid intervals produce RPM. It is not a fixed-rate polling sensor. The encoder is read periodically even though interrupts capture its rotation edges.
 
 The bearing is inside the gearbox. Its raw RPM is recorded for later conversion to wheel and secondary RPM using the relevant drivetrain ratios; this firmware does not perform those conversions.
+
+Linear pots currently map 0–3000 mV to 0–100 mm at 100 Hz per channel. Verify this mapping and the input divider on the bench before vehicle use. Both shock profiles use normal CAN operation; set `SENSOR_SERIAL_TEST=1` for local serial checks.
 
 Both firmwares use 1 Mbit/s CAN, configured by `CAN_BITRATE` in the [shared protocol header](../protocol/app_protocol.h).
 

@@ -21,6 +21,11 @@
 #define CAN_ID_GENERIC_ADC          0x0BA
 #define CAN_ID_ENGINE_RPM           0x0BB
 #define CAN_ID_ENGINE_SPARK         0x0BC
+#define CAN_ID_FRONT_LIN_1          0x0BD
+#define CAN_ID_FRONT_LIN_2          0x0BE
+#define CAN_ID_REAR_LIN_1           0x0BF
+#define CAN_ID_REAR_LIN_2           0x0C9 /* State reports occupy 0x0C1..0x0C8. */
+
 
 /* Master-only log records, never sent on the bus. */
 #define CAN_ID_GPS_SPEED            0x700
@@ -35,8 +40,8 @@
 /* Node N sends state, reason and reset_reason (one byte each) on CAN_ID_NODE_STATE_BASE + N. */
 #define CAN_ID_NODE_STATE_BASE      0x0C0
 #define CAN_NODE_STATE_LENGTH       3
-#define CAN_NODE_ID_MASK            ((1U << 1) | (1U << 3) | (1U << 4) | (1U << 5) | (1U << 6))
-#define CAN_NODE_SLOT_COUNT         7
+#define CAN_NODE_ID_MASK            ((1U << 1) | (1U << 3) | (1U << 4) | (1U << 5) | (1U << 6) | (1U << 7) | (1U << 8))
+#define CAN_NODE_SLOT_COUNT         9
 
 _Static_assert(CAN_NODE_ID_MASK < (1U << CAN_NODE_SLOT_COUNT), "every node ID must be below CAN_NODE_SLOT_COUNT");
 
@@ -64,11 +69,15 @@ static inline uint8_t protocol_sensor_node_id(uint32_t id)
         case CAN_ID_MPU_ACCEL_Z:
         case CAN_ID_MPU_GYRO_X:
         case CAN_ID_MPU_GYRO_Y:
-        case CAN_ID_MPU_GYRO_Z:     return 3;
+        case CAN_ID_MPU_GYRO_Z:      return 3;
         case CAN_ID_BEARING_ENCODER: return 4;
         case CAN_ID_ENGINE_RPM:
         case CAN_ID_ENGINE_SPARK:   return 5;
         case CAN_ID_GENERIC_ADC:    return 6;
+        case CAN_ID_FRONT_LIN_1:
+        case CAN_ID_FRONT_LIN_2:    return 7;
+        case CAN_ID_REAR_LIN_1:
+        case CAN_ID_REAR_LIN_2:     return 8;
         default:                    return 0;
     }
 }

@@ -142,6 +142,8 @@ void app_control_get_status(app_status_t *status)
     status->node_4 = node_registry_state_name(4);
     status->node_5 = node_registry_state_name(5);
     status->node_6 = node_registry_state_name(6);
+    status->node_7 = node_registry_state_name(7);
+    status->node_8 = node_registry_state_name(8);
 }
 
 /* Print the same status snapshot exposed by the web API. */
@@ -155,6 +157,6 @@ void app_control_print_status(void)
     ESP_LOGI(TAG, "AiM=%s age_ms=%" PRId64 " valid=%" PRIu32 " malformed=%" PRIu32 " discontinuities=%" PRIu32,
              status.aim.state, status.aim.last_frame_age_ms, status.aim.valid_frames,
              status.aim.malformed_frames, status.aim.counter_discontinuities);
-    ESP_LOGI(TAG, "nodes: 1=%s 3=%s 4=%s 5=%s 6=%s",
-             status.node_1, status.node_3, status.node_4, status.node_5, status.node_6);
+    ESP_LOGI(TAG, "nodes: 1=%s 3=%s 4=%s 5=%s 6=%s 7=%s 8=%s",
+             status.node_1, status.node_3, status.node_4, status.node_5, status.node_6, status.node_7, status.node_8);
 }

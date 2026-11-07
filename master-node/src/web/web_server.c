@@ -128,7 +128,7 @@ static esp_err_t status_handler(httpd_req_t *request)
              "\"can_errors_available\":%s,"
              "\"live_enabled\":%s,"
              "\"nodes\":{\"1\":\"%s\",\"3\":\"%s\",\"4\":\"%s\",\"5\":\"%s\","
-             "\"6\":\"%s\"},\"aim\":{\"state\":\"%s\",\"last_frame_age_ms\":%" PRId64
+             "\"6\":\"%s\",\"7\":\"%s\",\"8\":\"%s\"},\"aim\":{\"state\":\"%s\",\"last_frame_age_ms\":%" PRId64
              ",\"valid_frames\":%" PRIu32 ",\"malformed_frames\":%" PRIu32
              ",\"counter_discontinuities\":%" PRIu32 "}}",
              data_logger_state_name(), base_name(status.current_file),
@@ -136,7 +136,7 @@ static esp_err_t status_handler(httpd_req_t *request)
              status.can_rx_errors, status.can_tx_errors,
              status.can_errors_available ? "true" : "false",
              status.live_enabled ? "true" : "false", status.node_1, status.node_3, status.node_4,
-             status.node_5, status.node_6, status.aim.state, status.aim.last_frame_age_ms,
+             status.node_5, status.node_6, status.node_7, status.node_8, status.aim.state, status.aim.last_frame_age_ms,
              status.aim.valid_frames, status.aim.malformed_frames, status.aim.counter_discontinuities);
     httpd_resp_set_type(request, "application/json");
     httpd_resp_set_hdr(request, "Cache-Control", "no-store");

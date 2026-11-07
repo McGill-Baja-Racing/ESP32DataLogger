@@ -4,6 +4,7 @@
 #include <stdint.h>
 
 #include "esp_err.h"
+#include "protocol/node_config.h"
 
 typedef struct sensor sensor_t;
 

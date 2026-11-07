@@ -31,6 +31,8 @@ typedef struct {
     const char *node_4;
     const char *node_5;
     const char *node_6;
+    const char *node_7;
+    const char *node_8;
 } app_status_t;
 
 esp_err_t app_control_init(void);
