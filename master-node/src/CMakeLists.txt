@@ -1,6 +1,8 @@
 idf_component_register(
     SRCS
         "main.c"
+        "aim/aim_adapter.c"
+        "aim/aim_decode.c"
         "app/app_control.c"
         "can/can_master.c"
         "console/serial_console.c"

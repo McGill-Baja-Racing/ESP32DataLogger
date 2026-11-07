@@ -79,3 +79,7 @@ Replace the example paths with your files. Expect a saved CSV and sample/ID coun
 The offline tool produces the full-CSV fields **without** `absolute_time_utc`: it does not read companions or implement Powertrain pairing. Use the browser exporter for those capabilities.
 
 Next: [Logger implementation](../master-node/src/logger/README.md), [Web implementation](../master-node/src/web/README.md), and [Testing](TESTING.md).
+
+## AiM backup RPM
+
+Master-generated `0x703` records contain `engine_rpm_aim` from `aim_evo4s` in rpm. Their timestamp is master CAN reception time; the incoming `0x500` payload and counter are not stored directly. Full CSV includes this independent channel; Powertrain CSV continues to use the original engine RPM. See [AiM integration](../master-node/docs/AIM_EVO4S.md).

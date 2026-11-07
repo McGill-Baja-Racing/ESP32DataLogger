@@ -27,14 +27,15 @@ typedef struct { const char *signal, *node, *units; } live_signal_metadata_t;
 static const live_signal_metadata_t *metadata_for(uint32_t id) {
     static const live_signal_metadata_t engine={"engine_rpm","engine_node_5","rpm"};
     static const live_signal_metadata_t idler={"bearing_rpm","encoder_node_4","rpm"};
-    return id==187?&engine:id==185?&idler:NULL;
+    static const live_signal_metadata_t aim={"engine_rpm_aim","aim_evo4s","rpm"};
+    return id==0x703?&aim:id==187?&engine:id==185?&idler:NULL;
 }
 static int httpd_resp_send_chunk(httpd_req_t *request,const char *data,size_t size) {
     (void)request;return size&&fwrite(data,1,size,stdout)!=size?ESP_FAIL:ESP_OK;
 }
 '''+source[helper_start:helper_end]+source[start:end]+r'''
 int main(void) {
-    const uint32_t ids[]={187,185,188,190,189,187,185,187,0x700,0x700,0x700};
+    const uint32_t ids[]={187,185,188,0x703,189,187,185,187,0x700,0x700,0x700};
     const int32_t values[]={3000,-1000,1,4,1000,0,20000,3100,1234,0,1};
     FILE *file=tmpfile();if(!file)return 1;
     for(unsigned i=0;i<11;i++){
@@ -52,6 +53,8 @@ with tempfile.TemporaryDirectory() as directory:
     assert full.splitlines()[0]=='sample_index,can_id,can_id_hex,signal,node,timestamp_ms,absolute_time_utc,value,units,raw_data'
     full_rows=list(csv.DictReader(io.StringIO(full)))
     assert len(full_rows)==11
+    assert full_rows[3]["signal"]=="engine_rpm_aim"
+    assert full_rows[3]["node"]=="aim_evo4s"
     assert [r['value'] for r in full_rows[-3:]]==['12.34','0.00','0.01']
     assert all(r['units']=='km/h' for r in full_rows[-3:])
     import runpy
@@ -62,6 +65,8 @@ with tempfile.TemporaryDirectory() as directory:
     decoder['decode_log'](binary,temp/'speed.csv')
     decoded=list(csv.DictReader((temp/'speed.csv').open()))
     assert all(r['units']=='km/h' for r in decoded[-3:])
+    assert decoded[3]['signal']==full_rows[3]['signal']=='engine_rpm_aim'
+    assert decoded[3]['node']==full_rows[3]['node']=='aim_evo4s'
     for firmware,python in zip(full_rows,decoded):
         for key in ('value','raw_data','timestamp_ms'):
             assert firmware[key]==python[key], (key,firmware,python)

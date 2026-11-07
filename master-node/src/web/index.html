@@ -33,7 +33,7 @@
       <button id="start">Start</button><button id="stop">Stop</button>
     </div>
     <div class="muted">Leave blank for a GPS date/time name. Start waits up to 3 seconds for GPS, then falls back to log_XXXX.bin.</div>
-    <div id="stats" class="muted"></div><div id="nodes" class="muted"></div><div id="error" class="error"></div>
+    <div id="stats" class="muted"></div><div id="nodes" class="muted"></div><div id="aim" class="muted"></div><div id="error" class="error"></div>
   </section>
 
   <section class="card">
@@ -79,6 +79,9 @@ async function refreshStatus(){
     $('state').textContent=pretty(s.logger_state); $('file').textContent=s.current_file==='none'?'No session yet':s.current_file;
     $('stats').textContent=`CAN RX errors: ${s.can_errors_available?s.can_rx_errors:'N/A'} | CAN TX errors: ${s.can_errors_available?s.can_tx_errors:'N/A'} | CAN drops: ${s.can_drops} | Log drops: ${s.log_drops}`;
     $('nodes').textContent=`Nodes — 1: ${s.nodes['1']}, 3: ${s.nodes['3']}, 4: ${s.nodes['4']}, 5: ${s.nodes['5']}, 6: ${s.nodes['6']}`;
+    $('aim').textContent=`AiM: ${s.aim.state} | Age: ${s.aim.last_frame_age_ms<0?'N/A':s.aim.last_frame_age_ms+' ms'} | Frames: ${s.aim.valid_frames} | Malformed: ${s.aim.malformed_frames} | Counter discontinuities: ${s.aim.counter_discontinuities}`;
+    const aimChart=charts.get(0x703);
+    if(aimChart&&s.aim.state!=='receiving')aimChart.section.querySelector('.value').textContent=pretty(s.aim.state);
     const becameIdle=previousLoggerState!==null&&previousLoggerState!=='idle'&&s.logger_state==='idle';
     if(becameIdle)$('logName').value='';
     previousLoggerState=s.logger_state;$('start').disabled=s.logger_state!=='idle'; $('stop').disabled=s.logger_state!=='running';$('logName').disabled=s.logger_state!=='idle';
@@ -140,7 +143,17 @@ function schedulePoll(){clearTimeout(timer);if(!token)return;timer=setTimeout(po
 async function poll(){
   if(!token||polling)return;polling=true;
   try{const result=await json('/api/live/samples?token='+encodeURIComponent(token));
-    for(const sample of result.samples){const chart=charts.get(sample.can_id);if(!chart||chart.paused||chart.lastSequence===sample.sequence)continue;chart.lastSequence=sample.sequence;chart.points.push({t:sample.timestamp_ms,v:sample.value});chart.section.querySelector('.value').textContent=`${sample.value} ${chart.signal.units}`;trim(chart);draw(chart)}
+    for(const sample of result.samples){
+      const chart=charts.get(sample.can_id);
+      if(!chart)continue;
+      // Check freshness before sequence: a disconnected source stops producing new samples.
+      if(sample.stale){chart.section.querySelector('.value').textContent='Stale';continue}
+      if(chart.paused||chart.lastSequence===sample.sequence)continue;
+      chart.lastSequence=sample.sequence;
+      chart.points.push({t:sample.timestamp_ms,v:sample.value});
+      chart.section.querySelector('.value').textContent=`${sample.value} ${chart.signal.units}`;
+      trim(chart);draw(chart);
+    }
   }catch(e){endLive(false,e.message)}finally{polling=false;schedulePoll()}
 }
 function trim(chart){if(!chart.points.length)return;const cutoff=chart.points.at(-1).t-historyMs()*1.2;while(chart.points.length&&chart.points[0].t<cutoff)chart.points.shift()}

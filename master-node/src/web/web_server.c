@@ -14,6 +14,7 @@
 #include "esp_hosted.h"
 #include "esp_http_server.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "esp_netif.h"
 #include "esp_wifi.h"
 #include "freertos/FreeRTOS.h"
@@ -114,10 +115,11 @@ static esp_err_t root_handler(httpd_req_t *request)
                            web_index_html_end - web_index_html_start);
 }
 
+/* Report AiM health separately: it does not participate in our node state protocol. */
 static esp_err_t status_handler(httpd_req_t *request)
 {
     app_status_t status;
-    char body[512];
+    char body[1024];
     app_control_get_status(&status);
     snprintf(body, sizeof(body),
              "{\"logger_state\":\"%s\",\"current_file\":\"%s\","
@@ -126,13 +128,16 @@ static esp_err_t status_handler(httpd_req_t *request)
              "\"can_errors_available\":%s,"
              "\"live_enabled\":%s,"
              "\"nodes\":{\"1\":\"%s\",\"3\":\"%s\",\"4\":\"%s\",\"5\":\"%s\","
-             "\"6\":\"%s\"}}",
+             "\"6\":\"%s\"},\"aim\":{\"state\":\"%s\",\"last_frame_age_ms\":%" PRId64
+             ",\"valid_frames\":%" PRIu32 ",\"malformed_frames\":%" PRIu32
+             ",\"counter_discontinuities\":%" PRIu32 "}}",
              data_logger_state_name(), base_name(status.current_file),
              status.can_drops, status.log_drops,
              status.can_rx_errors, status.can_tx_errors,
              status.can_errors_available ? "true" : "false",
              status.live_enabled ? "true" : "false", status.node_1, status.node_3, status.node_4,
-             status.node_5, status.node_6);
+             status.node_5, status.node_6, status.aim.state, status.aim.last_frame_age_ms,
+             status.aim.valid_frames, status.aim.malformed_frames, status.aim.counter_discontinuities);
     httpd_resp_set_type(request, "application/json");
     httpd_resp_set_hdr(request, "Cache-Control", "no-store");
     return httpd_resp_sendstr(request, body);
@@ -560,6 +565,7 @@ static esp_err_t live_start_handler(httpd_req_t *request)
     return httpd_resp_sendstr(request, body);
 }
 
+/* Return latest live values; flag stale AiM data even when its sequence stops changing. */
 static esp_err_t live_samples_handler(httpd_req_t *request)
 {
     uint32_t token;
@@ -582,12 +588,15 @@ static esp_err_t live_samples_handler(httpd_req_t *request)
     bool first = true;
     for (size_t i = 0; i < count; i++) {
         if (!samples[i].valid) continue;
-        char item[160];
+        char item[200];
+        /* Unsigned subtraction preserves elapsed time across millisecond rollover. */
+        bool stale = samples[i].can_id == CAN_ID_AIM_RPM &&
+                     (uint32_t)((uint32_t)(esp_timer_get_time() / 1000) - samples[i].timestamp_ms) >= 500;
         int length = snprintf(item, sizeof(item),
                               "%s{\"can_id\":%" PRIu32 ",\"value\":%" PRId32
-                              ",\"timestamp_ms\":%" PRIu32 ",\"sequence\":%" PRIu32 "}",
+                              ",\"timestamp_ms\":%" PRIu32 ",\"sequence\":%" PRIu32 ",\"stale\":%s}",
                               first ? "" : ",", samples[i].can_id, samples[i].value,
-                              samples[i].timestamp_ms, samples[i].sequence);
+                              samples[i].timestamp_ms, samples[i].sequence, stale ? "true" : "false");
         if (length < 0 || length >= (int)sizeof(item) ||
             httpd_resp_send_chunk(request, item, length) != ESP_OK) return ESP_FAIL;
         first = false;

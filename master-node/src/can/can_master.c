@@ -6,6 +6,8 @@
 #include <string.h>
 
 #include "esp_log.h"
+#include "esp_timer.h"
+#include "app/app_control.h"
 #include "esp_twai.h"
 #include "esp_twai_onchip.h"
 #include "freertos/FreeRTOS.h"
@@ -48,6 +50,7 @@ static bool state_change_callback(twai_node_handle_t node,
     return false;
 }
 
+/* Copy each hardware frame into the task queue; do not decode or write SD in the ISR. */
 static bool receive_callback(twai_node_handle_t node,
                              const twai_rx_done_event_data_t *event,
                              void *context)
@@ -58,8 +61,12 @@ static bool receive_callback(twai_node_handle_t node,
     uint8_t bytes[8] = {0};
     twai_frame_t frame = {.buffer = bytes, .buffer_len = sizeof(bytes)};
     if (twai_node_receive_from_isr(node, &frame) == ESP_OK) {
+        int64_t received_us = esp_timer_get_time();
         can_message_t message = {
             .id = frame.header.id,
+            .extended = frame.header.ide,
+            .remote = frame.header.rtr,
+            .received_us = received_us,
             .dlc = frame.header.dlc > 8 ? 8 : frame.header.dlc,
         };
         for (uint8_t i = 0; i < message.dlc; i++) {
@@ -155,14 +162,37 @@ esp_err_t can_master_error_counts(uint32_t *rx_errors, uint32_t *tx_errors)
     return error;
 }
 
+/* Caller holds the recording lock, so START cannot clear a frame already in use. */
+void can_master_clear_receive_queue(void)
+{
+    if (rx_queue) xQueueReset(rx_queue);
+}
+
+/* Keep dequeue and handler admission in the same START/STOP critical section to avoid race conditions. */
+static void dispatch_next_message(void)
+{
+    can_message_t message;
+    // Try and get can processing Lock
+    app_control_lock_can_processing();
+
+    // ONCE lock aquired, try to fetch and decode queue data
+    if (xQueueReceive(rx_queue, &message, 0) == pdTRUE && application_handler) {
+        application_handler(&message);
+    }
+
+    // Release lock
+    app_control_unlock_can_processing();
+}
+
 static void dispatch_task(void *argument)
 {
     (void)argument;
     can_message_t message;
     while (true) {
-        if (xQueueReceive(rx_queue, &message, portMAX_DELAY) == pdTRUE &&
-            application_handler) {
-            application_handler(&message);
+
+        // Wait without the recording lock and without removing the frame to prevent race conditions.
+        if (xQueuePeek(rx_queue, &message, portMAX_DELAY) == pdTRUE) {
+            dispatch_next_message();
         }
     }
 }
