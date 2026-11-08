@@ -73,6 +73,13 @@ function normalizeLogName(value){
 }
 function selectedLogName(){return normalizeLogName($('logName').value)}
 
+// On a slow link, overlapping polls would each open another connection to the master.
+let statusBusyUntil=0;
+async function pollStatus(){
+  const now=Date.now();if(now<statusBusyUntil)return;
+  statusBusyUntil=now+5000;
+  try{await refreshStatus()}finally{statusBusyUntil=0}
+}
 async function refreshStatus(){
   try{
     const s=await json('/api/status'); loggerState=s.logger_state;
@@ -199,7 +206,7 @@ async function renameLog(oldName){
 }
 $('logName').value='';$('logFilter').onchange=renderLogs;$('start').onclick=()=>logging('start');$('stop').onclick=()=>logging('stop');$('liveEnable').onclick=enableLive;$('liveDisable').onclick=disableLive;$('rate').onchange=schedulePoll;$('window').onchange=()=>{for(const chart of charts.values()){trim(chart);draw(chart)}};
 window.addEventListener('resize',()=>{for(const chart of charts.values())draw(chart)});window.addEventListener('pagehide',()=>{if(token)fetch('/api/live/stop?token='+encodeURIComponent(token),{method:'POST',keepalive:true})});
-loadSignals();refreshStatus();refreshLogs();setInterval(refreshStatus,1000);
+loadSignals();pollStatus();refreshLogs();setInterval(pollStatus,1000);
 </script>
 </body>
 </html>
