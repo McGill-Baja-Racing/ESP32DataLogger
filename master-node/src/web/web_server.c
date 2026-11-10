@@ -8,6 +8,7 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <time.h>
+#include <unistd.h>
 
 #include "app/app_control.h"
 #include "esp_event.h"
@@ -26,7 +27,7 @@
 
 #define AP_SSID "BajaDAQ"
 #define SD_ROOT "/sdcard"
-#define DOWNLOAD_CHUNK_SIZE 4096
+#define DOWNLOAD_CHUNK_SIZE 16384
 
 typedef struct {
     char name[DATA_LOGGER_FILENAME_MAX + 1];
@@ -266,15 +267,16 @@ static esp_err_t stream_binary(httpd_req_t *request, FILE *file)
 {
     char *buffer = malloc(DOWNLOAD_CHUNK_SIZE);
     if (!buffer) return ESP_ERR_NO_MEM;
+    int fd = fileno(file);
     esp_err_t result = ESP_OK;
-    size_t count;
-    while ((count = fread(buffer, 1, DOWNLOAD_CHUNK_SIZE, file)) > 0) {
+    ssize_t count;
+    while ((count = read(fd, buffer, DOWNLOAD_CHUNK_SIZE)) > 0) {
         if (httpd_resp_send_chunk(request, buffer, count) != ESP_OK) {
             result = ESP_FAIL;
             break;
         }
     }
-    if (ferror(file)) result = ESP_FAIL;
+    if (count < 0) result = ESP_FAIL;
     free(buffer);
     if (result == ESP_OK) result = httpd_resp_send_chunk(request, NULL, 0);
     return result;
