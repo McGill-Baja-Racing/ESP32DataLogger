@@ -447,9 +447,9 @@ static esp_err_t download_handler(httpd_req_t *request)
         httpd_query_key_value(query, "format", format, sizeof(format)) != ESP_OK ||
         !data_logger_valid_filename(name) ||
         (strcmp(format, "bin") != 0 && strcmp(format, "csv") != 0 &&
-         strcmp(format, "paired") != 0)) {
+         strcmp(format, "paired") != 0 && strcmp(format, "utc") != 0)) {
         return send_json_error(request, "400 Bad Request",
-                               "Expected a valid log filename and bin, csv or paired format");
+                               "Expected a valid log filename and bin, csv, paired or utc format");
     }
     if (data_logger_state() != LOGGER_IDLE &&
         strcmp(name, base_name(data_logger_path())) == 0) {
@@ -460,8 +460,9 @@ static esp_err_t download_handler(httpd_req_t *request)
         return send_json_error(request, "503 Service Unavailable",
                                "Another download is already active");
     }
+    bool utc = strcmp(format, "utc") == 0;
     char path[96];
-    snprintf(path, sizeof(path), SD_ROOT "/%s", name);
+    snprintf(path, sizeof(path), SD_ROOT "/%s%s", name, utc ? ".utc" : "");
     FILE *file = fopen(path, "rb");
     if (!file) {
         xSemaphoreGive(download_mutex);
@@ -478,7 +479,8 @@ static esp_err_t download_handler(httpd_req_t *request)
         snprintf(attachment, sizeof(attachment), "attachment; filename=\"%s\"", csv_name);
         httpd_resp_set_type(request, "text/csv; charset=utf-8");
     } else {
-        snprintf(attachment, sizeof(attachment), "attachment; filename=\"%s\"", name);
+        snprintf(attachment, sizeof(attachment), "attachment; filename=\"%s%s\"", name,
+                 utc ? ".utc" : "");
         httpd_resp_set_type(request, "application/octet-stream");
     }
     httpd_resp_set_hdr(request, "Content-Disposition", attachment);
