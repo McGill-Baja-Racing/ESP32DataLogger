@@ -377,7 +377,9 @@ bool node_health_handle_frame(const can_message_t *message)
             memcpy(&entry->status, &frame.data, sizeof(entry->status));
             entry->status_seen = true;
         } else {
+            uint8_t resets = entry->diagnostics.resets;
             memcpy(&entry->diagnostics, &frame.data, sizeof(entry->diagnostics));
+            if (entry->diagnostics.resets != resets) sequence_seen[node] = false;
         }
         portEXIT_CRITICAL(&summary_lock);
     } else if (node_event) {
