@@ -733,7 +733,7 @@ void firmware_update_run(void)
     running = true;
     load_images();
 
-    if (resume && firmware_update_on_trial()) {
+    if (firmware_update_on_trial()) {
         /* The marker stays: the rollback restart reports it. */
         results[0] = "failed: new image not confirmed";
     } else if (resume) {
