@@ -356,10 +356,12 @@ static bool write_records(const int64_t records[][2], const int64_t *utc, size_t
 static bool checkpoint_file(void)
 {
     if (xSemaphoreTake(file_mutex, portMAX_DELAY) != pdTRUE) return false;
-    if (log_file) fclose(log_file);
+    if (log_file && fclose(log_file) != 0) {
+        node_health_count(HEALTH_SD_WRITE, 1, 0, ESP_FAIL);
+    }
     log_file = fopen(log_path, "ab");
     if (utc_file) {
-        fclose(utc_file);
+        if (fclose(utc_file) != 0) node_health_count(HEALTH_SD_WRITE, 1, 0, ESP_FAIL);
         utc_file = fopen(utc_path, "ab");
         if (!utc_file) ESP_LOGE(TAG, "Cannot reopen UTC sidecar");
     }
