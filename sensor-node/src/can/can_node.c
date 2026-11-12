@@ -211,6 +211,22 @@ esp_err_t can_node_send(uint32_t can_id, const uint8_t *payload, uint8_t length)
     return error;
 }
 
+esp_err_t can_node_flush(uint32_t timeout_ms)
+{
+    if (!tx_mutex || xSemaphoreTake(tx_mutex, pdMS_TO_TICKS(timeout_ms)) != pdTRUE) {
+        return ESP_ERR_TIMEOUT;
+    }
+    esp_err_t error = ESP_OK;
+    if (tx_pending) {
+        error = twai_node_transmit_wait_all_done(can_handle, timeout_ms);
+        if (error == ESP_OK) {
+            tx_pending = false;
+        }
+    }
+    xSemaphoreGive(tx_mutex);
+    return error;
+}
+
 void can_node_error_counts(uint8_t *tx_errors, uint8_t *rx_errors)
 {
     twai_node_status_t status = {0};

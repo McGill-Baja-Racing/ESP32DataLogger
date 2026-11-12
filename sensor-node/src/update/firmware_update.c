@@ -247,6 +247,7 @@ static void finish_update(void)
     }
     uint8_t reply[] = {UPDATE_REPLY_DONE};
     send_reply(reply, sizeof(reply));
+    (void)can_node_flush(200);
     ESP_LOGI(TAG, "Update written; restarting");
     esp_restart();
 }

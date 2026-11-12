@@ -18,10 +18,11 @@ typedef struct {
 /**
  * @brief Start the CAN controller and its receive and recovery tasks.
  *
- * Callbacks may be NULL. on_bus_off runs on the recovery task, the others on
- * the receive task. on_update_command gets only commands for this node or all
- * nodes, and the payload pointers are valid only during the call. Does not
- * send the boot report; call can_node_report_state() after.
+ * Receives only master commands (0x0A0-0x0A7). Callbacks may be NULL.
+ * on_bus_off runs on the recovery task, the others on the receive task.
+ * on_update_command gets only commands for this node or all nodes, and the
+ * payload pointers are valid only during the call. Does not send the boot
+ * report; call can_node_report_state() after.
  *
  * @param callbacks Copied.
  * @param boot_reset_reason Sent in the boot state report.
@@ -48,6 +49,14 @@ esp_err_t can_node_init(const can_node_callbacks_t *callbacks,
  * @return Other TWAI driver errors, for example while the bus is off.
  */
 esp_err_t can_node_send(uint32_t can_id, const uint8_t *payload, uint8_t length);
+
+/**
+ * @brief Wait until the last sent frame has left the controller.
+ *
+ * @param timeout_ms Longest wait.
+ * @return ESP_OK once nothing is pending, otherwise the wait error.
+ */
+esp_err_t can_node_flush(uint32_t timeout_ms);
 
 /**
  * @brief Read the CAN error counters, capped at 255.
