@@ -130,10 +130,11 @@ static void enqueue_engine_event(const engine_event_t *event)
         .timestamp_ms = time_sync_timestamp_ms_at(event->timestamp_us),
         .value = event->engine_rpm,
     };
-    if (sample.timestamp_ms < 0) {
-        node_health_count(HEALTH_BAD_TIMESTAMP, 1, CAN_ID_ENGINE_RPM, ESP_OK);
-    }
     bool has_rpm = !event->spark || event->engine_rpm > 0;
+    if (sample.timestamp_ms < 0) {
+        node_health_count(HEALTH_BAD_TIMESTAMP, 1,
+                          has_rpm ? CAN_ID_ENGINE_RPM : CAN_ID_ENGINE_SPARK, ESP_OK);
+    }
 #if SENSOR_SERIAL_TEST
     /* Bench output uses the same value and throttling as every sensor. */
     if (has_rpm) {
@@ -220,13 +221,13 @@ static void sample_task(void *argument)
                     sensor->next_sample_us += sensor->period_us;
                     periods++;
                 }
-                if (sample.timestamp_ms < 0) {
-                    node_health_count(HEALTH_BAD_TIMESTAMP, 1, sensor->can_id, ESP_OK);
-                }
                 if (periods > 1) {
                     node_health_count(HEALTH_SAMPLES_MISSED, periods - 1, sensor->can_id, ESP_OK);
                 }
                 if (error == ESP_OK) {
+                    if (sample.timestamp_ms < 0) {
+                        node_health_count(HEALTH_BAD_TIMESTAMP, 1, sensor->can_id, ESP_OK);
+                    }
                     enqueue_latest(&sample);
                 }
             }
