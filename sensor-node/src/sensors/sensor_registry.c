@@ -40,6 +40,8 @@ static sensor_t sensors[2];
 #error "Select a fixed sensor-node configuration"
 #endif
 
+_Static_assert(sizeof(sensors) / sizeof(sensors[0]) <= MAX_SENSORS, "too many sensors; raise MAX_SENSORS");
+
 sensor_t *sensor_registry(size_t *count)
 {
 #if NODE_FIXED_BRAKE_CONFIG

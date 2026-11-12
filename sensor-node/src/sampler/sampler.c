@@ -310,9 +310,6 @@ static void send_task(void *argument)
 esp_err_t sampler_init(void)
 {
     sensors = sensor_registry(&sensor_count);
-    if (sensor_count > MAX_SENSORS) {
-        return ESP_ERR_INVALID_SIZE;
-    }
     for (size_t i = 0; i < sensor_count; i++) {
         esp_err_t error = ESP_OK;
         if (error == ESP_OK && sensors[i].init) {
