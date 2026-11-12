@@ -260,7 +260,12 @@ static bool enqueue(const can_message_t *message)
 {
     queued_sample_t sample = { .message = *message,
         .utc_ms = absolute_clock_sample_utc((uint32_t)(message->data >> 32)) };
-    if (xQueueSend(log_queue, &sample, 0) != pdPASS) {
+    bool file_lost = false;
+    if (xSemaphoreTake(file_mutex, 0) == pdTRUE) {
+        file_lost = !log_file;
+        xSemaphoreGive(file_mutex);
+    }
+    if (file_lost || xQueueSend(log_queue, &sample, 0) != pdPASS) {
         atomic_fetch_add(&queue_drops, 1);
         node_health_count(HEALTH_SAMPLES_DROPPED, 1, message->id, ESP_OK);
         return false;
@@ -402,7 +407,9 @@ static void writer_task(void *argument)
             records[count][1] = (int64_t)sample.message.data;
             utc[count] = sample.utc_ms;
             if (++count == LOG_RECORDS_PER_BLOCK) {
-                (void)write_records(records, utc, count);
+                if (!write_records(records, utc, count)) {
+                    node_health_count(HEALTH_SAMPLES_DROPPED, count, 0, ESP_OK);
+                }
                 count = 0;
             }
         }
@@ -425,7 +432,9 @@ static void writer_task(void *argument)
         }
         if (close_log) {
             if (count > 0) {
-                (void)write_records(records, utc, count);
+                if (!write_records(records, utc, count)) {
+                    node_health_count(HEALTH_SAMPLES_DROPPED, count, 0, ESP_OK);
+                }
                 count = 0;
             }
             if (xSemaphoreTake(file_mutex, portMAX_DELAY) == pdTRUE) {
