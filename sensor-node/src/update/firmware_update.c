@@ -109,7 +109,8 @@ void firmware_update_handle_command(const uint8_t *payload, uint8_t length)
         firmware_update_report_identity();
         return;
     }
-    if ((payload[1] == UPDATE_OP_BEGIN && length >= 6) || payload[1] == UPDATE_OP_ABORT) {
+    if ((payload[1] == UPDATE_OP_BEGIN && length >= 6 && payload[0] == NODE_ID) ||
+        payload[1] == UPDATE_OP_ABORT) {
         update_input_t input = {.kind = INPUT_COMMAND, .length = length};
         memcpy(input.bytes, payload, length);
         (void)xQueueSend(input_queue, &input, 0);
