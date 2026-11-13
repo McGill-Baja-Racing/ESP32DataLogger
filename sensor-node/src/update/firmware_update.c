@@ -9,6 +9,7 @@
 #include "esp_ota_ops.h"
 #include "esp_partition.h"
 #include "esp_system.h"
+#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/task.h"
@@ -324,8 +325,6 @@ static void handle_input(const update_input_t *input)
  *
  * Asks again for the current chunk every UPDATE_RETRY_MS without it, and
  * fails with UPDATE_ERROR_TIMEOUT after UPDATE_RETRY_LIMIT retries in a row.
- * Restarts to roll back an image still on trial UPDATE_CONFIRM_TIMEOUT_MS
- * after boot.
  */
 static void update_task(void *argument)
 {
@@ -342,12 +341,18 @@ static void update_task(void *argument)
                 request_chunk();
             }
         }
-        /* A new image that cannot reach the master must not stay installed. */
-        if (is_on_trial() &&
-            xTaskGetTickCount() >= pdMS_TO_TICKS(UPDATE_CONFIRM_TIMEOUT_MS)) {
-            ESP_LOGE(TAG, "New image not confirmed; restarting to roll back");
-            esp_restart();
-        }
+    }
+}
+
+/**
+ * @brief Timer callback that restarts to roll back an image still on trial.
+ */
+static void confirm_timeout(void *argument)
+{
+    (void)argument;
+    if (is_on_trial()) {
+        ESP_LOGE(TAG, "New image not confirmed; restarting to roll back");
+        esp_restart();
     }
 }
 
@@ -356,6 +361,19 @@ esp_err_t firmware_update_init(void)
     input_queue = xQueueCreate(UPDATE_QUEUE_LENGTH, sizeof(update_input_t));
     if (!input_queue) {
         return ESP_ERR_NO_MEM;
+    }
+    /* A new image that cannot reach the master must not stay installed. */
+    if (is_on_trial()) {
+        static esp_timer_handle_t timer;
+        const esp_timer_create_args_t args = {.callback = confirm_timeout, .name = "fw_confirm"};
+        esp_err_t error = esp_timer_create(&args, &timer);
+        if (error != ESP_OK) {
+            return error;
+        }
+        error = esp_timer_start_once(timer, (uint64_t)UPDATE_CONFIRM_TIMEOUT_MS * 1000);
+        if (error != ESP_OK) {
+            return error;
+        }
     }
     return xTaskCreate(update_task, "fw_update", 6144, NULL, 5, NULL) == pdPASS
          ? ESP_OK : ESP_ERR_NO_MEM;

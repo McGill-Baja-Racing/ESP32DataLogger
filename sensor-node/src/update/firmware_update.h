@@ -8,11 +8,12 @@
  * @brief Start the task that receives updates.
  *
  * Call before can_node_init(): its update callbacks feed this task. If the
- * running image is on trial, the task restarts the node 30 s after boot to
- * roll back, unless firmware_update_confirm() runs first.
+ * running image is on trial, a timer restarts the node 30 s later to roll
+ * back, unless firmware_update_confirm() runs first.
  *
  * @retval ESP_OK          The task is running.
  * @retval ESP_ERR_NO_MEM  The queue or the task could not be created.
+ * @retval other           The rollback timer could not be started.
  */
 esp_err_t firmware_update_init(void);
 
