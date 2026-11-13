@@ -159,18 +159,6 @@ static bool targets_this_node(const can_message_t *message)
     return target == NODE_ID || target == 0xFF;
 }
 
-/**
- * @brief Copy a received frame's data bytes out in bus order.
- *
- * @param payload At least message->dlc bytes.
- */
-static void unpack_payload(const can_message_t *message, uint8_t *payload)
-{
-    for (uint8_t i = 0; i < message->dlc; i++) {
-        payload[i] = (uint8_t)(message->data >> (8 * i));
-    }
-}
-
 esp_err_t can_node_send(uint32_t can_id, const uint8_t *payload, uint8_t length)
 {
     if (length > 8 || (length > 0 && !payload)) {
@@ -311,16 +299,13 @@ static void dispatch_task(void *argument)
             /* As with START, repeat only the acknowledgement, not the action. */
             can_node_report_state(NODE_STATE_IDLE, NODE_STATE_REASON_STOP);
         } else if (message.id == CAN_ID_UPDATE_COMMAND && targets_this_node(&message)) {
-            uint8_t payload[8];
-            unpack_payload(&message, payload);
+            /* The ESP32 is little-endian, so data's bytes in memory are the frame bytes in bus order. */
             if (app_callbacks.on_update_command) {
-                app_callbacks.on_update_command(payload, message.dlc);
+                app_callbacks.on_update_command((const uint8_t *)&message.data, message.dlc);
             }
         } else if (message.id == CAN_ID_UPDATE_DATA) {
-            uint8_t payload[8];
-            unpack_payload(&message, payload);
             if (app_callbacks.on_update_data) {
-                app_callbacks.on_update_data(payload, message.dlc);
+                app_callbacks.on_update_data((const uint8_t *)&message.data, message.dlc);
             }
         }
     }
