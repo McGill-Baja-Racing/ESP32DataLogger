@@ -4,6 +4,9 @@
 #include <stdint.h>
 
 #include "esp_err.h"
+#include "protocol/node_config.h"
+
+#define MAX_SENSORS 8
 
 typedef struct sensor sensor_t;
 

@@ -14,10 +14,12 @@
 #include "esp_hosted.h"
 #include "esp_http_server.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "esp_netif.h"
 #include "esp_wifi.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
+#include "health/node_health.h"
 #include "logger/data_logger.h"
 #include "live/live_data.h"
 #include "protocol/app_protocol.h"
@@ -114,10 +116,11 @@ static esp_err_t root_handler(httpd_req_t *request)
                            web_index_html_end - web_index_html_start);
 }
 
+/* Report AiM health separately: it does not participate in our node state protocol. */
 static esp_err_t status_handler(httpd_req_t *request)
 {
     app_status_t status;
-    char body[512];
+    char body[1024];
     app_control_get_status(&status);
     snprintf(body, sizeof(body),
              "{\"logger_state\":\"%s\",\"current_file\":\"%s\","
@@ -126,16 +129,35 @@ static esp_err_t status_handler(httpd_req_t *request)
              "\"can_errors_available\":%s,"
              "\"live_enabled\":%s,"
              "\"nodes\":{\"1\":\"%s\",\"3\":\"%s\",\"4\":\"%s\",\"5\":\"%s\","
-             "\"6\":\"%s\"}}",
+             "\"6\":\"%s\",\"7\":\"%s\",\"8\":\"%s\"},\"aim\":{\"state\":\"%s\",\"last_frame_age_ms\":%" PRId64
+             ",\"valid_frames\":%" PRIu32 ",\"malformed_frames\":%" PRIu32
+             ",\"counter_discontinuities\":%" PRIu32 "}}",
              data_logger_state_name(), base_name(status.current_file),
              status.can_drops, status.log_drops,
              status.can_rx_errors, status.can_tx_errors,
              status.can_errors_available ? "true" : "false",
              status.live_enabled ? "true" : "false", status.node_1, status.node_3, status.node_4,
-             status.node_5, status.node_6);
+             status.node_5, status.node_6, status.node_7, status.node_8, status.aim.state, status.aim.last_frame_age_ms,
+             status.aim.valid_frames, status.aim.malformed_frames, status.aim.counter_discontinuities);
     httpd_resp_set_type(request, "application/json");
     httpd_resp_set_hdr(request, "Cache-Control", "no-store");
     return httpd_resp_sendstr(request, body);
+}
+
+static esp_err_t health_handler(httpd_req_t *request)
+{
+    /* Keep the full report off the HTTP task's stack. */
+    char *text = malloc(NODE_HEALTH_PROBLEMS_MAX);
+    if (!text) {
+        return httpd_resp_send_err(request, HTTPD_500_INTERNAL_SERVER_ERROR,
+                                   "Cannot allocate health report");
+    }
+    node_health_list_problems(text, NODE_HEALTH_PROBLEMS_MAX);
+    httpd_resp_set_type(request, "text/plain");
+    httpd_resp_set_hdr(request, "Cache-Control", "no-store");
+    esp_err_t result = httpd_resp_sendstr(request, text);
+    free(text);
+    return result;
 }
 
 static esp_err_t command_handler(httpd_req_t *request)
@@ -399,7 +421,7 @@ static esp_err_t stream_paired_csv(httpd_req_t *request, FILE *file,
 static esp_err_t stream_csv(httpd_req_t *request, FILE *file, FILE *utc_file)
 {
     static const char header[] =
-        "sample_index,can_id,can_id_hex,signal,node,timestamp_ms,absolute_time_utc,value,units,raw_data\r\n";
+        "sample_index,can_id,can_id_hex,signal,node,timestamp_ms,absolute_time_utc,value,units,raw_data,detail\r\n";
     if (httpd_resp_send_chunk(request, header, sizeof(header) - 1) != ESP_OK) {
         return ESP_FAIL;
     }
@@ -418,6 +440,13 @@ static esp_err_t stream_csv(httpd_req_t *request, FILE *file, FILE *utc_file)
         const char *signal = metadata ? metadata->signal : "";
         const char *node = metadata ? metadata->node : "";
         const char *units = metadata ? metadata->units : "raw";
+        char detail[NODE_HEALTH_TEXT_MAX] = "";
+        const char *health_signal = node_health_describe(can_id, packed, &node,
+                                                         detail, sizeof(detail));
+        if (health_signal) {
+            signal = health_signal;
+            units = "";
+        }
         char value_text[32];
         if (can_id == CAN_ID_GPS_SPEED) {
             snprintf(value_text, sizeof(value_text), "%.2f", value / 100.0);
@@ -425,12 +454,12 @@ static esp_err_t stream_csv(httpd_req_t *request, FILE *file, FILE *utc_file)
         } else {
             snprintf(value_text, sizeof(value_text), "%" PRId32, value);
         }
-        char row[256];
+        char row[256 + NODE_HEALTH_TEXT_MAX];
         int length = snprintf(row, sizeof(row),
                               "%" PRIu64 ",%" PRIu32 ",0x%03" PRIX32
-                              ",%s,%s,%" PRIu32 ",%s,%s,%s,%" PRIu64 "\r\n",
+                              ",%s,%s,%" PRIu32 ",%s,%s,%s,%" PRIu64 ",%s\r\n",
                               sample_index++, can_id, can_id, signal, node,
-                              timestamp, absolute_time, value_text, units, packed);
+                              timestamp, absolute_time, value_text, units, packed, detail);
         if (length < 0 || length >= (int)sizeof(row) ||
             httpd_resp_send_chunk(request, row, length) != ESP_OK) {
             return ESP_FAIL;
@@ -560,6 +589,7 @@ static esp_err_t live_start_handler(httpd_req_t *request)
     return httpd_resp_sendstr(request, body);
 }
 
+/* Return latest live values; flag stale AiM data even when its sequence stops changing. */
 static esp_err_t live_samples_handler(httpd_req_t *request)
 {
     uint32_t token;
@@ -582,12 +612,15 @@ static esp_err_t live_samples_handler(httpd_req_t *request)
     bool first = true;
     for (size_t i = 0; i < count; i++) {
         if (!samples[i].valid) continue;
-        char item[160];
+        char item[200];
+        /* Unsigned subtraction preserves elapsed time across millisecond rollover. */
+        bool stale = samples[i].can_id == CAN_ID_AIM_RPM &&
+                     (uint32_t)((uint32_t)(esp_timer_get_time() / 1000) - samples[i].timestamp_ms) >= 500;
         int length = snprintf(item, sizeof(item),
                               "%s{\"can_id\":%" PRIu32 ",\"value\":%" PRId32
-                              ",\"timestamp_ms\":%" PRIu32 ",\"sequence\":%" PRIu32 "}",
+                              ",\"timestamp_ms\":%" PRIu32 ",\"sequence\":%" PRIu32 ",\"stale\":%s}",
                               first ? "" : ",", samples[i].can_id, samples[i].value,
-                              samples[i].timestamp_ms, samples[i].sequence);
+                              samples[i].timestamp_ms, samples[i].sequence, stale ? "true" : "false");
         if (length < 0 || length >= (int)sizeof(item) ||
             httpd_resp_send_chunk(request, item, length) != ESP_OK) return ESP_FAIL;
         first = false;
@@ -617,11 +650,19 @@ static esp_err_t start_http_server(void)
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.stack_size = 8192;
     config.max_uri_handlers = 12;
+    /* A client leaving Wi-Fi range sends no FIN, so its idle sessions would stay
+     * open forever and use up the seven available slots. */
+    config.lru_purge_enable = true;
+    config.keep_alive_enable = true;
+    config.keep_alive_idle = 5;
+    config.keep_alive_interval = 5;
+    config.keep_alive_count = 3;
     esp_err_t error = httpd_start(&server, &config);
     if (error != ESP_OK) return error;
     const httpd_uri_t handlers[] = {
         {.uri = "/", .method = HTTP_GET, .handler = root_handler},
         {.uri = "/api/status", .method = HTTP_GET, .handler = status_handler},
+        {.uri = "/api/health", .method = HTTP_GET, .handler = health_handler},
         {.uri = "/api/logging/start", .method = HTTP_POST, .handler = command_handler},
         {.uri = "/api/logging/stop", .method = HTTP_POST, .handler = command_handler},
         {.uri = "/api/logs", .method = HTTP_GET, .handler = logs_handler},

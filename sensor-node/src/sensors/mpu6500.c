@@ -160,6 +160,13 @@ static esp_err_t init_mpu(sensor_t *sensor)
     return ESP_OK;
 }
 
+/* Without it the other channels would show ok while idle, not failed to start. */
+static esp_err_t check_mpu(sensor_t *sensor)
+{
+    (void)sensor;
+    return mpu.initialized ? ESP_OK : ESP_ERR_INVALID_STATE;
+}
+
 static void start_mpu(sensor_t *sensor)
 {
     (void)sensor;
@@ -226,12 +233,12 @@ static mpu_sensor_context_t contexts[MPU_CHANNEL_COUNT] = {
 MPU_SENSOR(mpu_accel_x_sensor, "mpu_accel_x", CAN_ID_MPU_ACCEL_X,
            MPU_ACCEL_X, init_mpu, start_mpu);
 MPU_SENSOR(mpu_accel_y_sensor, "mpu_accel_y", CAN_ID_MPU_ACCEL_Y,
-           MPU_ACCEL_Y, NULL, NULL);
+           MPU_ACCEL_Y, check_mpu, NULL);
 MPU_SENSOR(mpu_accel_z_sensor, "mpu_accel_z", CAN_ID_MPU_ACCEL_Z,
-           MPU_ACCEL_Z, NULL, NULL);
+           MPU_ACCEL_Z, check_mpu, NULL);
 MPU_SENSOR(mpu_gyro_x_sensor, "mpu_gyro_x", CAN_ID_MPU_GYRO_X,
-           MPU_GYRO_X, NULL, NULL);
+           MPU_GYRO_X, check_mpu, NULL);
 MPU_SENSOR(mpu_gyro_y_sensor, "mpu_gyro_y", CAN_ID_MPU_GYRO_Y,
-           MPU_GYRO_Y, NULL, NULL);
+           MPU_GYRO_Y, check_mpu, NULL);
 MPU_SENSOR(mpu_gyro_z_sensor, "mpu_gyro_z", CAN_ID_MPU_GYRO_Z,
-           MPU_GYRO_Z, NULL, NULL);
+           MPU_GYRO_Z, check_mpu, NULL);

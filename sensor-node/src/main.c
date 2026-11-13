@@ -5,12 +5,11 @@
 #include "freertos/task.h"
 
 #include "can/can_node.h"
+#include "health/node_health.h"
 #include "sampler/sampler.h"
 #include "time/time_sync.h"
 
-#ifndef SENSOR_SERIAL_TEST
-#define SENSOR_SERIAL_TEST 0
-#endif
+#include "protocol/node_config.h"
 
 #define SENSOR_STARTUP_DELAY_MS 3000
 
@@ -60,5 +59,6 @@ void app_main(void)
     ESP_ERROR_CHECK(can_node_init(&callbacks, (uint8_t)esp_reset_reason()));
     /* The master uses this acknowledgement to register the node after boot. */
     can_node_report_state(NODE_STATE_IDLE, NODE_STATE_REASON_BOOT);
+    ESP_ERROR_CHECK(node_health_init());
 #endif
 }

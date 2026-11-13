@@ -62,8 +62,8 @@ selected registry branch is never initialized, started, or read by the sampler.
 | Master metadata and monitoring | See the exact integration checklist in Workflow A, step 5, and Workflow B, step 3 |
 
 Keep hardware access and conversion in drivers rather than `main.c` or the generic
-sampler loop. Shared ADC initialization is an existing exception: adding an
-ADC-using configuration requires extending the condition in `sampler_init()`.
+sampler loop. Each ADC driver initializes the shared ADC in its descriptor
+`init` callback; `adc_input_init()` is idempotent.
 Event-driven acquisition requires a separate design; see the final sections.
 
 ## Workflow A: add a sensor to an existing configuration
@@ -76,7 +76,7 @@ measurement.
 Add a unique ID to the root-level `protocol/app_protocol.h` (`../protocol/app_protocol.h` from the sensor project):
 
 ```c
-#define CAN_ID_STEERING_ANGLE 0x0BD /* example: verify availability first */
+#define CAN_ID_STEERING_ANGLE 0x0CA /* example: verify availability first */
 ```
 
 Before choosing it, check the shared protocol header and command/state ranges for
@@ -282,25 +282,12 @@ that guard to `#if NODE_FIXED_ADC_CONFIG || NODE_FIXED_STEERING_CONFIG`; otherwi
 the new registry references a descriptor whose definition is compiled out.
 Adding the file to `SRCS` alone does not override preprocessor conditions.
 
-If the configuration uses shared support hardware, ensure it is initialized.
-The steering example above includes `generic_adc_sensor`, so add
-`NODE_FIXED_STEERING_CONFIG` to the ADC initialization condition in
-`src/sampler/sampler.c`, inside `sampler_init()`:
-
-```c
-/* Keep every existing ADC-using configuration and append the new one. */
-#if NODE_FIXED_BRAKE_CONFIG || NODE_FIXED_ADC_CONFIG || NODE_FIXED_STEERING_CONFIG
-    esp_err_t error = adc_input_init();
-    if (error != ESP_OK) {
-        return error;
-    }
-#endif
-```
-
-Selecting the configuration in `platformio.ini` and `sensor_registry.c` does
-not automatically initialize the shared ADC. Without this addition, ADC reads
-return an error and the sampler skips those values. Extend this condition only
-when the new configuration uses the shared ADC helper.
+If the configuration uses shared support hardware, initialize it in the sensor's
+`init` callback. ADC drivers call `adc_input_init()`, which can be called by
+several sensors on the same node. The included `generic_adc_sensor` already does
+this. Do not add configuration-specific hardware initialization to
+`sampler_init()`; it records each driver's initialization result for health
+reporting and skips a driver whose initialization fails.
 
 ### 2. Add a PlatformIO environment
 
@@ -311,7 +298,7 @@ Add an environment to `platformio.ini`:
 extends = node_base
 build_flags =
     ${node_base.build_flags}
-    -D NODE_ID=7
+    -D NODE_ID=2
     -D NODE_FIXED_BRAKE_CONFIG=0
     -D NODE_FIXED_ENCODER_CONFIG=0
     -D NODE_FIXED_ENGINE_CONFIG=0
@@ -321,8 +308,9 @@ build_flags =
     -D SENSOR_SERIAL_TEST=0
 ```
 
-Add the new macro with value `0` to every other environment as well. This makes
-each build's selection visible and prevents settings from becoming ambiguous.
+Add a default value of `0` for the new macro in `protocol/node_config.h`, which
+`sensor.h` includes for every driver. Each environment then enables only its own
+configuration.
 
 Rules:
 
@@ -339,27 +327,24 @@ For every signal transmitted by this configuration, update the shared
 old concurrent deployment; a unique `NODE_ID` does not disambiguate duplicate
 signal IDs.
 
-**Node 7 is an extension example, not already supported monitoring capacity.**
-The shared header has `CAN_NODE_SLOT_COUNT=7`, so only indices 0–6 exist. To add
-node 7 and make its status visible, complete all of these changes:
+**Node 2 is an extension example; nodes 7 and 8 are already the shock nodes.**
+The shared header has `CAN_NODE_SLOT_COUNT=9`, allowing indices 0–8. To add
+node 2 and make its status visible:
 
-1. Add bit 7 to `CAN_NODE_ID_MASK` in root `protocol/app_protocol.h` and
-   increase `CAN_NODE_SLOT_COUNT` to 8 so index 7 exists. Sensor builds require
-   their `NODE_ID` in this mask; the mask must fit the slot count. Master
-   state-frame recognition, registry storage, and liveness bounds use that count.
-2. Add bit 7 to `MASTER_EXPECTED_NODE_MASK` in
-   `master-node/src/node_state/node_registry.h` when this
-   node is part of the intended vehicle configuration.
-3. Extend `app_status_t` in `master-node/src/app/app_control.h` and its
-   population/serial status output in `app_control.c`.
-4. Extend the status JSON in `master-node/src/web/web_server.c` and node
-   display in `master-node/src/web/index.html`.
-5. Test boot, recording, disconnection, and reconnection status for node 7,
-   as well as accepted samples and exports.
+1. Add bit 2 to `CAN_NODE_ID_MASK` in `protocol/app_protocol.h`. Existing array
+   capacity covers it; keep the mask within that capacity.
+2. Add bit 2 to `MASTER_EXPECTED_NODE_MASK` when this node belongs to the
+   intended vehicle configuration.
+3. Extend `app_status_t`, `app_control.c`, the status JSON, and the node display
+   in `master-node/src/web/index.html`.
+4. Update node names in the firmware health module and offline decoder, and
+   verify its sensor slots in both.
+5. Test boot, recording, disconnection, reconnection, samples, and exports.
 
-For other IDs, also check array capacity, mask width, state-frame ID collisions,
-and the 11-bit CAN identifier limit; the example does not establish arbitrary
-node discovery.
+For an ID above 8, redesign the one-byte offline event mask as well as array
+capacity and state IDs. In particular, `0x0C9` is a rear pot sample, so increasing
+the state-frame range to include node 9 would collide with it. Check all control,
+state, sample, and health ranges before allocating an ID.
 
 ## Workflow C: add a completely new node and sensor
 

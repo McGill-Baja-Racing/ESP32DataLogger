@@ -11,7 +11,6 @@
 
 static esp_err_t read_pressure(sensor_t *sensor, int32_t *value)
 {
-    (void)sensor;
     int voltage_mv = 0;
     esp_err_t error = adc_input_read_mv(GPIO, &voltage_mv);
     if (error != ESP_OK) {
@@ -24,9 +23,16 @@ static esp_err_t read_pressure(sensor_t *sensor, int32_t *value)
     return ESP_OK;
 }
 
+static esp_err_t init_front_brake(sensor_t *sensor)
+{
+    (void)sensor;
+    return adc_input_init();
+}
+
 sensor_t front_brake_sensor = {
     .name = "front_brake_pressure",
     .can_id = CAN_ID_FRONT_BRAKE,
     .period_us = 10000,
+    .init = init_front_brake,
     .read = read_pressure,
 };

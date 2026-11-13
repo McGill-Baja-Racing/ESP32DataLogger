@@ -38,3 +38,7 @@ Expect `SUCCESS`. Initial downloads can be substantial. For uploads and expected
 Wi-Fi startup failure is reported on serial while collection can continue. SD mount failure prevents normal startup; automatic formatting is disabled in the current build configuration. See [Troubleshooting](../docs/TROUBLESHOOTING.md).
 
 Next: [Source map](src/README.md). Shared references: [protocol](../docs/PROTOCOL.md), [hardware](../docs/HARDWARE.md), [testing](../docs/TESTING.md), and [contribution workflow](../CONTRIBUTING.md).
+
+## AiM backup RPM
+
+The master can receive EVO4S RPM on the common CAN bus as a separate channel. See [AiM configuration, behavior, and bench checks](docs/AIM_EVO4S.md).

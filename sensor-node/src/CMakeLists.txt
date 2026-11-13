@@ -2,6 +2,8 @@ idf_component_register(
     SRCS
         "main.c"
         "can/can_node.c"
+        "health/node_health.c"
+        "../../protocol/health_counters.c"
         "sampler/sampler.c"
         "sensors/sensor_registry.c"
         "sensors/adc_input.c"
@@ -10,6 +12,7 @@ idf_component_register(
         "sensors/bearing_encoder.c"
         "sensors/generic_adc.c"
         "sensors/engine_rpm.c"
+        "sensors/shock_displacement.c"
         "sensors/mpu6500.c"
         "time/time_sync.c"
     INCLUDE_DIRS

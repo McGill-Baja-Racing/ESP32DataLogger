@@ -1,12 +1,16 @@
 idf_component_register(
     SRCS
         "main.c"
+        "aim/aim_adapter.c"
+        "aim/aim_decode.c"
         "app/app_control.c"
         "can/can_master.c"
         "console/serial_console.c"
         "gps/gps_receiver.c"
         "gps/rmc_parser.c"
         "gps/ubx_config.c"
+        "health/node_health.c"
+        "../../protocol/health_counters.c"
         "logger/data_logger.c"
         "live/live_data.c"
         "node_state/node_registry.c"

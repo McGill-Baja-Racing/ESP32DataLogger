@@ -33,7 +33,7 @@
       <button id="start">Start</button><button id="stop">Stop</button>
     </div>
     <div class="muted">Leave blank for a GPS date/time name. Start waits up to 3 seconds for GPS, then falls back to log_XXXX.bin.</div>
-    <div id="stats" class="muted"></div><div id="nodes" class="muted"></div><div id="error" class="error"></div>
+    <div id="stats" class="muted"></div><div id="nodes" class="muted"></div><div id="aim" class="muted"></div><div id="health" class="error" style="white-space:pre-line;min-height:0"></div><div id="error" class="error"></div>
   </section>
 
   <section class="card">
@@ -73,12 +73,22 @@ function normalizeLogName(value){
 }
 function selectedLogName(){return normalizeLogName($('logName').value)}
 
+// On a slow link, overlapping polls would each open another connection to the master.
+let statusBusyUntil=0;
+async function pollStatus(){
+  const now=Date.now();if(now<statusBusyUntil)return;
+  statusBusyUntil=now+5000;
+  try{await refreshStatus()}finally{statusBusyUntil=0}
+}
 async function refreshStatus(){
   try{
     const s=await json('/api/status'); loggerState=s.logger_state;
     $('state').textContent=pretty(s.logger_state); $('file').textContent=s.current_file==='none'?'No session yet':s.current_file;
     $('stats').textContent=`CAN RX errors: ${s.can_errors_available?s.can_rx_errors:'N/A'} | CAN TX errors: ${s.can_errors_available?s.can_tx_errors:'N/A'} | CAN drops: ${s.can_drops} | Log drops: ${s.log_drops}`;
-    $('nodes').textContent=`Nodes — 1: ${s.nodes['1']}, 3: ${s.nodes['3']}, 4: ${s.nodes['4']}, 5: ${s.nodes['5']}, 6: ${s.nodes['6']}`;
+    $('nodes').textContent=`Nodes — 1: ${s.nodes['1']}, 3: ${s.nodes['3']}, 4: ${s.nodes['4']}, 5: ${s.nodes['5']}, 6: ${s.nodes['6']}, 7: ${s.nodes['7']}, 8: ${s.nodes['8']}`;
+    $('aim').textContent=`AiM: ${s.aim.state} | Age: ${s.aim.last_frame_age_ms<0?'N/A':s.aim.last_frame_age_ms+' ms'} | Frames: ${s.aim.valid_frames} | Malformed: ${s.aim.malformed_frames} | Counter discontinuities: ${s.aim.counter_discontinuities}`;
+    const aimChart=charts.get(0x703);
+    if(aimChart&&s.aim.state!=='receiving')aimChart.section.querySelector('.value').textContent=pretty(s.aim.state);
     const becameIdle=previousLoggerState!==null&&previousLoggerState!=='idle'&&s.logger_state==='idle';
     if(becameIdle)$('logName').value='';
     previousLoggerState=s.logger_state;$('start').disabled=s.logger_state!=='idle'; $('stop').disabled=s.logger_state!=='running';$('logName').disabled=s.logger_state!=='idle';
@@ -87,6 +97,7 @@ async function refreshStatus(){
     if(token&&(!s.live_enabled||s.logger_state!=='running')) endLive(false,'Live data stopped with the recording.');
     if(becameIdle)refreshLogs();
   }catch(e){$('error').textContent=e.message}
+  try{const r=await fetch('/api/health');if(!r.ok)throw 0;$('health').textContent=(await r.text()).replace(/_/g,' ')}catch(e){$('health').textContent='Health unavailable'}
 }
 async function logging(action){
   try{$('error').textContent='';let suffix='';if(action==='start'&&$('logName').value.trim()){const name=selectedLogName();$('logName').value=name;suffix=`?name=${encodeURIComponent(name)}`;}await json('/api/logging/'+action+suffix,{method:'POST'});await refreshStatus();await refreshLogs()}
@@ -140,7 +151,17 @@ function schedulePoll(){clearTimeout(timer);if(!token)return;timer=setTimeout(po
 async function poll(){
   if(!token||polling)return;polling=true;
   try{const result=await json('/api/live/samples?token='+encodeURIComponent(token));
-    for(const sample of result.samples){const chart=charts.get(sample.can_id);if(!chart||chart.paused||chart.lastSequence===sample.sequence)continue;chart.lastSequence=sample.sequence;chart.points.push({t:sample.timestamp_ms,v:sample.value});chart.section.querySelector('.value').textContent=`${sample.value} ${chart.signal.units}`;trim(chart);draw(chart)}
+    for(const sample of result.samples){
+      const chart=charts.get(sample.can_id);
+      if(!chart)continue;
+      // Check freshness before sequence: a disconnected source stops producing new samples.
+      if(sample.stale){chart.section.querySelector('.value').textContent='Stale';continue}
+      if(chart.paused||chart.lastSequence===sample.sequence)continue;
+      chart.lastSequence=sample.sequence;
+      chart.points.push({t:sample.timestamp_ms,v:sample.value});
+      chart.section.querySelector('.value').textContent=`${sample.value} ${chart.signal.units}`;
+      trim(chart);draw(chart);
+    }
   }catch(e){endLive(false,e.message)}finally{polling=false;schedulePoll()}
 }
 function trim(chart){if(!chart.points.length)return;const cutoff=chart.points.at(-1).t-historyMs()*1.2;while(chart.points.length&&chart.points[0].t<cutoff)chart.points.shift()}
@@ -185,7 +206,7 @@ async function renameLog(oldName){
 }
 $('logName').value='';$('logFilter').onchange=renderLogs;$('start').onclick=()=>logging('start');$('stop').onclick=()=>logging('stop');$('liveEnable').onclick=enableLive;$('liveDisable').onclick=disableLive;$('rate').onchange=schedulePoll;$('window').onchange=()=>{for(const chart of charts.values()){trim(chart);draw(chart)}};
 window.addEventListener('resize',()=>{for(const chart of charts.values())draw(chart)});window.addEventListener('pagehide',()=>{if(token)fetch('/api/live/stop?token='+encodeURIComponent(token),{method:'POST',keepalive:true})});
-loadSignals();refreshStatus();refreshLogs();setInterval(refreshStatus,1000);
+loadSignals();pollStatus();refreshLogs();setInterval(pollStatus,1000);
 </script>
 </body>
 </html>

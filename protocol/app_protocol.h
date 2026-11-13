@@ -21,11 +21,22 @@
 #define CAN_ID_GENERIC_ADC          0x0BA
 #define CAN_ID_ENGINE_RPM           0x0BB
 #define CAN_ID_ENGINE_SPARK         0x0BC
+#define CAN_ID_FRONT_LIN_1          0x0BD
+#define CAN_ID_FRONT_LIN_2          0x0BE
+#define CAN_ID_REAR_LIN_1           0x0BF
+#define CAN_ID_REAR_LIN_2           0x0C9 /* State reports occupy 0x0C1..0x0C8. */
+
+/* Upper bound for sensor-slot lookup; control/state IDs are filtered by mapping. */
+#define CAN_ID_SENSOR_END           0x0D0
+
+/* External AiM wire frame; independent of the DAQ node protocol. */
+#define CAN_ID_AIM_WIRE             0x500
 
 /* Master-only log records, never sent on the bus. */
 #define CAN_ID_GPS_SPEED            0x700
 #define CAN_ID_GPS_LATITUDE         0x701
 #define CAN_ID_GPS_LONGITUDE        0x702
+#define CAN_ID_AIM_RPM              0x703 /* Normalized AiM record, not its wire ID (0x500). */
 
 #define CAN_MASTER_TIME_PERIOD_MS      100
 #define CAN_MASTER_TIME_RECORDING_FLAG (UINT64_C(1) << 63)
@@ -34,8 +45,8 @@
 /* Node N sends state, reason and reset_reason (one byte each) on CAN_ID_NODE_STATE_BASE + N. */
 #define CAN_ID_NODE_STATE_BASE      0x0C0
 #define CAN_NODE_STATE_LENGTH       3
-#define CAN_NODE_ID_MASK            ((1U << 1) | (1U << 3) | (1U << 4) | (1U << 5) | (1U << 6))
-#define CAN_NODE_SLOT_COUNT         7
+#define CAN_NODE_ID_MASK            ((1U << 1) | (1U << 3) | (1U << 4) | (1U << 5) | (1U << 6) | (1U << 7) | (1U << 8))
+#define CAN_NODE_SLOT_COUNT         9
 
 _Static_assert(CAN_NODE_ID_MASK < (1U << CAN_NODE_SLOT_COUNT), "every node ID must be below CAN_NODE_SLOT_COUNT");
 
@@ -52,6 +63,180 @@ typedef enum {
     NODE_STATE_REASON_BEACON_SYNC = 5,
 } node_state_reason_t;
 
+#define CAN_ID_NODE_STATUS_BASE     0x0D0
+#define CAN_ID_NODE_EVENT_BASE      0x0E0
+#define CAN_ID_NODE_DIAGNOSTICS_BASE 0x0F0
+
+/*
+ * Node health. Health frames use the sample layout, a 4-byte payload then a
+ * uint32 timestamp_ms on the master clock, so the master logs them like
+ * samples. Each node, and the master as node 0, sends a status and a
+ * diagnostics frame each second; nodes send only the payload and the master
+ * stamps arrival. While recording, each node also sends one event frame per
+ * code and subject counted since the last one, stamped with its last
+ * occurrence. Subjects are one byte: DAQ node IDs fit directly; AiM and GPS use aliases.
+ * The master finds lost events from gaps in each node's event sequence.
+ */
+#define NODE_STATUS_PERIOD_MS 1000
+
+typedef enum {
+    NODE_HEALTH_OK = 0,
+    NODE_HEALTH_WARNING = 1,   /* data lost, node still working */
+    NODE_HEALTH_ERROR = 2,     /* a sensor, the clock, CAN or the SD card is failing */
+    NODE_HEALTH_CRITICAL = 3,  /* no sensor produces data */
+} node_health_t;
+
+typedef enum {
+    NODE_MODE_IDLE = 0,
+    NODE_MODE_RECORDING = 1,
+} node_mode_t;
+
+typedef enum {
+    /* Faults. Status bit N is set while fault N holds or if it was
+     * counted during the last status period. Each onset of a lasting
+     * fault is counted, except NO_TIME_SYNC, which only the status shows. */
+    HEALTH_SAMPLES_MISSED,    /* event: subject sensor CAN ID, sample periods skipped */
+    HEALTH_SAMPLES_DROPPED,   /* event: subject CAN ID, samples or spark captures lost */
+    HEALTH_BAD_TIMESTAMP,     /* event: subject CAN ID, negative master time */
+    HEALTH_NO_TIME_SYNC,      /* no master time beacon for over 1 s */
+    HEALTH_CAN_TX,            /* event: subject CAN ID of the frame not sent, error */
+    HEALTH_CAN_RX_OVERFLOW,   /* event: subject CAN ID of the frame lost */
+    HEALTH_CAN_NO_ACK,        /* event: open wire or no other node */
+    HEALTH_CAN_BUS_ERROR,     /* event: bit, stuff, form or CRC error, noise or short */
+    HEALTH_CAN_PASSIVE,
+    HEALTH_CAN_BUS_OFF,       /* event: error set when recovery could not start */
+    HEALTH_SD_WRITE,          /* master; a write failed or a log file is lost */
+    HEALTH_GPS_NO_DATA,       /* master; no NMEA bytes for 3 s */
+    HEALTH_GPS_NO_FIX,        /* master; no position fix for 3 s */
+    HEALTH_EVENT_LOST,        /* master; event: subject node ID, event frames lost */
+    HEALTH_FAULT_COUNT,
+
+    /* Events that are not faults; the status sensors field shows sensor problems. */
+    HEALTH_BOOT = HEALTH_FAULT_COUNT,  /* subject: esp_reset_reason_t */
+    HEALTH_SENSOR_INIT,                /* sent once: subject sensor CAN ID, error */
+    HEALTH_SENSOR_READ,                /* subject sensor CAN ID, failed reads, last error */
+    HEALTH_ADC_UNCALIBRATED,           /* subject: GPIO, raw conversion used */
+    HEALTH_NODE_OFFLINE,               /* master; subject: protocol_offline_node_bit() mask */
+    HEALTH_CODE_COUNT,
+} health_code_t;
+
+#define HEALTH_BIT(code) (1U << (code))
+
+/* Offline subjects keep legacy bits 1..7; unused bit 0 represents node 8.
+ * The master (node 0) is never an offline subject. This fits eight nodes in
+ * the existing one-byte event subject without changing the frame layout. */
+_Static_assert(CAN_NODE_SLOT_COUNT <= 9, "offline event subjects support nodes 1..8");
+static inline uint8_t protocol_offline_node_bit(uint8_t node)
+{
+    return node > 0 && node < CAN_NODE_SLOT_COUNT
+         ? (uint8_t)(1U << (node % 8)) : 0;
+}
+
+
+/* Bits from HEALTH_FAULT_COUNT up are spare. */
+#define HEALTH_STATUS_FAULT_BITS 17
+
+_Static_assert(HEALTH_FAULT_COUNT <= HEALTH_STATUS_FAULT_BITS, "faults must fit the status bits");
+_Static_assert(HEALTH_CODE_COUNT <= 32, "codes must fit the 5 event bits");
+
+/* An event's error: one entry per esp_err_t the firmware returns. */
+typedef enum {
+    HEALTH_ERROR_NONE,
+    HEALTH_ERROR_FAIL,
+    HEALTH_ERROR_NO_MEM,
+    HEALTH_ERROR_INVALID_ARG,
+    HEALTH_ERROR_INVALID_STATE,
+    HEALTH_ERROR_NOT_FOUND,
+    HEALTH_ERROR_TIMEOUT,
+    HEALTH_ERROR_INVALID_RESPONSE,
+    HEALTH_ERROR_OTHER,
+    HEALTH_ERROR_COUNT,
+} health_error_t;
+
+_Static_assert(HEALTH_ERROR_COUNT <= 16, "errors must fit the 4 event bits");
+
+/* Ordered by severity: health_for() takes the highest as the worst. */
+typedef enum {
+    SENSOR_STATE_OK = 0,
+    SENSOR_STATE_SOME_FAILED = 1,   /* some reads failed */
+    SENSOR_STATE_NO_READINGS = 2,   /* under 10 % of reads worked */
+    SENSOR_STATE_INIT_FAILED = 3,
+} sensor_state_t;
+
+/* A status holds the states of a node's first NODE_SENSOR_SLOTS sensors; see
+ * protocol_slot_sensor_id(). */
+#define NODE_SENSOR_SLOTS 6
+
+/* Faults are bits 0-16, health bits 17-18, mode bit 19 and sensors bits 20-31. */
+typedef struct __attribute__((packed)) {
+    uint32_t faults : HEALTH_STATUS_FAULT_BITS;   /* HEALTH_BIT() of each fault */
+    uint32_t health : 2;    /* node_health_t */
+    uint32_t mode : 1;      /* node_mode_t */
+    uint32_t sensors : 2 * NODE_SENSOR_SLOTS;     /* sensor_state_t of slot N in bits 2N-2N+1 */
+    uint32_t timestamp_ms;
+} node_status_frame_t;
+
+_Static_assert(HEALTH_STATUS_FAULT_BITS + 2 + 1 + 2 * NODE_SENSOR_SLOTS == 32,
+               "status fields must fill the 4-byte payload");
+
+static inline sensor_state_t node_status_sensor_state(const node_status_frame_t *status,
+                                                      unsigned slot)
+{
+    return (sensor_state_t)(status->sensors >> (2 * slot) & 0x3);
+}
+
+/* GCC packs bit-fields from bit 0 up: code is bits 0-4 of the first byte,
+ * count the top 9 bits of the first uint32. */
+typedef struct __attribute__((packed)) {
+    uint32_t code : 5;      /* health_code_t */
+    uint32_t error : 4;     /* health_error_t */
+    uint32_t subject : 8;
+    uint32_t sequence : 6;  /* node events sent since boot, wrapping; the boot
+                             * event is sent first, so a reboot restarts at 0 */
+    uint32_t count : 9;     /* occurrences since the previous event;
+                             * HEALTH_EVENT_COUNT_MAX means that many or more */
+    uint32_t timestamp_ms;
+} health_event_frame_t;
+
+#define HEALTH_EVENT_COUNT_MAX 0x1FF
+#define HEALTH_EVENT_SEQUENCE_MASK 0x3F
+
+typedef struct __attribute__((packed)) {
+    uint8_t tx_errors;      /* TWAI transmit error counter, 255 or more at bus-off */
+    uint8_t rx_errors;      /* TWAI receive error counter, capped at 255 */
+    uint8_t resets;         /* resets since power-on, stops at 255 */
+    uint8_t reset_reason;   /* esp_reset_reason_t of the last reset or power-on */
+    uint32_t timestamp_ms;
+} node_diagnostics_frame_t;
+
+_Static_assert(sizeof(node_status_frame_t) == 8, "status must fill one CAN frame");
+_Static_assert(sizeof(health_event_frame_t) == 8, "event must fill one CAN frame");
+_Static_assert(sizeof(node_diagnostics_frame_t) == 8, "diagnostics must fill one CAN frame");
+
+/* Status and diagnostics on the bus: a node that has just reset has no
+ * master clock yet. */
+#define NODE_HEALTH_PAYLOAD 4
+
+static inline node_health_t health_for(uint32_t faults, sensor_state_t worst_sensor,
+                                       bool no_sensor_works)
+{
+    const uint32_t error_faults =
+        HEALTH_BIT(HEALTH_BAD_TIMESTAMP) | HEALTH_BIT(HEALTH_NO_TIME_SYNC) |
+        HEALTH_BIT(HEALTH_CAN_PASSIVE) | HEALTH_BIT(HEALTH_CAN_BUS_OFF) |
+        HEALTH_BIT(HEALTH_SD_WRITE) | HEALTH_BIT(HEALTH_GPS_NO_DATA) |
+        HEALTH_BIT(HEALTH_EVENT_LOST);
+    if (no_sensor_works) {
+        return NODE_HEALTH_CRITICAL;
+    }
+    if ((faults & error_faults) || worst_sensor >= SENSOR_STATE_NO_READINGS) {
+        return NODE_HEALTH_ERROR;
+    }
+    if (faults || worst_sensor == SENSOR_STATE_SOME_FAILED) {
+        return NODE_HEALTH_WARNING;
+    }
+    return NODE_HEALTH_OK;
+}
+
 /* Node that sends a sample frame (int32 value, uint32 timestamp_ms); 0 for any other ID. */
 static inline uint8_t protocol_sensor_node_id(uint32_t id)
 {
@@ -63,11 +248,15 @@ static inline uint8_t protocol_sensor_node_id(uint32_t id)
         case CAN_ID_MPU_ACCEL_Z:
         case CAN_ID_MPU_GYRO_X:
         case CAN_ID_MPU_GYRO_Y:
-        case CAN_ID_MPU_GYRO_Z:     return 3;
+        case CAN_ID_MPU_GYRO_Z:      return 3;
         case CAN_ID_BEARING_ENCODER: return 4;
         case CAN_ID_ENGINE_RPM:
         case CAN_ID_ENGINE_SPARK:   return 5;
         case CAN_ID_GENERIC_ADC:    return 6;
+        case CAN_ID_FRONT_LIN_1:
+        case CAN_ID_FRONT_LIN_2:    return 7;
+        case CAN_ID_REAR_LIN_1:
+        case CAN_ID_REAR_LIN_2:     return 8;
         default:                    return 0;
     }
 }
@@ -75,4 +264,56 @@ static inline uint8_t protocol_sensor_node_id(uint32_t id)
 static inline bool protocol_is_sensor_id(uint32_t id)
 {
     return protocol_sensor_node_id(id) != 0;
+}
+
+/* Sample ID shown in slot N of a node's status, or 0: the node's Nth sample
+ * ID, lowest first. A new sample ID must go above the existing ones so no
+ * node's slots move. The spark has no slot: the engine RPM sensor sends it. */
+static inline uint32_t protocol_slot_sensor_id(uint8_t node, unsigned slot)
+{
+    if (node == 0) {
+        return 0;
+    }
+    for (uint32_t id = CAN_ID_FRONT_BRAKE; id < CAN_ID_SENSOR_END; id++) {
+        if (id != CAN_ID_ENGINE_SPARK && protocol_sensor_node_id(id) == node) {
+            if (slot == 0) {
+                return id;
+            }
+            slot--;
+        }
+    }
+    return 0;
+}
+
+/* Slot of a sample ID in node's status; NODE_SENSOR_SLOTS if it has none there. */
+static inline unsigned protocol_sensor_slot(uint8_t node, uint32_t id)
+{
+    unsigned slot = 0;
+    while (slot < NODE_SENSOR_SLOTS && protocol_slot_sensor_id(node, slot) != id) {
+        slot++;
+    }
+    return slot;
+}
+
+/* Compact subjects for GPS (0x700..0x702), AiM wire (0x500), and its
+ * normalized RPM record (0x703). No DAQ signal or control uses 0x70..0x74. */
+#define HEALTH_SUBJECT_GPS_BASE 0x70
+#define HEALTH_SUBJECT_AIM_WIRE 0x73
+#define HEALTH_SUBJECT_AIM_RPM  0x74
+
+static inline uint32_t protocol_health_subject(uint32_t id)
+{
+    if (id == CAN_ID_AIM_WIRE) return HEALTH_SUBJECT_AIM_WIRE;
+    if (id == CAN_ID_AIM_RPM) return HEALTH_SUBJECT_AIM_RPM;
+    return id >= CAN_ID_GPS_SPEED && id <= CAN_ID_GPS_LONGITUDE
+         ? id - CAN_ID_GPS_SPEED + HEALTH_SUBJECT_GPS_BASE : id;
+}
+
+static inline uint32_t protocol_health_subject_id(uint8_t subject)
+{
+    if (subject == HEALTH_SUBJECT_AIM_WIRE) return CAN_ID_AIM_WIRE;
+    if (subject == HEALTH_SUBJECT_AIM_RPM) return CAN_ID_AIM_RPM;
+    return subject >= HEALTH_SUBJECT_GPS_BASE &&
+           subject <= HEALTH_SUBJECT_GPS_BASE + CAN_ID_GPS_LONGITUDE - CAN_ID_GPS_SPEED
+         ? subject - HEALTH_SUBJECT_GPS_BASE + CAN_ID_GPS_SPEED : subject;
 }

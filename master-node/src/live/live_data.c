@@ -1,4 +1,6 @@
 #include "live/live_data.h"
+#include "aim/aim_adapter.h"
+#include "protocol/app_protocol.h"
 
 #include <string.h>
 
@@ -21,9 +23,14 @@ static const live_signal_metadata_t signals[LIVE_DATA_SIGNAL_COUNT] = {
     {0x0BA, "generic_adc_voltage", "adc_node_6", "mV", 100},
     {0x0BB, "engine_rpm", "engine_node_5", "rpm", 100},
     {0x0BC, "engine_spark", "engine_node_5", "event", 100},
+    {CAN_ID_FRONT_LIN_1, "front_lin_pot_1", "front_shock_node_7", "mm", 100},
+    {CAN_ID_FRONT_LIN_2, "front_lin_pot_2", "front_shock_node_7", "mm", 100},
+    {CAN_ID_REAR_LIN_1, "rear_lin_pot_1", "rear_shock_node_8", "mm", 100},
+    {CAN_ID_REAR_LIN_2, "rear_lin_pot_2", "rear_shock_node_8", "mm", 100},
     {0x700, "gps_speed", "master_gps", "km/h_x100", 1},
     {0x701, "gps_latitude", "master_gps", "deg_e7", 1},
     {0x702, "gps_longitude", "master_gps", "deg_e7", 1},
+    {CAN_ID_AIM_RPM, "engine_rpm_aim", "aim_evo4s", "rpm", AIM_OUTPUT_RATE_HZ},
 };
 
 static live_sample_t latest[LIVE_DATA_SIGNAL_COUNT];
@@ -32,6 +39,12 @@ static bool enabled;
 static uint32_t owner_token;
 static int64_t lease_deadline_us;
 
+/**
+ * @brief Find a signal's table index from its CAN ID.
+ *
+ * @param can_id CAN ID of a sensor sample.
+ * @return The index, or -1 if unknown.
+ */
 static int signal_index(uint32_t can_id)
 {
     for (size_t i = 0; i < LIVE_DATA_SIGNAL_COUNT; i++) {
@@ -40,6 +53,9 @@ static int signal_index(uint32_t can_id)
     return -1;
 }
 
+/**
+ * @brief Drop the lease and clear the cache. Call with lock held.
+ */
 static void clear_locked(void)
 {
     enabled = false;
@@ -48,6 +64,13 @@ static void clear_locked(void)
     memset(latest, 0, sizeof(latest));
 }
 
+/**
+ * @brief End the lease if its deadline has passed. Call with lock held.
+ *
+ * There is no timer: every call that checks the lease runs this first.
+ *
+ * @param now_us Current esp_timer time.
+ */
 static void expire_locked(int64_t now_us)
 {
     if (enabled && now_us >= lease_deadline_us) clear_locked();
