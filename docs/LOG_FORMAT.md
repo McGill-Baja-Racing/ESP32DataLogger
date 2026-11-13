@@ -6,7 +6,7 @@ This is the storage/export contract reference. Read the [system overview](SYSTEM
 
 The master creates a `.bin` recording and its `.bin.utc` companion under `/sdcard`. Default names use GPS UTC (`log_YYYY-MM-DD_HH-MM-SS.bin`) when available within the naming wait; otherwise the first free numbered name (`log_0001.bin`) is selected. Repeated timestamp names receive a numeric suffix. Custom names must be 5–44 characters including `.bin`, with only letters, digits, underscores, and hyphens before the suffix. Existing binary or companion names are rejected.
 
-Renaming through the browser applies to completed sessions and their companions. Active recordings cannot be downloaded or renamed. Keep both files together when copying a card; a binary web download contains only the `.bin` file.
+Renaming through the browser applies to completed sessions and their companions. Active recordings cannot be downloaded or renamed. Keep both files together when copying a card; a binary web download (`format=bin`) contains only the `.bin` file, and `format=utc` downloads its companion as stored (`404` when the session has none).
 
 ## Binary records
 

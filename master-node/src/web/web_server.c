@@ -8,6 +8,7 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <time.h>
+#include <unistd.h>
 
 #include "app/app_control.h"
 #include "esp_event.h"
@@ -28,7 +29,7 @@
 
 #define AP_SSID "BajaDAQ"
 #define SD_ROOT "/sdcard"
-#define DOWNLOAD_CHUNK_SIZE 4096
+#define DOWNLOAD_CHUNK_SIZE 16384
 
 typedef struct {
     char name[DATA_LOGGER_FILENAME_MAX + 1];
@@ -288,15 +289,16 @@ static esp_err_t stream_binary(httpd_req_t *request, FILE *file)
 {
     char *buffer = malloc(DOWNLOAD_CHUNK_SIZE);
     if (!buffer) return ESP_ERR_NO_MEM;
+    int fd = fileno(file);
     esp_err_t result = ESP_OK;
-    size_t count;
-    while ((count = fread(buffer, 1, DOWNLOAD_CHUNK_SIZE, file)) > 0) {
+    ssize_t count;
+    while ((count = read(fd, buffer, DOWNLOAD_CHUNK_SIZE)) > 0) {
         if (httpd_resp_send_chunk(request, buffer, count) != ESP_OK) {
             result = ESP_FAIL;
             break;
         }
     }
-    if (ferror(file)) result = ESP_FAIL;
+    if (count < 0) result = ESP_FAIL;
     free(buffer);
     if (result == ESP_OK) result = httpd_resp_send_chunk(request, NULL, 0);
     return result;
@@ -476,9 +478,9 @@ static esp_err_t download_handler(httpd_req_t *request)
         httpd_query_key_value(query, "format", format, sizeof(format)) != ESP_OK ||
         !data_logger_valid_filename(name) ||
         (strcmp(format, "bin") != 0 && strcmp(format, "csv") != 0 &&
-         strcmp(format, "paired") != 0)) {
+         strcmp(format, "paired") != 0 && strcmp(format, "utc") != 0)) {
         return send_json_error(request, "400 Bad Request",
-                               "Expected a valid log filename and bin, csv or paired format");
+                               "Expected a valid log filename and bin, csv, paired or utc format");
     }
     if (data_logger_state() != LOGGER_IDLE &&
         strcmp(name, base_name(data_logger_path())) == 0) {
@@ -489,8 +491,9 @@ static esp_err_t download_handler(httpd_req_t *request)
         return send_json_error(request, "503 Service Unavailable",
                                "Another download is already active");
     }
+    bool utc = strcmp(format, "utc") == 0;
     char path[96];
-    snprintf(path, sizeof(path), SD_ROOT "/%s", name);
+    snprintf(path, sizeof(path), SD_ROOT "/%s%s", name, utc ? ".utc" : "");
     FILE *file = fopen(path, "rb");
     if (!file) {
         xSemaphoreGive(download_mutex);
@@ -507,7 +510,8 @@ static esp_err_t download_handler(httpd_req_t *request)
         snprintf(attachment, sizeof(attachment), "attachment; filename=\"%s\"", csv_name);
         httpd_resp_set_type(request, "text/csv; charset=utf-8");
     } else {
-        snprintf(attachment, sizeof(attachment), "attachment; filename=\"%s\"", name);
+        snprintf(attachment, sizeof(attachment), "attachment; filename=\"%s%s\"", name,
+                 utc ? ".utc" : "");
         httpd_resp_set_type(request, "application/octet-stream");
     }
     httpd_resp_set_hdr(request, "Content-Disposition", attachment);
