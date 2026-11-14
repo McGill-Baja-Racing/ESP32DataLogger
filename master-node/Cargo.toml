@@ -1,0 +1,25 @@
+[package]
+name = "master-node"
+edition = "2024"
+# Compiles src/ with clang into each binary.
+build = "../kernel/firmware.rs"
+default-run = "master"
+
+# The `test` crate does not exist for bare-metal targets.
+[[bin]]
+name = "master"
+test = false
+bench = false
+
+[[bin]]
+name = "master-no-can"
+test = false
+bench = false
+
+[dependencies]
+kernel = { package = "baja-kernel", path = "../kernel" }
+# Its build script passes the clang arguments to ours.
+sys = { package = "baja-sys", path = "../kernel/sys" }
+
+[lints]
+workspace = true

@@ -1,0 +1,48 @@
+[workspace]
+members = [
+    "kernel",
+    "kernel/esp-hosted",
+    "kernel/macros",
+    "kernel/sys",
+    "master-node",
+    "sensor-node",
+    "simulators/engine-rpm",
+    "simulators/wheel-rpm",
+]
+# A firmware builds inside its folder; at the root, cargo builds and checks the kernel for the C3.
+default-members = ["kernel"]
+resolver = "3"
+
+[workspace.lints.rust]
+elided_lifetimes_in_paths = "warn"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+undocumented_unsafe_blocks = "warn"
+unnecessary_safety_comment = "warn"
+unwrap_used = "warn"
+expect_used = "warn"
+panic = "warn"
+todo = "warn"
+unimplemented = "warn"
+indexing_slicing = "warn"
+allow_attributes = "warn"
+allow_attributes_without_reason = "warn"
+mod_module_files = "warn"
+precedence_bits = "warn"
+
+# Until a release has the invalid Content-Length fix; edge-nal must come from the same repository.
+[patch.crates-io]
+edge-http = { git = "https://github.com/sysgrok/edge-net", rev = "2b12b3b1900287a7b0f1f95f5fd66be6672621f9" }
+edge-nal = { git = "https://github.com/sysgrok/edge-net", rev = "2b12b3b1900287a7b0f1f95f5fd66be6672621f9" }
+
+[profile.dev]
+# esp-hal is too slow unoptimized.
+opt-level = "s"
+
+[profile.release]
+codegen-units = 1
+debug = 2
+lto = "fat"
+opt-level = "z"

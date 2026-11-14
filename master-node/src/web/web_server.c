@@ -11,6 +11,7 @@
 
 #include "app/app_control.h"
 #include "esp_event.h"
+#include "esp_heap_caps.h"
 #include "esp_hosted.h"
 #include "esp_http_server.h"
 #include "esp_log.h"
@@ -131,14 +132,17 @@ static esp_err_t status_handler(httpd_req_t *request)
              "\"nodes\":{\"1\":\"%s\",\"3\":\"%s\",\"4\":\"%s\",\"5\":\"%s\","
              "\"6\":\"%s\",\"7\":\"%s\",\"8\":\"%s\"},\"aim\":{\"state\":\"%s\",\"last_frame_age_ms\":%" PRId64
              ",\"valid_frames\":%" PRIu32 ",\"malformed_frames\":%" PRIu32
-             ",\"counter_discontinuities\":%" PRIu32 "}}",
+             ",\"counter_discontinuities\":%" PRIu32 "},"
+             "\"free_heap\":%zu,\"min_free_heap\":%zu}",
              data_logger_state_name(), base_name(status.current_file),
              status.can_drops, status.log_drops,
              status.can_rx_errors, status.can_tx_errors,
              status.can_errors_available ? "true" : "false",
              status.live_enabled ? "true" : "false", status.node_1, status.node_3, status.node_4,
              status.node_5, status.node_6, status.node_7, status.node_8, status.aim.state, status.aim.last_frame_age_ms,
-             status.aim.valid_frames, status.aim.malformed_frames, status.aim.counter_discontinuities);
+             status.aim.valid_frames, status.aim.malformed_frames, status.aim.counter_discontinuities,
+             heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
+             heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL));
     httpd_resp_set_type(request, "application/json");
     httpd_resp_set_hdr(request, "Cache-Control", "no-store");
     return httpd_resp_sendstr(request, body);
