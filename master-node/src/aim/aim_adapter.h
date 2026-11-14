@@ -32,7 +32,7 @@ typedef struct {
  * Returns false for unrelated or malformed frames; sample is then untouched. */
 bool aim_decode(aim_tracker_t *tracker, const can_message_t *frame, can_message_t *sample);
 /* Derive connection state from the last valid reception, independently of logging. */
-aim_status_t aim_tracker_status(const aim_tracker_t *tracker, int64_t now_us, bool available);
+aim_status_t aim_tracker_status(const aim_tracker_t *tracker, int64_t now_us);
 
 /* Thread-safe decoder wrapper; diagnostics update even outside a recording. */
 bool aim_adapter_receive(const can_message_t *frame, can_message_t *sample);

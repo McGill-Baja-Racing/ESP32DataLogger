@@ -12,7 +12,7 @@ class AimTests(unittest.TestCase):
         dispatch = can[can.index('void can_master_clear_receive_queue('):can.index('static void dispatch_task(')]
         main = (ROOT / 'src/main.c').read_text()
         start = main.index('static void handle_can_message(')
-        handler = main[start:main.index('\n#endif', start)]
+        handler = main[start:main.index('static void handle_gps_sample(', start)]
         harness = r'''
 #include <assert.h>
 #include <string.h>
@@ -53,18 +53,17 @@ static can_message_handler_t application_handler=handle;
 ''' + dispatch + r'''
 int main(void) {
     aim_tracker_t t={0}; can_message_t s;
-    assert(!strcmp(aim_tracker_status(&t,0,false).state,"unavailable"));
-    assert(!strcmp(aim_tracker_status(&t,0,true).state,"waiting"));
-    assert(aim_tracker_status(&t,0,true).last_frame_age_ms==-1);
+    assert(!strcmp(aim_tracker_status(&t,0).state,"waiting"));
+    assert(aim_tracker_status(&t,0).last_frame_age_ms==-1);
     can_message_t f={.id=AIM_CAN_ID,.dlc=4,.received_us=1234567,.data=0xffff0000};
     assert(aim_decode(&t,&f,&s));
     assert(s.id==0x703 && s.dlc==8 && s.data==((uint64_t)1234<<32));
-    assert(!strcmp(aim_tracker_status(&t,f.received_us+499999,true).state,"receiving"));
-    assert(!strcmp(aim_tracker_status(&t,f.received_us+500000,true).state,"stale"));
+    assert(!strcmp(aim_tracker_status(&t,f.received_us+499999).state,"receiving"));
+    assert(!strcmp(aim_tracker_status(&t,f.received_us+500000).state,"stale"));
     f.data=65535;f.received_us+=1000000; /* counter wraps to zero, maximum RPM */
     assert(aim_decode(&t,&f,&s) && (uint32_t)s.data==65535);
     assert(t.counter_discontinuities==0);
-    assert(!strcmp(aim_tracker_status(&t,f.received_us,true).state,"receiving"));
+    assert(!strcmp(aim_tracker_status(&t,f.received_us).state,"receiving"));
     assert(aim_decode(&t,&f,&s)); /* repeated counter is diagnostic, value retained */
     f.data=((uint64_t)100<<16)|3000;
     assert(aim_decode(&t,&f,&s));

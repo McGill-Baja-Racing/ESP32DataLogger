@@ -37,7 +37,6 @@ static void print_status(void)
     app_control_print_status();
 }
 
-#if MASTER_CAN_ENABLED
 static void handle_can_message(const can_message_t *message)
 {
     /* Route external AiM data separately from our timestamped, DAQ-controlled nodes. */
@@ -70,7 +69,6 @@ static void handle_can_message(const can_message_t *message)
         live_data_record(message);
     }
 }
-#endif
 
 static void handle_gps_sample(const can_message_t *sample)
 {
@@ -95,18 +93,14 @@ void app_main(void)
     ESP_ERROR_CHECK(node_registry_init());
     /* The CAN dispatch task uses the recording lock as soon as it starts. */
     ESP_ERROR_CHECK(app_control_init());
-#if MASTER_CAN_ENABLED
     ESP_ERROR_CHECK(can_master_init(handle_can_message));
-#endif
     ESP_ERROR_CHECK(gps_receiver_start(handle_gps_sample));
 
-#if MASTER_CAN_ENABLED
     /* Force nodes idle before the console and automatic session can start. */
     for (int i = 0; i < 3; i++) {
         ESP_ERROR_CHECK_WITHOUT_ABORT(can_master_stop_nodes());
         vTaskDelay(pdMS_TO_TICKS(50));
     }
-#endif
 
     serial_console_callbacks_t console = {
         .start = start_logging,
@@ -114,11 +108,7 @@ void app_main(void)
         .status = print_status,
     };
     ESP_ERROR_CHECK(serial_console_start(&console));
-#if MASTER_CAN_ENABLED
     ESP_ERROR_CHECK(time_beacon_start());
-#else
-    ESP_LOGW(TAG, "CAN disabled; running as a GPS-only master");
-#endif
     ESP_ERROR_CHECK(xTaskCreate(auto_start_task, "auto_start", 3072, NULL, 5, NULL)
                     == pdPASS ? ESP_OK : ESP_ERR_NO_MEM);
     esp_err_t web_error = web_server_start();
