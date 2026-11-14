@@ -22,7 +22,7 @@ The writer stores two `int64_t` values: ID and packed payload. Interpret the pay
 
 Each companion entry is one little-endian signed 64-bit Unix UTC timestamp in milliseconds, aligned by record index. Zero means UTC was unavailable when the sample was enqueued. Missing/truncated companions yield blank absolute-time cells for unavailable entries. Earlier samples are not retroactively given UTC after synchronization. See [absolute time](../master-node/docs/ABSOLUTE_TIME.md) for the clock model.
 
-UTC adds eight bytes per sample. If companion writing fails, later UTC entries are unavailable; partial binary writes also disable further companion writes to avoid unsafe alignment.
+UTC adds eight bytes per sample. Every record in the binary has its companion entry; a block the SD card fails to save is left out of both files and counted in log drops. After a power cut the companion may hold up to one block (100 entries) more than the binary; readers ignore them.
 
 ## Full CSV through the browser
 

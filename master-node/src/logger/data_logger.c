@@ -20,7 +20,7 @@
 
 #define LOG_QUEUE_LENGTH        256
 #define LOG_RECORDS_PER_BLOCK   100
-#define LOG_FLUSH_INTERVAL_MS   15000
+#define LOG_FLUSH_INTERVAL_MS   1000
 /* Nodes may send health events until they hear STOP. */
 #define LOG_STOP_GRACE_MS       200
 #define LOG_PATH_LENGTH         64
@@ -31,8 +31,9 @@ static QueueHandle_t log_queue;
 static SemaphoreHandle_t file_mutex;
 /* Guards health_admission_open and the corresponding queue insertion. */
 static SemaphoreHandle_t health_admission_mutex;
-static FILE *log_file;
-static FILE *utc_file;
+static int log_fd = -1;
+static int utc_fd = -1;
+static uint32_t records_saved;
 static char utc_path[LOG_PATH_LENGTH + 8];
 typedef struct { can_message_t message; int64_t utc_ms; } queued_sample_t;
 static char log_path[LOG_PATH_LENGTH];
@@ -40,6 +41,7 @@ static volatile logger_state_t state = LOGGER_IDLE;
 static volatile TickType_t stop_tick;
 static bool health_admission_open;
 static atomic_uint queue_drops;
+static atomic_uint write_drops;
 
 bool data_logger_valid_filename(const char *filename)
 {
@@ -109,7 +111,7 @@ static void choose_default_log_path(char *path, size_t path_size)
 
 data_logger_start_result_t data_logger_prepare(const char *filename)
 {
-    if (state != LOGGER_IDLE || log_file) {
+    if (state != LOGGER_IDLE || log_fd >= 0) {
         ESP_LOGW(TAG, "Logger is already active or prepared");
         return DATA_LOGGER_START_ACTIVE;
     }
@@ -135,23 +137,16 @@ data_logger_start_result_t data_logger_prepare(const char *filename)
     if (xSemaphoreTake(file_mutex, portMAX_DELAY) != pdTRUE) {
         return DATA_LOGGER_START_OPEN_FAILED;
     }
-    int log_fd = open(candidate_path, O_WRONLY | O_CREAT | O_EXCL, 0666);
-    log_file = log_fd >= 0 ? fdopen(log_fd, "wb") : NULL;
-    if (!log_file && log_fd >= 0) close(log_fd);
-    int utc_fd = log_file
-               ? open(candidate_utc_path, O_WRONLY | O_CREAT | O_EXCL, 0666)
-               : -1;
-    bool utc_created = (utc_fd >= 0);
-    utc_file = utc_fd >= 0 ? fdopen(utc_fd, "wb") : NULL;
-    if (!utc_file && utc_fd >= 0) close(utc_fd);
+    int flags = O_WRONLY | O_CREAT | O_EXCL | O_APPEND;
+    log_fd = open(candidate_path, flags, 0666);
+    utc_fd = log_fd >= 0 ? open(candidate_utc_path, flags, 0666) : -1;
     int open_error = errno;
-    if (log_file && !utc_file) {
-        fclose(log_file);
-        log_file = NULL;
+    if (log_fd >= 0 && utc_fd < 0) {
+        close(log_fd);
+        log_fd = -1;
         unlink(candidate_path);
-        if (utc_created) unlink(candidate_utc_path);
     }
-    if (!log_file) {
+    if (log_fd < 0) {
         xSemaphoreGive(file_mutex);
         ESP_LOGE(TAG, "Cannot open %s", candidate_path);
         return open_error == EEXIST ? DATA_LOGGER_START_EXISTS
@@ -159,6 +154,7 @@ data_logger_start_result_t data_logger_prepare(const char *filename)
     }
     snprintf(log_path, sizeof(log_path), "%s", candidate_path);
     snprintf(utc_path, sizeof(utc_path), "%s", candidate_utc_path);
+    records_saved = 0;
     xSemaphoreGive(file_mutex);
     return DATA_LOGGER_START_OK;
 }
@@ -172,7 +168,7 @@ void data_logger_clear_queue(void)
 
 void data_logger_start(void)
 {
-    configASSERT(state == LOGGER_IDLE && log_file && utc_file);
+    configASSERT(state == LOGGER_IDLE && log_fd >= 0 && utc_fd >= 0);
     xSemaphoreTake(health_admission_mutex, portMAX_DELAY);
     health_admission_open = true;
     state = LOGGER_RUNNING;
@@ -200,7 +196,7 @@ data_logger_rename_result_t data_logger_rename(const char *old_filename,
     snprintf(old_utc_path, sizeof(old_utc_path), "%s.utc", old_path);
     snprintf(new_utc_path, sizeof(new_utc_path), "%s.utc", new_path);
 
-    if ((state != LOGGER_IDLE || log_file) &&
+    if ((state != LOGGER_IDLE || log_fd >= 0) &&
         (strcmp(old_path, log_path) == 0 || strcmp(new_path, log_path) == 0)) {
         xSemaphoreGive(file_mutex);
         return DATA_LOGGER_RENAME_ACTIVE;
@@ -286,7 +282,10 @@ bool data_logger_enqueue_health(const can_message_t *message)
 
 logger_state_t data_logger_state(void) { return state; }
 const char *data_logger_path(void) { return log_path[0] ? log_path : "none"; }
-uint32_t data_logger_drop_count(void) { return atomic_load(&queue_drops); }
+uint32_t data_logger_drop_count(void)
+{
+    return atomic_load(&queue_drops) + atomic_load(&write_drops);
+}
 
 const char *data_logger_state_name(void)
 {
@@ -294,92 +293,90 @@ const char *data_logger_state_name(void)
            state == LOGGER_STOPPING ? "stopping" : "idle";
 }
 
+/** @brief Close both log files. Call with file_mutex held. */
+static void close_files(void)
+{
+    if (log_fd >= 0) close(log_fd);
+    if (utc_fd >= 0) close(utc_fd);
+    log_fd = -1;
+    utc_fd = -1;
+}
+
 /**
- * @brief Set HEALTH_SD_WRITE if a log or UTC file was lost during a run.
+ * @brief Reopen both log files and cut them back to the saved records.
  *
  * Call with file_mutex held.
+ *
+ * @return false if either file could not be reopened or cut; both are then closed.
  */
-static void update_sd_fault(void)
+static bool reopen_files(void)
 {
-    node_health_set(HEALTH_SD_WRITE, state != LOGGER_IDLE && (!log_file || !utc_file));
+    close_files();
+    log_fd = open(log_path, O_WRONLY | O_APPEND);
+    utc_fd = log_fd >= 0 ? open(utc_path, O_WRONLY | O_APPEND) : -1;
+    /* Commit the .bin cut before the .utc grows again, or a power cut can pair cut
+     * .bin records with newer UTC entries. */
+    if (log_fd >= 0 && utc_fd >= 0 &&
+        ftruncate(log_fd, (off_t)records_saved * 16) == 0 && fsync(log_fd) == 0 &&
+        ftruncate(utc_fd, (off_t)records_saved * 8) == 0) {
+        return true;
+    }
+    close_files();
+    return false;
 }
 
 /**
- * @brief Append records to the .bin file and their UTC times to the .utc file.
+ * @brief Append and sync one block to the .utc, then to the .bin, so every saved
+ * .bin record has its UTC entry.
  *
- * The .utc must stay aligned with the .bin, so a failed .utc write or short
- * .bin write closes the .utc for the rest of the run. A failed flush counts
- * HEALTH_SD_WRITE.
+ * Call with file_mutex held.
  *
- * @param records CAN ID and data per record.
- * @param utc UTC time in ms per record.
- * @param count Number of records.
- * @return false if the .bin write was short or the file is gone.
+ * @return false on any short write or failed sync.
  */
-static bool write_records(const int64_t records[][2], const int64_t *utc, size_t count)
+static bool write_block(const int64_t records[][2], const int64_t *utc, size_t count)
 {
-    size_t bytes = count * sizeof(records[0]);
-    if (xSemaphoreTake(file_mutex, portMAX_DELAY) != pdTRUE) return false;
-    size_t written = log_file ? fwrite(records, 1, bytes, log_file) : 0;
-    /* Only append UTC for complete records successfully written to the binary. */
-    size_t complete = written / sizeof(records[0]);
-    if (utc_file && (fwrite(utc, sizeof(*utc), complete, utc_file) != complete ||
-                     fflush(utc_file) != 0)) {
-        ESP_LOGE(TAG, "UTC sidecar write failed; later UTC values unavailable");
-        fclose(utc_file);
-        utc_file = NULL;
-    }
-    if (written != bytes && utc_file) {
-        /* A partial binary record makes later positional metadata unsafe. */
-        fclose(utc_file);
-        utc_file = NULL;
-    }
-    if (log_file && fflush(log_file) != 0) {
-        node_health_count(HEALTH_SD_WRITE, 1, 0, ESP_FAIL);
-    }
-    update_sd_fault();
-    xSemaphoreGive(file_mutex);
-    if (written != bytes) {
-        /* Counted by the SD_WRITE onset: a short write closes the UTC file. */
-        ESP_LOGE(TAG, "SD write failed (%u/%u bytes)",
-                 (unsigned)written, (unsigned)bytes);
-        return false;
-    }
-    return true;
+    ssize_t utc_bytes = (ssize_t)(count * sizeof(*utc));
+    ssize_t bin_bytes = (ssize_t)(count * sizeof(records[0]));
+    return write(utc_fd, utc, utc_bytes) == utc_bytes && fsync(utc_fd) == 0 &&
+           write(log_fd, records, bin_bytes) == bin_bytes && fsync(log_fd) == 0;
 }
 
 /**
- * @brief Close and reopen both log files so the card saves their size.
+ * @brief Save one block, retrying once after reopening the files.
  *
- * @return false if the .bin could not be reopened.
+ * A block that still fails is cut off both files and counted as dropped. A failure
+ * sets HEALTH_SD_WRITE until a block is saved again.
  */
-static bool checkpoint_file(void)
+static void save_records(const int64_t records[][2], const int64_t *utc, size_t count)
 {
-    if (xSemaphoreTake(file_mutex, portMAX_DELAY) != pdTRUE) return false;
-    if (log_file) fclose(log_file);
-    log_file = fopen(log_path, "ab");
-    if (utc_file) {
-        fclose(utc_file);
-        utc_file = fopen(utc_path, "ab");
-        if (!utc_file) ESP_LOGE(TAG, "Cannot reopen UTC sidecar");
+    xSemaphoreTake(file_mutex, portMAX_DELAY);
+    bool saved = write_block(records, utc, count);
+    if (!saved) {
+        /* FatFs refuses every later write to a file after one error until it is reopened. */
+        ESP_LOGW(TAG, "SD write failed; reopening %s", log_path);
+        node_health_set(HEALTH_SD_WRITE, true);
+        saved = reopen_files() && write_block(records, utc, count);
     }
-    update_sd_fault();
+    if (saved) {
+        records_saved += count;
+    } else {
+        ESP_LOGE(TAG, "SD write failed; %u records lost", (unsigned)count);
+        atomic_fetch_add(&write_drops, count);
+        for (size_t i = 0; i < count; i++) {
+            node_health_count(HEALTH_SAMPLES_DROPPED, 1, (uint32_t)records[i][0], ESP_FAIL);
+        }
+        (void)reopen_files();
+    }
+    node_health_set(HEALTH_SD_WRITE, !saved);
     xSemaphoreGive(file_mutex);
-    if (!log_file) {
-        ESP_LOGE(TAG, "Checkpoint saved, but cannot reopen %s", log_path);
-        return false;
-    }
-    ESP_LOGI(TAG, "Checkpoint saved; file closed and reopened: %s", log_path);
-    return true;
 }
 
 /**
  * @brief Task that writes queued frames to the SD card.
  *
- * Writes 100-record blocks. Every 15 s it writes what it has and calls
- * checkpoint_file(), keeping unwritten records if the write fails. After stop,
- * once the queue is empty and 200 ms have passed, it writes the rest, closes
- * both files and sets LOGGER_IDLE.
+ * Writes 100-record blocks, and any partial block every 1 s. After stop, once
+ * the queue is empty and 200 ms have passed, it writes the rest, closes both
+ * files and sets LOGGER_IDLE.
  */
 static void writer_task(void *argument)
 {
@@ -388,11 +385,11 @@ static void writer_task(void *argument)
     int64_t utc[LOG_RECORDS_PER_BLOCK];
     size_t count = 0;
     queued_sample_t sample;
-    TickType_t last_checkpoint = xTaskGetTickCount();
+    TickType_t last_flush = xTaskGetTickCount();
     while (true) {
         if (state == LOGGER_IDLE) {
             vTaskDelay(pdMS_TO_TICKS(100));
-            last_checkpoint = xTaskGetTickCount();
+            last_flush = xTaskGetTickCount();
             continue;
         }
         if (xQueueReceive(log_queue, &sample, pdMS_TO_TICKS(100)) == pdTRUE) {
@@ -400,16 +397,16 @@ static void writer_task(void *argument)
             records[count][1] = (int64_t)sample.message.data;
             utc[count] = sample.utc_ms;
             if (++count == LOG_RECORDS_PER_BLOCK) {
-                (void)write_records(records, utc, count);
+                save_records(records, utc, count);
                 count = 0;
             }
         }
         TickType_t now = xTaskGetTickCount();
         if (state == LOGGER_RUNNING &&
-            now - last_checkpoint >= pdMS_TO_TICKS(LOG_FLUSH_INTERVAL_MS)) {
-            if (count > 0 && write_records(records, utc, count)) count = 0;
-            (void)checkpoint_file();
-            last_checkpoint = now;
+            now - last_flush >= pdMS_TO_TICKS(LOG_FLUSH_INTERVAL_MS)) {
+            if (count > 0) save_records(records, utc, count);
+            count = 0;
+            last_flush = now;
         }
         bool close_log = false;
         if (state == LOGGER_STOPPING &&
@@ -422,17 +419,11 @@ static void writer_task(void *argument)
             xSemaphoreGive(health_admission_mutex);
         }
         if (close_log) {
-            if (count > 0) {
-                (void)write_records(records, utc, count);
-                count = 0;
-            }
-            if (xSemaphoreTake(file_mutex, portMAX_DELAY) == pdTRUE) {
-                if (log_file) fclose(log_file);
-                log_file = NULL;
-                if (utc_file) fclose(utc_file);
-                utc_file = NULL;
-                xSemaphoreGive(file_mutex);
-            }
+            if (count > 0) save_records(records, utc, count);
+            count = 0;
+            xSemaphoreTake(file_mutex, portMAX_DELAY);
+            close_files();
+            xSemaphoreGive(file_mutex);
             state = LOGGER_IDLE;
             node_health_set(HEALTH_SD_WRITE, false);
             ESP_LOGI(TAG, "Logging stopped and file closed");

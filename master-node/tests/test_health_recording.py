@@ -32,7 +32,7 @@ class HealthRecordingTests(unittest.TestCase):
 #define ESP_LOGI(...) ((void)0)
 #define ESP_LOGW(...) ((void)0)
 #define LOG_RECORDS_PER_BLOCK 100
-#define LOG_FLUSH_INTERVAL_MS 15000
+#define LOG_FLUSH_INTERVAL_MS 1000
 #define LOG_STOP_GRACE_MS 200
 typedef uint32_t TickType_t;
 typedef struct { can_message_t message; int64_t utc_ms; } queued_sample_t;
@@ -40,7 +40,7 @@ static logger_state_t state = LOGGER_IDLE;
 static bool health_admission_open, health_locked, full, probe_close;
 static atomic_uint queue_drops;
 static int health_admission_mutex = 1, file_mutex = 2, log_queue = 3;
-static FILE *log_file, *utc_file;
+static int log_fd = -1, utc_fd = -1;
 static TickType_t tick, stop_tick;
 static queued_sample_t queue[8];
 static unsigned queued, saved, refused_after_close;
@@ -90,22 +90,21 @@ static void node_health_count(health_code_t code, unsigned n, uint32_t id, int e
 static void node_health_set(health_code_t code, bool active) {
     assert(code == HEALTH_SD_WRITE && !active);
 }
-static bool write_records(const int64_t records[][2], const int64_t *utc, size_t count) {
+static void save_records(const int64_t records[][2], const int64_t *utc, size_t count) {
     assert(!health_admission_open && tick - stop_tick >= LOG_STOP_GRACE_MS);
     for (size_t i = 0; i < count; i++) {
         assert(utc[i] == 123000 + (uint32_t)((uint64_t)records[i][1] >> 32));
         saved_ids[saved++] = (uint32_t)records[i][0];
     }
-    return true;
 }
-static bool checkpoint_file(void) { assert(false); return false; }
+static void close_files(void) { log_fd = -1; utc_fd = -1; }
 ''' + start + admission + writer + r'''
 int main(void) {
     can_message_t health = {.id = CAN_ID_NODE_EVENT_BASE + 8, .dlc = 8, .data = UINT64_C(42) << 32};
     can_message_t aim = {.id = CAN_ID_AIM_RPM, .dlc = 8, .data = UINT64_C(43) << 32};
     for (unsigned session = 0; session < 2; session++) {
         assert(state == LOGGER_IDLE && !health_admission_open);
-        log_file = tmpfile(); utc_file = tmpfile(); assert(log_file && utc_file);
+        log_fd = 3; utc_fd = 4;
         assert(!data_logger_enqueue_health(&health)); /* prepared, not started */
         data_logger_clear_queue();
         assert(!data_logger_enqueue_health(&health));
@@ -122,7 +121,7 @@ int main(void) {
         probe_close = true;
         if (!setjmp(done)) writer_task(NULL);
         assert(state == LOGGER_IDLE && !health_admission_open && queued == 0);
-        assert(!log_file && !utc_file && !health_locked);
+        assert(log_fd < 0 && utc_fd < 0 && !health_locked);
         assert(!data_logger_enqueue_health(&health));
         assert(saved == (session + 1) * 3 && refused_after_close == session + 1);
         assert(saved_ids[session*3] == health.id && saved_ids[session*3+1] == aim.id &&

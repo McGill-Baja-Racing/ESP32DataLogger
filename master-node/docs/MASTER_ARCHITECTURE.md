@@ -65,7 +65,7 @@ using the current anchor; it does not replace the source elapsed timestamp.
 
 Stop is accepted only while running. It ends live viewing and requests logger stop, then clears recording/monitoring state and broadcasts STOP. The writer drains already accepted data asynchronously before becoming idle. Repeated API start/stop requests conflict with the current lifecycle state, even though node-level commands are idempotent.
 
-Default naming can wait up to three seconds for GPS UTC. [Logger guide](../src/logger/README.md) explains buffering, checkpoints, and companion failure behavior.
+Default naming can wait up to three seconds for GPS UTC. [Logger guide](../src/logger/README.md) explains buffering, syncing, and companion failure behavior.
 
 ## Time and liveness
 
