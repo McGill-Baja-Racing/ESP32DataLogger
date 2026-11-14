@@ -16,7 +16,6 @@ Connect to the open `BajaDAQ` network and open `http://192.168.4.1` for controls
 |---|---|
 | `MasterStable` | Normal master firmware with CAN |
 | `Master` | Same current configuration as `MasterStable`; base environment |
-| `MasterNoCAN` | GPS/SD/web operation without initializing CAN or monitoring remote nodes |
 
 With PlatformIO installed, from the repository root and without a board:
 

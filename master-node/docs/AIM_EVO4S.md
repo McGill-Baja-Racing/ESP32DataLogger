@@ -30,7 +30,7 @@ Each valid frame during its active session becomes master-generated record `0x70
 
 The master timestamps CAN reception before queueing using its uptime clock. This is arrival time, not AiM sample time; it includes unknown measurement/filtering and output scheduling delays. There is no assumed time correction or synchronization of the AiM clock. Measure relative delay before claiming accuracy.
 
-`/api/status` includes `aim` with state (`unavailable`, `waiting`, `receiving`, `stale`), `last_frame_age_ms` (-1 before reception), `valid_frames`, `malformed_frames`, and `counter_discontinuities`. Status and counters last until master reboot. Freshness expires at 500 ms without a valid frame; malformed frames do not refresh it. Counter jumps/repeats/restarts are discontinuities, not a proven loss count; wrap is normal. The live API marks stale AiM samples and the browser labels the last value stale.
+`/api/status` includes `aim` with state (`waiting`, `receiving`, `stale`), `last_frame_age_ms` (-1 before reception), `valid_frames`, `malformed_frames`, and `counter_discontinuities`. Status and counters last until master reboot. Freshness expires at 500 ms without a valid frame; malformed frames do not refresh it. Counter jumps/repeats/restarts are discontinuities, not a proven loss count; wrap is normal. The live API marks stale AiM samples and the browser labels the last value stale.
 
 Master build flag `-D AIM_OUTPUT_RATE_HZ=100` changes nominal live metadata after 100 Hz verification; default is 20. Reception accepts either rate independently of that flag. No sensor-node firmware change is required.
 

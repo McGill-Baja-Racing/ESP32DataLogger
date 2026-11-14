@@ -18,6 +18,6 @@ bool aim_adapter_receive(const can_message_t *frame, can_message_t *sample)
 void aim_adapter_status(aim_status_t *status)
 {
     portENTER_CRITICAL(&lock);
-    *status = aim_tracker_status(&tracker, esp_timer_get_time(), MASTER_CAN_ENABLED);
+    *status = aim_tracker_status(&tracker, esp_timer_get_time());
     portEXIT_CRITICAL(&lock);
 }
