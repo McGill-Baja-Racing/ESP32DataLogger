@@ -22,6 +22,8 @@ struct Firmware {
     chip: &'static str,
     /// Each binary, and the defines its C is built with.
     binaries: &'static [(&'static str, &'static str)],
+    /// C files outside `src/`, from the repository root.
+    shared: &'static [&'static str],
 }
 
 const FIRMWARE: [Firmware; 4] = [
@@ -53,28 +55,45 @@ const FIRMWARE: [Firmware; 4] = [
                 "adc",
                 "-DNODE_ID=6 -DSENSOR_SERIAL_TEST=0 -DNODE_FIXED_ADC_CONFIG=1",
             ),
+            (
+                "front-shock",
+                "-DNODE_ID=7 -DSENSOR_SERIAL_TEST=0 -DNODE_FIXED_FRONT_SHOCK_CONFIG=1",
+            ),
+            (
+                "rear-shock",
+                "-DNODE_ID=8 -DSENSOR_SERIAL_TEST=0 -DNODE_FIXED_REAR_SHOCK_CONFIG=1",
+            ),
         ],
+        shared: &["protocol/health_counters.c"],
     },
     Firmware {
         package: "engine-rpm-sim",
         chip: "esp32c3",
         binaries: &[("engine-rpm-sim", "")],
+        shared: &[],
     },
     Firmware {
         package: "wheel-rpm-sim",
         chip: "esp32c3",
         binaries: &[("wheel-rpm-sim", "")],
+        shared: &[],
     },
     Firmware {
         package: "master-node",
         chip: "esp32p4",
         binaries: &[("master", ""), ("master-no-can", "-DMASTER_CAN_ENABLED=0")],
+        shared: &["protocol/health_counters.c"],
     },
 ];
 
 fn main() -> Result<(), Box<dyn Error>> {
     let package = env::var("CARGO_PKG_NAME")?;
-    let Firmware { chip, binaries, .. } = FIRMWARE
+    let Firmware {
+        chip,
+        binaries,
+        shared,
+        ..
+    } = FIRMWARE
         .into_iter()
         .find(|firmware| firmware.package == package)
         .ok_or("FIRMWARE lists every package that uses this build script")?;
@@ -120,6 +139,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         format!("-I{}", firmware.display()),
         format!("-I{}", repo.display()),
     ]);
+    let shared: Vec<_> = shared.iter().map(|file| repo.join(file)).collect();
     let mut entries = Vec::new();
     for (index, &(binary, defines)) in binaries.iter().enumerate() {
         let defines: Vec<_> = defines.split_whitespace().map(String::from).collect();
@@ -127,6 +147,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             &clang,
             &[&flags[..], &defines].concat(),
             &src,
+            &shared,
             &out.join(binary),
             binary,
         )?;
@@ -145,12 +166,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-/// Compiles the C in `src` with `flags` into `out` and links the objects into `binary`. Returns
-/// the compile commands, as `compile_commands.json` entries.
+/// Compiles the C in `src` and the `shared` files with `flags` into `out`, and links the objects
+/// into `binary`. Returns the compile commands, as `compile_commands.json` entries.
 fn compile(
     clang: &str,
     flags: &[String],
     src: &Path,
+    shared: &[PathBuf],
     out: &Path,
     binary: &str,
 ) -> Result<Vec<String>, Box<dyn Error>> {
@@ -162,13 +184,20 @@ fn compile(
     let mut files = Vec::new();
     c_files(src, &mut files)?;
     files.sort();
+    files.extend_from_slice(shared);
     let mut entries = Vec::new();
     fs::create_dir_all(out)?;
     let stamp = out.join("flags");
     let current = format!("{clang} {flags:?}");
     let flags_changed = fs::read_to_string(&stamp).ok().as_deref() != Some(&current);
     for file in &files {
-        let object = out.join(file.strip_prefix(src)?).with_extension("o");
+        let object = match file.strip_prefix(src) {
+            Ok(file) => out.join(file),
+            Err(_shared) => out
+                .join("shared")
+                .join(file.file_name().ok_or("a file has a name")?),
+        }
+        .with_extension("o");
         let rule = object.with_extension("d");
         let [file_arg, object_arg] = [file, &object].map(|path| path.display().to_string());
         // -MD doesn't list the files an assembly file's `.incbin` reads. C headers have no

@@ -35,6 +35,16 @@ name = "adc"
 test = false
 bench = false
 
+[[bin]]
+name = "front-shock"
+test = false
+bench = false
+
+[[bin]]
+name = "rear-shock"
+test = false
+bench = false
+
 [dependencies]
 kernel = { package = "baja-kernel", path = "../kernel" }
 # Its build script passes the clang arguments to ours.
