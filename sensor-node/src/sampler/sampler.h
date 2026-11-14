@@ -10,7 +10,6 @@
  * A sensor whose init fails does not fail this call; it is never read.
  *
  * @retval ESP_OK                Sampler is ready; samples are sent only after sampler_start().
- * @retval ESP_ERR_INVALID_SIZE  The registry has more than MAX_SENSORS sensors.
  * @retval ESP_ERR_NO_MEM        The queue or a task could not be created.
  */
 esp_err_t sampler_init(void);
