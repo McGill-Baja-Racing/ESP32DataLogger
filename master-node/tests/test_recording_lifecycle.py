@@ -10,7 +10,7 @@ class RecordingLifecycleTests(unittest.TestCase):
     def test_start_stop_boundaries(self):
         source = (ROOT / 'src/app/app_control.c').read_text()
         lifecycle = source[source.index('app_control_result_t app_control_start_logging('):
-                           source.index('app_control_result_t app_control_start_live_data(')]
+                           source.index('app_control_result_t app_control_claim_firmware(')]
         harness = r'''
 #include <assert.h>
 #include <string.h>
@@ -25,6 +25,9 @@ static bool locked, log_pending, can_pending;
 static unsigned step, resets;
 static logger_state_t state=LOGGER_IDLE;
 static data_logger_start_result_t prepare_result=DATA_LOGGER_START_OK;
+static bool firmware_claimed;
+bool firmware_update_on_trial(void) { return false; }
+bool firmware_update_node_protocol_differs(void) { return false; }
 static int xSemaphoreTake(int mutex,int wait) { (void)wait;assert(mutex && !locked);locked=true;return pdTRUE; }
 static void xSemaphoreGive(int mutex) { assert(mutex && locked);locked=false; }
 logger_state_t data_logger_state(void) { return state; }
