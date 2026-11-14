@@ -7,7 +7,7 @@ use esp_hal::{
     twai::{BaudRate, TwaiConfiguration, TwaiMode},
 };
 
-use super::{ACK_SLOT, Events, Status};
+use super::{Events, Status};
 
 /// Leaves the node in reset mode until `enable`.
 ///
@@ -74,11 +74,28 @@ pub fn abort_tx() {
     TWAI0::regs().cmd().write(|w| w.abort_tx().set_bit());
 }
 
-/// Whether the last bus error was a transmitted frame nobody acknowledged. Reading the capture
-/// also re-arms it.
-pub fn ack_error() -> bool {
+/// The type and bit position of the last bus error. Reading the capture also re-arms it.
+pub fn error_capture() -> (u8, u8) {
     let error = TWAI0::regs().err_code_cap().read();
-    error.ecc_segment().bits() == ACK_SLOT && error.ecc_direction().bit_is_clear()
+    (error.ecc_type().bits(), error.ecc_segment().bits())
+}
+
+/// Whether the node is in reset mode, where the acceptance filter can change.
+pub fn stopped() -> bool {
+    TWAI0::regs().mode().read().reset_mode().bit_is_set()
+}
+
+/// Sets one filter over the frame's first 32 bits. A set `mask` bit must match `code`.
+pub fn set_filter(code: u32, mask: u32) {
+    let twai = TWAI0::regs();
+    twai.mode().modify(|_, w| w.rx_filter_mode().set_bit());
+    // The hardware's mask marks the bits it ignores.
+    let bytes = code.to_be_bytes().into_iter().chain((!mask).to_be_bytes());
+    for (index, byte) in bytes.enumerate() {
+        // SAFETY: in reset mode the data registers hold the acceptance code and mask.
+        twai.data(index)
+            .write(|w| unsafe { w.tx_byte().bits(byte) });
+    }
 }
 
 pub fn clear_overrun() {

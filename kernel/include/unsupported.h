@@ -6,6 +6,17 @@
 
 #include "../sys/wrapper.h"
 
+// One core runs interrupts and tasks under the same critical section, so the check for an
+// interrupt has nothing to choose between.
+#undef portENTER_CRITICAL_SAFE
+#undef portEXIT_CRITICAL_SAFE
+#define portENTER_CRITICAL_SAFE(mux) portENTER_CRITICAL(mux)
+#define portEXIT_CRITICAL_SAFE(mux) portEXIT_CRITICAL(mux)
+
+// esp-hal's linker script keeps this section through every reset but power-on.
+#undef RTC_NOINIT_ATTR
+#define RTC_NOINIT_ATTR __attribute__((section(".rtc_fast.persistent")))
+
 #undef xQueueSendToFront
 #undef xQueueSendToFrontFromISR
 #undef xQueueOverwrite
@@ -23,8 +34,9 @@
 #pragma GCC poison queueSEND_TO_FRONT queueOVERWRITE queueQUEUE_TYPE_BINARY_SEMAPHORE
 #pragma GCC poison queueQUEUE_TYPE_COUNTING_SEMAPHORE queueQUEUE_TYPE_RECURSIVE_MUTEX
 #pragma GCC poison enable_self_test enable_loopback enable_listen_only no_receive_rtr
-#pragma GCC poison quanta_clk_out bus_off_indicator fail_retry_cnt timestamp_resolution_hz
-#pragma GCC poison data_timing sp_permill ssp_permill on_tx_done on_error intr_priority
+#pragma GCC poison quanta_clk_out bus_off_indicator timestamp_resolution_hz
+#pragma GCC poison data_timing sp_permill ssp_permill on_tx_done intr_priority
+#pragma GCC poison id_list num_of_ids is_ext no_classic no_fd dual_filter
 #pragma GCC poison backup_before_sleep allow_pd sleep_allow_pd fdf brs
 #if CONFIG_IDF_TARGET_ESP32C3
 #pragma GCC poison ADC_UNIT_2 ADC_ULP_MODE_FSM ADC_ULP_MODE_RISCV ADC_ULP_MODE_LP_CORE
@@ -62,9 +74,14 @@
 #pragma GCC poison ssid_hidden beacon_interval pairwise_cipher ftm_responder pmf_cfg sae_pwe_h2e
 #pragma GCC poison csa_count dtim_period transition_disable sae_ext bss_max_idle_cfg gtk_rekey_interval
 #pragma GCC poison core_id task_caps max_req_hdr_len max_uri_len ctrl_port max_open_sockets
-#pragma GCC poison max_resp_headers backlog_conn lru_purge_enable recv_wait_timeout send_wait_timeout
+#pragma GCC poison max_resp_headers backlog_conn recv_wait_timeout send_wait_timeout
 #pragma GCC poison global_user_ctx global_user_ctx_free_fn global_transport_ctx
-#pragma GCC poison global_transport_ctx_free_fn enable_so_linger linger_timeout keep_alive_enable
-#pragma GCC poison keep_alive_idle keep_alive_interval keep_alive_count open_fn close_fn uri_match_fn
+#pragma GCC poison global_transport_ctx_free_fn enable_so_linger linger_timeout open_fn close_fn
+#pragma GCC poison uri_match_fn
 #pragma GCC poison user_ctx is_websocket handle_ws_control_frames supported_subprotocol
+#pragma GCC poison HTTPD_501_METHOD_NOT_IMPLEMENTED HTTPD_505_VERSION_NOT_SUPPORTED
+#pragma GCC poison HTTPD_400_BAD_REQUEST HTTPD_401_UNAUTHORIZED HTTPD_403_FORBIDDEN
+#pragma GCC poison HTTPD_404_NOT_FOUND HTTPD_405_METHOD_NOT_ALLOWED HTTPD_408_REQ_TIMEOUT
+#pragma GCC poison HTTPD_411_LENGTH_REQUIRED HTTPD_413_CONTENT_TOO_LARGE HTTPD_414_URI_TOO_LONG
+#pragma GCC poison HTTPD_431_REQ_HDR_FIELDS_TOO_LARGE
 #endif

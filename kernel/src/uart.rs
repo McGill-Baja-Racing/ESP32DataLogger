@@ -1,5 +1,5 @@
-//! ESP-IDF's UART driver on esp-hal's `Uart`. Only what the firmware uses: UART1 receiving 8N1
-//! without flow control into a byte queue.
+//! ESP-IDF's UART driver on esp-hal's `Uart`. Only what the firmware uses: UART1 at 8N1 without
+//! flow control, receiving into a byte queue and sending straight to the FIFO.
 
 use alloc::sync::Arc;
 use core::{
@@ -26,11 +26,12 @@ use sys::{
 
 use crate::{
     rtos,
-    system::{self, c_slice_mut},
+    system::{self, c_slice, c_slice_mut},
 };
 
 struct Port {
     uart: Uart<'static, Blocking>,
+    config: Config,
     /// One byte per item. A task that is reading holds its own reference, so deleting the driver
     /// can't free the queue under it.
     queue: Arc<QueueHandle>,
@@ -48,7 +49,7 @@ fn rx_interrupts() -> <UartInterrupt as BitOr>::Output {
 fn interrupt() {
     critical_section::with(|cs| {
         let mut port = PORT.borrow_ref_mut(cs);
-        let Some(Port { uart, queue }) = port.as_mut() else {
+        let Some(Port { uart, queue, .. }) = port.as_mut() else {
             return;
         };
         let mut bytes = [0_u8; 64];
@@ -101,7 +102,11 @@ fn uart_driver_install(
         uart.set_interrupt_handler(interrupt);
         uart.listen(rx_interrupts());
         let queue = Arc::new(QueueHandle::new(capacity, 1));
-        *port = Some(Port { uart, queue });
+        *port = Some(Port {
+            uart,
+            config: Config::default(),
+            queue,
+        });
         Ok(())
     })
 }
@@ -115,13 +120,34 @@ fn uart_param_config(uart_num: uart_port_t, uart_config: &uart_config_t) -> Resu
         "the kernel supports only UART1 at 8N1 without flow control"
     );
     let baudrate = u32::try_from(uart_config.baud_rate).map_err(|_negative| ESP_ERR_INVALID_ARG)?;
+    reconfigure(|config| config.with_baudrate(baudrate))
+}
+
+/// Applies `change` to the port's configuration.
+fn reconfigure(change: impl FnOnce(Config) -> Config) -> Result<(), esp_err_t> {
     critical_section::with(|cs| {
         let mut port = PORT.borrow_ref_mut(cs);
         let port = port.as_mut().ok_or(ESP_ERR_INVALID_STATE)?;
+        let config = change(port.config);
         port.uart
-            .apply_config(&Config::default().with_baudrate(baudrate))
-            .map_err(|_config| ESP_ERR_INVALID_ARG)
+            .apply_config(&config)
+            .map_err(|_config| ESP_ERR_INVALID_ARG)?;
+        port.config = config;
+        Ok(())
     })
+}
+
+#[export]
+fn uart_set_rx_full_threshold(uart_num: uart_port_t, threshold: c_int) -> Result<(), esp_err_t> {
+    assert!(
+        uart_num == uart_port_t::UART_NUM_1,
+        "the kernel supports only UART1"
+    );
+    let threshold = u16::try_from(threshold)
+        .ok()
+        .filter(|&threshold| threshold > 0 && i32::from(threshold) < SOC_UART_FIFO_LEN)
+        .ok_or(ESP_ERR_INVALID_ARG)?;
+    reconfigure(|config| config.with_rx(config.rx().with_fifo_full_threshold(threshold)))
 }
 
 #[export]
@@ -144,10 +170,18 @@ fn uart_set_pin(
     );
     critical_section::with(|cs| {
         let mut port = PORT.borrow_ref_mut(cs);
-        let Port { uart, queue } = port.take().ok_or(ESP_ERR_INVALID_STATE)?;
+        let Port {
+            uart,
+            config,
+            queue,
+        } = port.take().ok_or(ESP_ERR_INVALID_STATE)?;
         // SAFETY: C assigns pins, as in ESP-IDF; the firmware gives each GPIO to one driver.
         let uart = unsafe { uart.with_tx(AnyPin::steal(tx)).with_rx(AnyPin::steal(rx)) };
-        *port = Some(Port { uart, queue });
+        *port = Some(Port {
+            uart,
+            config,
+            queue,
+        });
         Ok(())
     })
 }
@@ -182,6 +216,54 @@ unsafe fn uart_read_bytes(
         .map_while(|byte| unsafe { queue.receive_with_deadline(byte, deadline) }.then_some(()))
         .count();
     c_int::try_from(count).unwrap_or(c_int::MAX)
+}
+
+/// Waits until every byte is in the FIFO, as ESP-IDF does without a TX buffer. Returns how many
+/// bytes were sent, or -1 if the driver isn't installed.
+#[export]
+unsafe fn uart_write_bytes(uart_num: uart_port_t, src: *const c_void, size: usize) -> c_int {
+    assert!(
+        uart_num == uart_port_t::UART_NUM_1,
+        "the kernel supports only UART1"
+    );
+    // SAFETY: C passes `size` bytes at `src`.
+    let Some(mut data) = (unsafe { c_slice(src.cast::<u8>(), size) }) else {
+        return -1;
+    };
+    while !data.is_empty() {
+        let written = critical_section::with(|cs| {
+            let mut port = PORT.borrow_ref_mut(cs);
+            let port = port.as_mut()?;
+            Some(port.uart.write(data).unwrap_or(0))
+        });
+        let Some(written) = written else {
+            return -1;
+        };
+        data = data.get(written..).unwrap_or_default();
+        if !data.is_empty() {
+            esp_radio_rtos_driver::usleep(1000);
+        }
+    }
+    c_int::try_from(size).unwrap_or(c_int::MAX)
+}
+
+/// Drops the bytes received but not read yet.
+#[export]
+fn uart_flush_input(uart_num: uart_port_t) -> Result<(), esp_err_t> {
+    assert!(
+        uart_num == uart_port_t::UART_NUM_1,
+        "the kernel supports only UART1"
+    );
+    critical_section::with(|cs| {
+        let mut port = PORT.borrow_ref_mut(cs);
+        let Port { uart, queue, .. } = port.as_mut().ok_or(ESP_ERR_INVALID_STATE)?;
+        let mut bytes = [0_u8; 64];
+        while uart.read_buffered(&mut bytes).is_ok_and(|count| count > 0) {}
+        let mut byte = 0_u8;
+        // SAFETY: `byte` holds one item of the queue's one-byte items.
+        while unsafe { queue.try_receive_from_isr(&raw mut byte, None) } {}
+        Ok(())
+    })
 }
 
 #[export]

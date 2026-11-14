@@ -2,7 +2,7 @@
 
 use alloc::{boxed::Box, vec::Vec};
 use core::{
-    cell::{Cell, UnsafeCell},
+    cell::{Cell, RefCell, UnsafeCell},
     ffi::{c_int, c_void},
     mem::MaybeUninit,
 };
@@ -172,13 +172,17 @@ unsafe fn xTaskCreatePinnedToCore(
     pdPASS
 }
 
-#[export]
 #[expect(
     clippy::cast_possible_truncation,
     reason = "wraps like FreeRTOS's tick count"
 )]
-fn xTaskGetTickCount() -> TickType_t {
+fn ticks() -> TickType_t {
     (rtos::now() / TICK_US) as TickType_t
+}
+
+#[export]
+fn xTaskGetTickCount() -> TickType_t {
+    ticks()
 }
 
 /// Only a task deleting itself; esp-rtos never returns from that.
@@ -203,6 +207,23 @@ fn vTaskDelay(ticks: TickType_t) {
     }
 }
 
+/// FreeRTOS's wrap-aware check: returns `pdFALSE` without waiting when the wake tick has passed.
+#[export]
+fn xTaskDelayUntil(previous: &mut TickType_t, increment: TickType_t) -> BaseType_t {
+    let now = ticks();
+    let wake = previous.wrapping_add(increment);
+    let wait = if now < *previous {
+        wake < *previous && wake > now
+    } else {
+        wake < *previous || wake > now
+    };
+    *previous = wake;
+    if wait {
+        rtos::usleep_until(deadline(wake.wrapping_sub(now)).unwrap_or(u64::MAX));
+    }
+    pd(wait)
+}
+
 /// FreeRTOS's mutexes are queues too.
 enum Queue {
     Items(Items),
@@ -214,6 +235,27 @@ struct Items {
     item_size: usize,
     /// esp-rtos queues report only how many items they hold.
     length: usize,
+    /// The front item, once `xQueuePeek` took it out of `handle`, which has no peek. It still
+    /// counts as queued, so the queue can briefly hold one item more than `length`.
+    peeked: Mutex<RefCell<Option<Box<[u8]>>>>,
+}
+
+impl Items {
+    fn peeked(&self) -> usize {
+        critical_section::with(|cs| self.peeked.borrow_ref(cs).is_some().into())
+    }
+
+    /// # Safety
+    ///
+    /// `buffer` has room for one item.
+    unsafe fn take_peeked(&self, buffer: *mut c_void) -> bool {
+        let Some(item) = critical_section::with(|cs| self.peeked.borrow_ref_mut(cs).take()) else {
+            return false;
+        };
+        // SAFETY: the caller gives room for one item, which `item` holds.
+        unsafe { core::ptr::copy_nonoverlapping(item.as_ptr(), buffer.cast(), item.len()) };
+        true
+    }
 }
 
 sys::c_handle!(Queue, sys::QueueHandle_t);
@@ -242,6 +284,7 @@ fn xQueueGenericCreate(
         handle: QueueHandle::new(length, item_size),
         item_size,
         length,
+        peeked: Mutex::new(RefCell::new(None)),
     });
     Some(Box::leak(Box::new(new)))
 }
@@ -314,14 +357,43 @@ fn vPortYieldFromISR() {
 
 #[export]
 unsafe fn xQueueReceive(queue: &Queue, buffer: *mut c_void, ticks: TickType_t) -> BaseType_t {
+    let items = queue.items();
     // SAFETY: `buffer` has room for one item of the queue's item size.
     let received = unsafe {
-        queue
-            .items()
-            .handle
-            .receive_with_deadline(buffer.cast(), deadline(ticks))
+        items.take_peeked(buffer)
+            || items
+                .handle
+                .receive_with_deadline(buffer.cast(), deadline(ticks))
     };
     pd(received)
+}
+
+/// Supports one peeking task: two could each take an item out of `handle`.
+#[export]
+unsafe fn xQueuePeek(queue: &Queue, buffer: *mut c_void, ticks: TickType_t) -> BaseType_t {
+    let items = queue.items();
+    if items.peeked() == 0 {
+        let mut item = alloc::vec![0_u8; items.item_size].into_boxed_slice();
+        // SAFETY: `item` holds one item.
+        if !unsafe {
+            items
+                .handle
+                .receive_with_deadline(item.as_mut_ptr(), deadline(ticks))
+        } {
+            return pdFALSE;
+        }
+        critical_section::with(|cs| *items.peeked.borrow_ref_mut(cs) = Some(item));
+    }
+    critical_section::with(|cs| {
+        let peeked = items.peeked.borrow_ref(cs);
+        let Some(item) = peeked.as_ref() else {
+            // A receive or reset took it since.
+            return pdFALSE;
+        };
+        // SAFETY: `buffer` has room for one item of the queue's item size.
+        unsafe { core::ptr::copy_nonoverlapping(item.as_ptr(), buffer.cast(), item.len()) };
+        pdTRUE
+    })
 }
 
 #[export]
@@ -332,7 +404,9 @@ unsafe fn xQueueReceive(queue: &Queue, buffer: *mut c_void, ticks: TickType_t) -
 fn uxQueueSpacesAvailable(queue: &Queue) -> UBaseType_t {
     // Not atomic with a receive in flight: it can count one slot free early.
     let items = queue.items();
-    items.length.saturating_sub(items.handle.messages_waiting()) as UBaseType_t
+    items
+        .length
+        .saturating_sub(items.handle.messages_waiting() + items.peeked()) as UBaseType_t
 }
 
 #[export]
@@ -341,7 +415,8 @@ fn uxQueueSpacesAvailable(queue: &Queue) -> UBaseType_t {
     reason = "at most the `UBaseType_t` length C created the queue with"
 )]
 fn uxQueueMessagesWaiting(queue: &Queue) -> UBaseType_t {
-    queue.items().handle.messages_waiting() as UBaseType_t
+    let items = queue.items();
+    (items.handle.messages_waiting() + items.peeked()) as UBaseType_t
 }
 
 /// The largest item the firmware queues.
@@ -357,6 +432,7 @@ fn xQueueGenericReset(queue: &Queue, _new_queue: BaseType_t) -> BaseType_t {
         "queue items fit the reset buffer"
     );
     // Never waits: the firmware resets queues inside portENTER_CRITICAL.
+    critical_section::with(|cs| items.peeked.borrow_ref_mut(cs).take());
     // SAFETY: `item` holds one item.
     while unsafe { items.handle.try_receive_from_isr(item.as_mut_ptr(), None) } {}
     pdPASS

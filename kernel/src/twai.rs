@@ -1,9 +1,9 @@
 //! ESP-IDF's on-chip TWAI (CAN) node driver, on the chip's controller. Only what the firmware
 //! uses: one node sending standard data frames at 1 Mbit/s.
 //!
-//! The controller retries a failed frame, where ESP-IDF's driver with the firmware's zeroed
-//! `fail_retry_cnt` sends each frame once; `Node::bus_error` gives up on unacknowledged ones. The
-//! bit timing has 20 quanta, a jump width of 3 and an 80 % sample point, where ESP-IDF uses 75 %.
+//! The controller retries a failed frame until it is sent, as ESP-IDF's driver does with the
+//! firmware's `fail_retry_cnt` of -1. The bit timing has 20 quanta, a jump width of 3 and an
+//! 80 % sample point, where ESP-IDF uses 75 %.
 
 use alloc::boxed::Box;
 use core::{
@@ -19,8 +19,9 @@ use esp_radio_rtos_driver::semaphore::SemaphoreHandle;
 use macros::export;
 use sys::{
     ESP_ERR_INVALID_ARG, ESP_ERR_INVALID_STATE, ESP_ERR_NOT_FOUND, ESP_ERR_TIMEOUT, esp_err_t,
-    twai_error_state_t, twai_event_callbacks_t, twai_frame_t, twai_node_handle_t,
-    twai_node_record_t, twai_node_status_t, twai_onchip_node_config_t, twai_rx_done_event_data_t,
+    twai_error_event_data_t, twai_error_flags_t, twai_error_state_t, twai_event_callbacks_t,
+    twai_frame_t, twai_mask_filter_config_t, twai_node_handle_t, twai_node_record_t,
+    twai_node_status_t, twai_onchip_node_config_t, twai_rx_done_event_data_t,
     twai_state_change_event_data_t,
 };
 
@@ -35,6 +36,15 @@ mod chip;
 
 /// The bit position `ERR_CODE_CAP` reports for an error in the ACK slot.
 const ACK_SLOT: u8 = 25;
+
+/// The error types `ERR_CODE_CAP` reports.
+const BIT_ERROR: u8 = 0;
+const FORM_ERROR: u8 = 1;
+const STUFF_ERROR: u8 = 2;
+const OTHER_ERROR: u8 = 3;
+
+/// Where a standard ID sits in the 32-bit acceptance code and mask.
+const STANDARD_ID_SHIFT: u32 = 21;
 
 /// An error counter at this count makes the node error-passive.
 const PASSIVE_LIMIT: u8 = 128;
@@ -138,6 +148,8 @@ struct Inner {
     bus_errors: u32,
     /// The frame `twai_node_receive_from_isr` reads, while `on_rx_done` runs.
     rx: Option<Frame>,
+    /// The acceptance filter can't tell extended frames apart, so they are dropped here.
+    standard_only: bool,
     callbacks: Option<(twai_event_callbacks_t, Context)>,
 }
 
@@ -193,16 +205,30 @@ impl Node {
         }
     }
 
-    /// Counts like ESP-IDF's `bus_err_num`. Error-passive stops the TEC from rising on ACK errors,
-    /// so the controller would retry a frame nobody acknowledges forever; this gives up on it.
+    /// Counts like ESP-IDF's `bus_err_num` and reports ESP-IDF's error flags.
     fn bus_error(&self, events: &Events) {
-        let unacknowledged = events.bus_error && chip::ack_error();
-        critical_section::with(|cs| {
+        let mut err_flags = twai_error_flags_t { val: 0 };
+        // SAFETY: every bit pattern is valid for both of the union's fields.
+        let flags = unsafe { &mut err_flags.__bindgen_anon_1 };
+        flags.set_arb_lost(events.arbitration_lost.into());
+        if events.bus_error {
+            let (kind, segment) = chip::error_capture();
+            flags.set_bit_err((kind == BIT_ERROR).into());
+            flags.set_form_err((kind == FORM_ERROR).into());
+            flags.set_stuff_err((kind == STUFF_ERROR).into());
+            flags.set_ack_err((kind == OTHER_ERROR && segment == ACK_SLOT).into());
+        }
+        let callbacks = critical_section::with(|cs| {
             let mut inner = self.inner.borrow_ref_mut(cs);
             inner.bus_errors = inner.bus_errors.wrapping_add(1);
+            inner.callbacks
         });
-        if unacknowledged && chip::tx_errors() >= PASSIVE_LIMIT {
-            self.abort_transmission();
+        if let Some((callbacks, context)) = callbacks
+            && let Some(callback) = callbacks.on_error
+        {
+            let event = twai_error_event_data_t { err_flags };
+            // SAFETY: as in `state_change`.
+            unsafe { callback(self.handle(), &raw const event, context.0) };
         }
     }
 
@@ -232,7 +258,7 @@ impl Node {
         loop {
             let (received, callbacks) = critical_section::with(|cs| {
                 let mut inner = self.inner.borrow_ref_mut(cs);
-                inner.rx = next_frame();
+                inner.rx = next_frame(inner.standard_only);
                 (inner.rx.is_some(), inner.callbacks)
             });
             if !received {
@@ -250,13 +276,15 @@ impl Node {
 }
 
 /// A frame the FIFO missed is released alone, as in ESP-IDF, so the frames behind it still arrive.
-fn next_frame() -> Option<Frame> {
+fn next_frame(standard_only: bool) -> Option<Frame> {
     loop {
         let status = chip::status();
         if status.bus_off || !status.rx_pending {
             return None;
         }
-        let frame = (!status.missed).then(Frame::read);
+        let frame = (!status.missed)
+            .then(Frame::read)
+            .filter(|frame| !(standard_only && frame.is_extended()));
         chip::release_frame();
         if frame.is_some() {
             return frame;
@@ -295,6 +323,10 @@ fn twai_new_node_onchip(
         config.bit_timing.bitrate == 1_000_000,
         "the kernel supports only 1 Mbit/s"
     );
+    assert!(
+        config.fail_retry_cnt == -1,
+        "the kernel supports only retrying a frame until it is sent"
+    );
     if config.tx_queue_depth == 0 {
         return Err(ESP_ERR_INVALID_ARG);
     }
@@ -314,6 +346,7 @@ fn twai_new_node_onchip(
                 state: twai_error_state_t::TWAI_ERROR_ACTIVE,
                 bus_errors: 0,
                 rx: None,
+                standard_only: false,
                 callbacks: None,
             })),
             idle: rtos::binary_semaphore(),
@@ -334,6 +367,38 @@ fn twai_node_register_event_callbacks(
         node.inner.borrow_ref_mut(cs).callbacks = Some((*callbacks, Context(context)));
     });
     Ok(())
+}
+
+/// Only filter 0 for standard IDs, before `twai_node_enable`.
+#[export]
+fn twai_node_config_mask_filter(
+    node: &Node,
+    filter_id: u8,
+    config: &twai_mask_filter_config_t,
+) -> Result<(), esp_err_t> {
+    // SAFETY: every bit pattern is a valid `u32`. ESP-IDF reads both words the same way.
+    let (id, ids) = unsafe {
+        (
+            config.__bindgen_anon_1.id,
+            config.__bindgen_anon_1.__bindgen_anon_1.num_of_ids,
+        )
+    };
+    let format = &config.__bindgen_anon_2;
+    assert!(
+        filter_id == 0 && ids == 0 && format.is_ext() == 0 && format.dual_filter() == 0,
+        "the kernel supports only one mask filter of standard IDs"
+    );
+    if (id | config.mask) > MAX_STANDARD_ID.into() {
+        return Err(ESP_ERR_INVALID_ARG);
+    }
+    critical_section::with(|cs| {
+        if !chip::stopped() {
+            return Err(ESP_ERR_INVALID_STATE);
+        }
+        chip::set_filter(id << STANDARD_ID_SHIFT, config.mask << STANDARD_ID_SHIFT);
+        node.inner.borrow_ref_mut(cs).standard_only = id != 0 || config.mask != 0;
+        Ok(())
+    })
 }
 
 /// The node stays in reset until here, as in ESP-IDF, so it neither acknowledges nor sends error

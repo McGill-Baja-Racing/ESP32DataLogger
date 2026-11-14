@@ -40,12 +40,12 @@ use crate::{
 use sys::{
     ESP_ERR_HTTPD_HANDLER_EXISTS, ESP_ERR_HTTPD_HANDLERS_FULL, ESP_ERR_HTTPD_RESP_HDR,
     ESP_ERR_HTTPD_RESP_SEND, ESP_ERR_HTTPD_RESULT_TRUNC, ESP_ERR_INVALID_ARG, ESP_ERR_NOT_FOUND,
-    ESP_OK, esp_err_t, httpd_config_t, httpd_method_t, httpd_req_t, httpd_uri_t,
+    ESP_OK, esp_err_t, httpd_config_t, httpd_err_code_t, httpd_method_t, httpd_req_t, httpd_uri_t,
 };
 
 /// Sockets serving at once: two viewers, one of them loading the page. More can't help while a
 /// download holds the one handler task. An idle client holds one until it closes or the I/O times
-/// out.
+/// out, which also frees the socket of a client that left without closing.
 pub const CONNECTIONS: usize = 5;
 /// The sockets' send and receive buffers.
 pub const TX: usize = 2048;
@@ -185,6 +185,8 @@ unsafe fn response(request: &mut httpd_req_t) -> &mut Response {
     unsafe { &mut *request.aux.cast::<Response>() }
 }
 
+/// `lru_purge_enable` and TCP keep-alive need nothing here: `IO_TIMEOUT_MS` already frees the
+/// socket of a silent client, sooner than ESP-IDF's keep-alive probes.
 #[export]
 fn httpd_start(
     handle: &mut MaybeUninit<*mut c_void>,
@@ -384,6 +386,31 @@ unsafe fn httpd_resp_send_chunk(
     let response = unsafe { response(r) };
     response.start(None)?;
     response.body(data)
+}
+
+/// `unsupported.h` rejects the other codes. Logs nothing, unlike ESP-IDF.
+#[export]
+unsafe fn httpd_resp_send_err(
+    r: &mut httpd_req_t,
+    error: httpd_err_code_t,
+    usr_msg: *const c_char,
+) -> Result<(), esp_err_t> {
+    assert!(
+        error == httpd_err_code_t::HTTPD_500_INTERNAL_SERVER_ERROR,
+        "the kernel supports only error 500"
+    );
+    let message = if usr_msg.is_null() {
+        b"Server has encountered an unexpected error"
+    } else {
+        // SAFETY: C passes NULL or a NUL-terminated string.
+        unsafe { CStr::from_ptr(usr_msg) }.to_bytes()
+    };
+    // SAFETY: C calls this from a running handler.
+    let response = unsafe { response(r) };
+    response.status = "500 Internal Server Error";
+    response.content_type = "text/html";
+    response.start(Some(message.len()))?;
+    response.body(message)
 }
 
 /// Copies `text` and a NUL to C's buffer of `size` bytes, or none of it if it doesn't fit.

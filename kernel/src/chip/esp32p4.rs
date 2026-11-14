@@ -1,20 +1,21 @@
-//! The ESP32-P4 master: its heap, PSRAM check and network error codes. It reads no reset reason.
+//! The ESP32-P4 master: its heap, PSRAM check, network error codes and reset reason.
 
 use core::ffi::CStr;
 
 use esp_hal::{
     peripherals::PSRAM,
     psram::{Psram, PsramConfig},
+    rtc_cntl::SocResetReason,
 };
 use macros::export;
 use sys::{
     ESP_ERR_ESP_NETIF_DHCP_ALREADY_STOPPED, ESP_ERR_ESP_NETIF_DHCP_NOT_STOPPED,
     ESP_ERR_HTTPD_HANDLER_EXISTS, ESP_ERR_HTTPD_HANDLERS_FULL, ESP_ERR_HTTPD_RESP_SEND,
-    ESP_ERR_HTTPD_RESULT_TRUNC, esp_err_t,
+    ESP_ERR_HTTPD_RESULT_TRUNC, esp_err_t, esp_reset_reason_t,
 };
 
 /// Everything the firmware leaves of the SRAM but the main stack, which the linker checks.
-pub const HEAP: usize = 372 * 1024;
+pub const HEAP: usize = 367 * 1024;
 
 /// The master board's PSRAM. esp-hal reports a missing or unrecognised one only in a log line.
 const PSRAM_SIZE: usize = 32 * 1024 * 1024;
@@ -40,6 +41,31 @@ pub fn init() {
         crate::system::locked(|| {
             esp_println::println!("PSRAM is {size} bytes, not the master's {PSRAM_SIZE}");
         });
+    }
+}
+
+/// ESP-IDF's table for the P4 from revision 0.1. Only a panic resets in software. esp-hal names
+/// no lockup or power glitch reset, so those are unknown.
+#[export]
+fn esp_reset_reason() -> esp_reset_reason_t {
+    use SocResetReason::{
+        ChipPowerOn, CoreDeepSleep, CoreEfuseCrc, CoreMwdt0, CoreMwdt1, CoreRtcWdt, CoreSw,
+        CoreUsbJtag, CoreUsbUart, Cpu0JtagCpu, Cpu0Mwdt0, Cpu0Mwdt1, Cpu0RtcWdt, Cpu0Sw,
+        SysBrownOut, SysRtcWdt, SysSuperWdt,
+    };
+    match esp_hal::system::reset_reason() {
+        Some(ChipPowerOn) => esp_reset_reason_t::ESP_RST_POWERON,
+        Some(CoreSw | Cpu0Sw) => esp_reset_reason_t::ESP_RST_PANIC,
+        Some(CoreDeepSleep) => esp_reset_reason_t::ESP_RST_DEEPSLEEP,
+        Some(
+            CoreMwdt0 | CoreMwdt1 | CoreRtcWdt | Cpu0Mwdt0 | Cpu0Mwdt1 | Cpu0RtcWdt | SysRtcWdt
+            | SysSuperWdt,
+        ) => esp_reset_reason_t::ESP_RST_WDT,
+        Some(SysBrownOut) => esp_reset_reason_t::ESP_RST_BROWNOUT,
+        Some(CoreUsbUart | CoreUsbJtag) => esp_reset_reason_t::ESP_RST_USB,
+        Some(Cpu0JtagCpu) => esp_reset_reason_t::ESP_RST_JTAG,
+        Some(CoreEfuseCrc) => esp_reset_reason_t::ESP_RST_EFUSE,
+        _ => esp_reset_reason_t::ESP_RST_UNKNOWN,
     }
 }
 

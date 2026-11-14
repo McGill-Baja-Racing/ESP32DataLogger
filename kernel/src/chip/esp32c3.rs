@@ -9,7 +9,7 @@ use portable_atomic::{AtomicU32, Ordering};
 use sys::{esp_err_t, esp_reset_reason_t};
 
 /// Everything the firmware leaves of the SRAM but the main stack, which the linker checks.
-pub const HEAP: usize = 296 * 1024;
+pub const HEAP: usize = 290 * 1024;
 
 /// The sensor nodes return no codes besides the common ones.
 pub fn error_name(_code: esp_err_t) -> Option<&'static CStr> {
