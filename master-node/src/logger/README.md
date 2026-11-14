@@ -14,9 +14,9 @@ Stop changes the logger to `LOGGER_STOPPING`, rejecting samples while accepting 
 
 Each queued item contains a CAN-style sample and its UTC value computed at enqueue time. Samples received outside `LOGGER_RUNNING` are ignored. A full log queue increments the drop counter rather than blocking acquisition indefinitely.
 
-The writer batches 100 records. At approximately 15-second intervals during recording, it writes any partial block and checkpoints by closing/reopening files. Written blocks are flushed, but this is not a guarantee against all power-loss/card failures.
+The writer batches 100 records and syncs each block to the card. While recording it also writes any partial block once per second. A power cut loses at most that second and the queued samples.
 
-UTC entries track successfully written complete binary records. Companion write/flush failure closes the companion and leaves later absolute time unavailable. A partial binary write disables further companion writing. SD failures are reported; the queue-drop counter is not a comprehensive file-integrity indicator.
+Each block is synced to the companion before the binary, so every saved binary record has its UTC entry. After one write error FatFs rejects all later writes to that file until it is reopened. On any write error the writer reopens both files, cuts them back to the last saved record and retries the block once. A block that fails again is cut off and counted in the drop counter, together with queue overflows.
 
 ## Making changes
 
