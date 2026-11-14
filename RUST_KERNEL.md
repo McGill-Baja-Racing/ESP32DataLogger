@@ -121,7 +121,7 @@ Tests:
 
 - **Install:** `rustup`, git, LLVM (clang and libclang: `brew install llvm`, `winget install
   LLVM.LLVM` or `apt install clang libclang-dev`) and `cargo install espflash@4.6.0 --locked`.
-  Rust 1.99.1 is pinned in `rust-toolchain.toml` and every crate exactly.
+  Rust 1.100.0 is pinned in `rust-toolchain.toml` and every crate exactly.
 - **Build:** inside the firmware's folder, `cargo build --release` with the command below:
 
   | Folder | Command |

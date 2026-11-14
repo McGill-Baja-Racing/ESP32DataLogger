@@ -1,5 +1,5 @@
 use core::fmt::Display;
-use core::future::{poll_fn, Future};
+use core::future::{Future, poll_fn};
 use core::net::SocketAddr;
 use core::pin::pin;
 use core::ptr::NonNull;
@@ -9,15 +9,15 @@ use edge_nal::{Close, Readable, TcpBind, TcpShutdown, TcpSplit};
 
 use embassy_futures::join::join;
 
-use embassy_net::tcp::{AcceptError, Error, TcpReader, TcpWriter};
 use embassy_net::Stack;
+use embassy_net::tcp::{AcceptError, Error, TcpReader, TcpWriter};
 
 use embassy_time::Duration;
 
 use embedded_io_async::{ErrorKind, ErrorType, Read, Write};
 
 use crate::sealed::SealedDynPool;
-use crate::{to_emb_bind_socket, to_net_socket, DynPool, Pool};
+use crate::{DynPool, Pool, to_emb_bind_socket, to_net_socket};
 
 /// A type that implements the `TcpBind` factory trait from `edge-nal`
 /// Uses the provided Embassy networking stack and TCP buffers pool to create TCP sockets.

@@ -1,7 +1,7 @@
 [package]
 name = "edge-nal-embassy"
 version = "0.9.0"
-edition = "2021"
+edition = "2024"
 description = "edge-nal over embassy-net, cut to TCP"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/sysgrok/edge-net"
@@ -12,3 +12,7 @@ embassy-futures = "=0.1.2"
 embassy-net = { version = "=0.9.1", default-features = false, features = ["tcp", "proto-ipv4", "medium-ethernet"] }
 embassy-time = "=0.5.1"
 embedded-io-async = "=0.7.0"
+
+# Vendored code keeps its upstream lints.
+[lints.cargo]
+missing_lints_inheritance = "allow"
