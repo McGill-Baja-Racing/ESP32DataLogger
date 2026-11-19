@@ -25,7 +25,7 @@ typedef void (*can_message_handler_t)(const can_message_t *message);
  * @brief Set up the CAN controller and start its receive and recovery tasks.
  *
  * The handler runs on the receive task, one frame at a time. Frames are lost
- * while the 256-frame queue is full.
+ * while the 2048-frame queue is full.
  *
  * @param message_handler Called for each received frame.
  * @retval ESP_OK               CAN is running.

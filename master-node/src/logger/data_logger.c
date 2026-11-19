@@ -12,14 +12,17 @@
 #include "health/node_health.h"
 #include "time/absolute_clock.h"
 
+#include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 
-#define LOG_QUEUE_LENGTH        256
-#define LOG_RECORDS_PER_BLOCK   100
+/* In PSRAM. Holds about 4 s at the CAN bus maximum, longer than an SD card may stay busy. */
+#define LOG_QUEUE_LENGTH        32768
+/* 32 KB .bin and 16 KB .utc per write: whole clusters and SD recording units. */
+#define LOG_RECORDS_PER_BLOCK   2048
 #define LOG_FLUSH_INTERVAL_MS   1000
 /* Nodes may send health events until they hear STOP. */
 #define LOG_STOP_GRACE_MS       200
@@ -40,8 +43,7 @@ static char log_path[LOG_PATH_LENGTH];
 static volatile logger_state_t state = LOGGER_IDLE;
 static volatile TickType_t stop_tick;
 static bool health_admission_open;
-static atomic_uint queue_drops;
-static atomic_uint write_drops;
+static atomic_uint dropped_frames;
 
 bool data_logger_valid_filename(const char *filename)
 {
@@ -257,7 +259,7 @@ static bool enqueue(const can_message_t *message)
     queued_sample_t sample = { .message = *message,
         .utc_ms = absolute_clock_sample_utc((uint32_t)(message->data >> 32)) };
     if (xQueueSend(log_queue, &sample, 0) != pdPASS) {
-        atomic_fetch_add(&queue_drops, 1);
+        atomic_fetch_add(&dropped_frames, 1);
         node_health_count(HEALTH_SAMPLES_DROPPED, 1, message->id, ESP_OK);
         return false;
     }
@@ -282,10 +284,7 @@ bool data_logger_enqueue_health(const can_message_t *message)
 
 logger_state_t data_logger_state(void) { return state; }
 const char *data_logger_path(void) { return log_path[0] ? log_path : "none"; }
-uint32_t data_logger_drop_count(void)
-{
-    return atomic_load(&queue_drops) + atomic_load(&write_drops);
-}
+uint32_t data_logger_drop_count(void) { return atomic_load(&dropped_frames); }
 
 const char *data_logger_state_name(void)
 {
@@ -303,6 +302,17 @@ static void close_files(void)
 }
 
 /**
+ * @brief Cut a file back to size bytes.
+ *
+ * @return false if the file is shorter than size; ftruncate would pad it with zeros.
+ */
+static bool cut_file(int fd, off_t size)
+{
+    struct stat info;
+    return fstat(fd, &info) == 0 && info.st_size >= size && ftruncate(fd, size) == 0;
+}
+
+/**
  * @brief Reopen both log files and cut them back to the saved records.
  *
  * Call with file_mutex held.
@@ -312,17 +322,19 @@ static void close_files(void)
 static bool reopen_files(void)
 {
     close_files();
+    /* FatFs creates a missing file even without O_CREAT; cut_file() then fails on it. */
     log_fd = open(log_path, O_WRONLY | O_APPEND);
     utc_fd = log_fd >= 0 ? open(utc_path, O_WRONLY | O_APPEND) : -1;
     /* Commit the .bin cut before the .utc grows again, or a power cut can pair cut
      * .bin records with newer UTC entries. */
-    if (log_fd >= 0 && utc_fd >= 0 &&
-        ftruncate(log_fd, (off_t)records_saved * 16) == 0 && fsync(log_fd) == 0 &&
-        ftruncate(utc_fd, (off_t)records_saved * 8) == 0) {
-        return true;
+    if (log_fd < 0 || utc_fd < 0 ||
+        !cut_file(log_fd, (off_t)records_saved * sizeof(int64_t[2])) ||
+        fsync(log_fd) != 0 ||
+        !cut_file(utc_fd, (off_t)records_saved * sizeof(int64_t))) {
+        close_files();
+        return false;
     }
-    close_files();
-    return false;
+    return true;
 }
 
 /**
@@ -361,7 +373,7 @@ static void save_records(const int64_t records[][2], const int64_t *utc, size_t 
         records_saved += count;
     } else {
         ESP_LOGE(TAG, "SD write failed; %u records lost", (unsigned)count);
-        atomic_fetch_add(&write_drops, count);
+        atomic_fetch_add(&dropped_frames, count);
         for (size_t i = 0; i < count; i++) {
             node_health_count(HEALTH_SAMPLES_DROPPED, 1, (uint32_t)records[i][0], ESP_FAIL);
         }
@@ -374,15 +386,16 @@ static void save_records(const int64_t records[][2], const int64_t *utc, size_t 
 /**
  * @brief Task that writes queued frames to the SD card.
  *
- * Writes 100-record blocks, and any partial block every 1 s. After stop, once
+ * Writes 2048-record blocks, and any partial block every 1 s. After stop, once
  * the queue is empty and 200 ms have passed, it writes the rest, closes both
  * files and sets LOGGER_IDLE.
  */
 static void writer_task(void *argument)
 {
     (void)argument;
-    int64_t records[LOG_RECORDS_PER_BLOCK][2];
-    int64_t utc[LOG_RECORDS_PER_BLOCK];
+    /* Static: 48 KB does not fit the task stack. */
+    static int64_t records[LOG_RECORDS_PER_BLOCK][2];
+    static int64_t utc[LOG_RECORDS_PER_BLOCK];
     size_t count = 0;
     queued_sample_t sample;
     TickType_t last_flush = xTaskGetTickCount();
@@ -396,18 +409,16 @@ static void writer_task(void *argument)
             records[count][0] = sample.message.id;
             records[count][1] = (int64_t)sample.message.data;
             utc[count] = sample.utc_ms;
-            if (++count == LOG_RECORDS_PER_BLOCK) {
-                save_records(records, utc, count);
-                count = 0;
-            }
+            count++;
         }
         TickType_t now = xTaskGetTickCount();
-        if (state == LOGGER_RUNNING &&
-            now - last_flush >= pdMS_TO_TICKS(LOG_FLUSH_INTERVAL_MS)) {
-            if (count > 0) save_records(records, utc, count);
+        bool flush_due = state == LOGGER_RUNNING &&
+                         now - last_flush >= pdMS_TO_TICKS(LOG_FLUSH_INTERVAL_MS);
+        if (count == LOG_RECORDS_PER_BLOCK || (flush_due && count > 0)) {
+            save_records(records, utc, count);
             count = 0;
-            last_flush = now;
         }
+        if (flush_due) last_flush = now;
         bool close_log = false;
         if (state == LOGGER_STOPPING &&
             (int32_t)(now - stop_tick) >= (int32_t)pdMS_TO_TICKS(LOG_STOP_GRACE_MS) &&
@@ -433,7 +444,8 @@ static void writer_task(void *argument)
 
 esp_err_t data_logger_init(void)
 {
-    log_queue = xQueueCreate(LOG_QUEUE_LENGTH, sizeof(queued_sample_t));
+    log_queue = xQueueCreateWithCaps(LOG_QUEUE_LENGTH, sizeof(queued_sample_t),
+                                     MALLOC_CAP_SPIRAM);
     file_mutex = xSemaphoreCreateMutex();
     health_admission_mutex = xSemaphoreCreateMutex();
     if (!log_queue || !file_mutex || !health_admission_mutex) return ESP_ERR_NO_MEM;

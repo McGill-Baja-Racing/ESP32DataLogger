@@ -4,7 +4,7 @@ Read the [master source map](../README.md) and its concurrency vocabulary first.
 
 ## Session lifecycle
 
-`data_logger` owns filenames, file handles, the file mutex, the 256-entry queue, drop count, and writer task. `app_control` serializes callers and decides when to broadcast commands; the logger itself does not control nodes.
+`data_logger` owns filenames, file handles, the file mutex, the 32,768-entry queue (in PSRAM), drop count, and writer task. `app_control` serializes callers and decides when to broadcast commands; the logger itself does not control nodes.
 
 Starting from `LOGGER_IDLE` validates/selects a name and exclusively creates the binary and UTC files before entering `LOGGER_RUNNING`. Companion-open failure prevents a successful session start. Only after that does application policy enable recording beacons and send START.
 
@@ -14,7 +14,7 @@ Stop changes the logger to `LOGGER_STOPPING`, rejecting samples while accepting 
 
 Each queued item contains a CAN-style sample and its UTC value computed at enqueue time. Samples received outside `LOGGER_RUNNING` are ignored. A full log queue increments the drop counter rather than blocking acquisition indefinitely.
 
-The writer batches 100 records and syncs each block to the card. While recording it also writes any partial block once per second. A power cut loses at most that second and the queued samples.
+The writer batches 2,048 records and syncs each block to the card. While recording it also writes any partial block once per second. A power cut loses at most that second and the queued samples.
 
 Each block is synced to the companion before the binary, so every saved binary record has its UTC entry. After one write error FatFs rejects all later writes to that file until it is reopened. On any write error the writer reopens both files, cuts them back to the last saved record and retries the block once. A block that fails again is cut off and counted in the drop counter, together with queue overflows.
 

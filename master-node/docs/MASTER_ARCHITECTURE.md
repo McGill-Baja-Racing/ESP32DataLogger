@@ -30,11 +30,11 @@ flowchart TD
     end
     subgraph Master[Master execution contexts]
         RX["CAN receive ISR callback"]
-        RXQ["256-entry receive queue: full drops incoming frame"]
+        RXQ["2,048-entry receive queue: full drops incoming frame"]
         DISPATCH["Dispatch task: application callback"]
         GPS["GPS receive task: local samples"]
         REG["Node liveness registry"]
-        LOGQ["256-entry logger queue: full drops incoming sample"]
+        LOGQ["32,768-entry logger queue: full drops incoming sample"]
         WRITER["SD writer task: binary and UTC companion"]
         LIVE["Latest-value cache"]
         HTTP["HTTP task: limited-rate live polling"]

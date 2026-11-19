@@ -17,6 +17,7 @@ PREFIX = r"""
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #define ESP_LOGW(tag, ...) ((void)(tag))
 #define ESP_LOGE(tag, ...) ((void)(tag))
@@ -27,7 +28,7 @@ static int file_mutex;
 static char log_path[256], utc_path[264];
 static int log_fd = -1, utc_fd = -1;
 static uint32_t records_saved;
-static atomic_uint write_drops;
+static atomic_uint dropped_frames;
 enum { HEALTH_SD_WRITE = 1, HEALTH_SAMPLES_DROPPED = 2 };
 #define ESP_FAIL (-1)
 static bool sd_fault;
@@ -48,6 +49,12 @@ static int failures, broken_fd = -1;
 static ssize_t faulty_write(int fd, const void *data, size_t size)
 {
     if (fd == broken_fd) { errno = EIO; return -1; }
+    if (fault == 't' && fd == log_fd && failures > 0 && records_saved > 0) {
+        failures--;
+        if (ftruncate(fd, 0) != 0) return -1;
+        errno = EIO;
+        return -1;
+    }
     if (fault == 'w' && fd == log_fd && failures > 0) {
         failures--;
         broken_fd = fd;
@@ -91,7 +98,7 @@ int main(int argc, char **argv)
         save_records((const int64_t (*)[2])records, utc, 4);
     }
     close_files();
-    printf("%u %u %u %d\n", atomic_load(&write_drops), samples_dropped, sd_onsets, sd_fault);
+    printf("%u %u %u %d\n", atomic_load(&dropped_frames), samples_dropped, sd_onsets, sd_fault);
     return 0;
 }
 """
@@ -141,6 +148,9 @@ class LoggerWriteTests(unittest.TestCase):
 
     def test_card_that_keeps_failing_keeps_sd_write_active(self):
         self.assertEqual(self.run_case("w", 99), (0, [], [], [12, 12, 1, 1]))
+
+    def test_file_shorter_than_saved_records_is_not_padded_with_zeros(self):
+        self.assertEqual(self.run_case("t", 1), (0, [], list(range(1000, 1008)), [8, 8, 1, 1]))
 
 
 if __name__ == "__main__":

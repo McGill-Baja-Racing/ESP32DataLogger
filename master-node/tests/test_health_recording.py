@@ -38,7 +38,7 @@ typedef uint32_t TickType_t;
 typedef struct { can_message_t message; int64_t utc_ms; } queued_sample_t;
 static logger_state_t state = LOGGER_IDLE;
 static bool health_admission_open, health_locked, full, probe_close;
-static atomic_uint queue_drops;
+static atomic_uint dropped_frames;
 static int health_admission_mutex = 1, file_mutex = 2, log_queue = 3;
 static int log_fd = -1, utc_fd = -1;
 static TickType_t tick, stop_tick;
@@ -127,7 +127,7 @@ int main(void) {
         assert(saved_ids[session*3] == health.id && saved_ids[session*3+1] == aim.id &&
                saved_ids[session*3+2] == health.id);
     }
-    assert(atomic_load(&queue_drops) == 2);
+    assert(atomic_load(&dropped_frames) == 2);
     return 0;
 }
 '''

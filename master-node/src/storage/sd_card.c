@@ -27,6 +27,8 @@ esp_err_t sd_card_mount(void)
     };
     sdmmc_host_t host = SDMMC_HOST_DEFAULT();
     host.slot = SDMMC_HOST_SLOT_0;
+    /* The driver bounce-copies unaligned buffers, by default one sector per write command. */
+    host.unaligned_multi_block_rw_max_chunk_size = 64;
 #if SOC_SDMMC_IO_POWER_EXTERNAL
     sd_pwr_ctrl_ldo_config_t power_config = {.ldo_chan_id = 4};
     sd_pwr_ctrl_handle_t power = NULL;
