@@ -1,0 +1,16 @@
+[package]
+name = "baja-sys"
+edition = "2024"
+links = "idf"
+
+[lib]
+test = false
+doctest = false
+bench = false
+
+[build-dependencies]
+bindgen = "=0.73.2"
+
+# The generated bindings and their build script keep their own lints.
+[lints.cargo]
+missing_lints_inheritance = "allow"
