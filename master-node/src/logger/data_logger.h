@@ -34,7 +34,8 @@ typedef enum {
 /**
  * @brief Create the sample queue and start the SD writer task.
  *
- * Files are saved every 15 s, so a power cut loses at most the last 15 s.
+ * Each block is synced to the card, and any partial block every 1 s, so a power
+ * cut loses about the last second.
  *
  * @retval ESP_OK          The writer is running, idle until data_logger_start().
  * @retval ESP_ERR_NO_MEM  Creating the queue, mutex or task failed.
@@ -123,7 +124,8 @@ const char *data_logger_state_name(void);
 const char *data_logger_path(void);
 
 /**
- * @brief Count frames dropped because the log queue was full.
+ * @brief Count frames dropped because the log queue was full or the SD card
+ * failed to save them.
  *
  * @return Frames dropped since boot.
  */

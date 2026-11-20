@@ -19,7 +19,7 @@
 
 #define CAN_TX_GPIO             20
 #define CAN_RX_GPIO             21
-#define CAN_RX_QUEUE_LENGTH     256
+#define CAN_RX_QUEUE_LENGTH     2048
 #define CAN_TX_QUEUE_DEPTH      5
 #define CAN_RECOVERY_POLL_MS    250
 #define CAN_RECOVERY_WARN_MS    5000

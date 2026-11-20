@@ -13,3 +13,8 @@ CONFIG_ESP32P4_REV_MIN_1=y
 CONFIG_PM_SLEEP_FUNC_IN_IRAM=y
 CONFIG_MBEDTLS_CMAC_C=y
 # CONFIG_LIBC_OPTIMIZED_MISALIGNED_ACCESS is not set
+
+# PSRAM only for explicit caps allocations (the log queue); FatFs buffers stay internal, which is faster.
+CONFIG_SPIRAM=y
+CONFIG_SPIRAM_USE_CAPS_ALLOC=y
+# CONFIG_FATFS_ALLOC_PREFER_EXTRAM is not set
