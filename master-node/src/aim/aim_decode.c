@@ -29,11 +29,11 @@ bool aim_decode(aim_tracker_t *tracker, const can_message_t *frame, can_message_
     return true;
 }
 
-aim_status_t aim_tracker_status(const aim_tracker_t *tracker, int64_t now_us, bool available)
+aim_status_t aim_tracker_status(const aim_tracker_t *tracker, int64_t now_us)
 {
     int64_t age = tracker->seen ? now_us - tracker->last_received_us : -1;
     return (aim_status_t){
-        .state = !available ? "unavailable" : !tracker->seen ? "waiting" :
+        .state = !tracker->seen ? "waiting" :
                  age >= AIM_STALE_US ? "stale" : "receiving",
         .last_frame_age_ms = age < 0 ? -1 : age / 1000,
         .valid_frames = tracker->valid_frames,

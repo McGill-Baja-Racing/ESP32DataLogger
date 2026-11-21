@@ -5,10 +5,6 @@
 
 #include "esp_err.h"
 
-#ifndef MASTER_CAN_ENABLED
-#define MASTER_CAN_ENABLED 1
-#endif
-
 typedef struct {
     uint32_t id;
     uint8_t dlc;

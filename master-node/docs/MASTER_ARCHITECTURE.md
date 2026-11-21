@@ -6,7 +6,7 @@ Read the [master introduction](../README.md) and [source map](../src/README.md) 
 
 `main.c` mounts SD and initializes the logger, live cache, registry, CAN (when enabled), GPS receiver, and application-control mutex. Mount/init failures guarded by `ESP_ERROR_CHECK` abort normal startup. The master sends initial STOP copies before exposing manual controls or auto-start.
 
-Serial control and time beacons start, and an auto-start task waits five seconds before requesting recording. Web startup is attempted separately: networking failure is reported without aborting the collection path. `MasterNoCAN` removes CAN initialization, commands, beacons, and node monitoring while retaining local GPS, logging, and web/serial operation.
+Serial control and time beacons start, and an auto-start task waits five seconds before requesting recording. Web startup is attempted separately: networking failure is reported without aborting the collection path.
 
 ## Collection tasks and queues
 

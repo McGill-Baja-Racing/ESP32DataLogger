@@ -1,4 +1,4 @@
-"""Exercise production START/STOP ordering with CAN enabled and disabled."""
+"""Exercise production START/STOP ordering."""
 from pathlib import Path
 import subprocess
 import tempfile
@@ -37,8 +37,7 @@ data_logger_start_result_t data_logger_prepare(const char *filename) {
 void data_logger_clear_queue(void) { assert(locked && step==1 && state==LOGGER_IDLE);log_pending=false;step=2;resets++; }
 void can_master_clear_receive_queue(void) { assert(locked && step==2 && state==LOGGER_IDLE);can_pending=false;step=3;resets++; }
 void data_logger_start(void) {
-    assert(locked && !log_pending && step==(MASTER_CAN_ENABLED?3:2));
-    if(MASTER_CAN_ENABLED)assert(!can_pending);
+    assert(locked && !log_pending && !can_pending && step==3);
     state=LOGGER_RUNNING;step=4;
 }
 void node_registry_set_monitoring(bool enabled) { assert(locked && (enabled?state==LOGGER_RUNNING:state==LOGGER_STOPPING)); }
@@ -55,7 +54,7 @@ int main(void) {
     assert(!locked && resets==0 && log_pending && can_pending && state==LOGGER_IDLE);
     prepare_result=DATA_LOGGER_START_OK;
     assert(app_control_start_logging("test.bin")==APP_CONTROL_OK);
-    assert(!locked && state==LOGGER_RUNNING && resets==(MASTER_CAN_ENABLED?2:1));
+    assert(!locked && state==LOGGER_RUNNING && resets==2);
     assert(app_control_start_logging(NULL)==APP_CONTROL_CONFLICT);
     log_pending=true;
     assert(app_control_stop_logging()==APP_CONTROL_OK);
@@ -72,10 +71,7 @@ int main(void) {
             tmp = Path(directory)
             (tmp / 'esp_err.h').write_text('typedef int esp_err_t;\n')
             (tmp / 'test.c').write_text(harness)
-            for enabled in (0, 1):
-                with self.subTest(can_enabled=enabled):
-                    subprocess.run(['cc', '-std=c11', '-Wall', '-Wextra', '-Werror',
-                                    f'-DMASTER_CAN_ENABLED={enabled}', '-I'+str(tmp),
-                                    '-I'+str(ROOT/'src'), '-I'+str(ROOT.parent),
-                                    str(tmp/'test.c'), '-o', str(tmp/'test')], check=True)
-                    subprocess.run([str(tmp/'test')], check=True)
+            subprocess.run(['cc', '-std=c11', '-Wall', '-Wextra', '-Werror', '-I'+str(tmp),
+                            '-I'+str(ROOT/'src'), '-I'+str(ROOT.parent),
+                            str(tmp/'test.c'), '-o', str(tmp/'test')], check=True)
+            subprocess.run([str(tmp/'test')], check=True)
