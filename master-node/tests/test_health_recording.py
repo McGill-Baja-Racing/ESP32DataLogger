@@ -14,6 +14,8 @@ class HealthRecordingTests(unittest.TestCase):
                        source.index('data_logger_rename_result_t data_logger_rename(')]
         admission = source[source.index('bool data_logger_stop('):
                            source.index('logger_state_t data_logger_state(')]
+        delay_start = source.index('static bool delay_has_passed(')
+        delay = source[delay_start:source.index('\n}\n', delay_start) + 3]
         writer = source[source.index('static void writer_task('):
                         source.index('esp_err_t data_logger_init(')]
         harness = r'''
@@ -98,7 +100,7 @@ static void save_records(const int64_t records[][2], const int64_t *utc, size_t 
     }
 }
 static void close_files(void) { log_fd = -1; utc_fd = -1; }
-''' + start + admission + writer + r'''
+''' + delay + start + admission + writer + r'''
 int main(void) {
     can_message_t health = {.id = CAN_ID_NODE_EVENT_BASE + 8, .dlc = 8, .data = UINT64_C(42) << 32};
     can_message_t aim = {.id = CAN_ID_AIM_RPM, .dlc = 8, .data = UINT64_C(43) << 32};
