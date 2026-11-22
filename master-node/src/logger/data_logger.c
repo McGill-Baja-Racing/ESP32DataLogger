@@ -34,6 +34,7 @@ static QueueHandle_t log_queue;
 static SemaphoreHandle_t file_mutex;
 /* Guards health_admission_open and the corresponding queue insertion. */
 static SemaphoreHandle_t health_admission_mutex;
+/* fd = File Descriptor */
 static int log_fd = -1;
 static int utc_fd = -1;
 static uint32_t records_saved;
@@ -59,6 +60,20 @@ bool data_logger_valid_filename(const char *filename)
 }
 
 /**
+ * @brief Check whether delay_ms has passed between two tick counts.
+ *
+ * Compares signed, because another task may set since after now was read.
+ *
+ * @param since Tick count the delay started at.
+ * @param now Current tick count.
+ * @param delay_ms Delay in milliseconds.
+ */
+static bool delay_has_passed(TickType_t since, TickType_t now, uint32_t delay_ms)
+{
+    return (int32_t)(now - since) >= (int32_t)pdMS_TO_TICKS(delay_ms);
+}
+
+/**
  * @brief Pick a free default log path, named by GPS date and time if available.
  *
  * Waits up to 3 s for GPS time, else uses log_NNNN.bin. A name is taken if its
@@ -70,12 +85,11 @@ bool data_logger_valid_filename(const char *filename)
 static void choose_default_log_path(char *path, size_t path_size)
 {
     TickType_t started = xTaskGetTickCount();
-    TickType_t wait_ticks = pdMS_TO_TICKS(DEFAULT_NAME_GPS_WAIT_MS);
     int64_t utc_ms;
     do {
         utc_ms = absolute_clock_now_utc();
         if (utc_ms > 0) break;
-        if (xTaskGetTickCount() - started >= wait_ticks) break;
+        if (delay_has_passed(started, xTaskGetTickCount(), DEFAULT_NAME_GPS_WAIT_MS)) break;
         vTaskDelay(pdMS_TO_TICKS(100));
     } while (true);
 
@@ -413,7 +427,7 @@ static void writer_task(void *argument)
         }
         TickType_t now = xTaskGetTickCount();
         bool flush_due = state == LOGGER_RUNNING &&
-                         now - last_flush >= pdMS_TO_TICKS(LOG_FLUSH_INTERVAL_MS);
+                         delay_has_passed(last_flush, now, LOG_FLUSH_INTERVAL_MS);
         if (count == LOG_RECORDS_PER_BLOCK || (flush_due && count > 0)) {
             save_records(records, utc, count);
             count = 0;
@@ -421,7 +435,7 @@ static void writer_task(void *argument)
         if (flush_due) last_flush = now;
         bool close_log = false;
         if (state == LOGGER_STOPPING &&
-            (int32_t)(now - stop_tick) >= (int32_t)pdMS_TO_TICKS(LOG_STOP_GRACE_MS) &&
+            delay_has_passed(stop_tick, now, LOG_STOP_GRACE_MS) &&
             xSemaphoreTake(health_admission_mutex, portMAX_DELAY) == pdTRUE) {
             if (state == LOGGER_STOPPING) {
                 health_admission_open = false;
