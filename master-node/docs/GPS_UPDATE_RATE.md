@@ -74,7 +74,8 @@ and by at most 2.5 s when it does not.
 
 ## Bench check
 
-1. Flash `MasterNoCAN` with only the GPS attached and open the serial monitor.
+1. Flash `MasterStable` with only the GPS attached and open the serial monitor.
+   CAN errors and offline nodes are expected without a bus.
 2. At boot, expect `Receiver set to RMC every 200 ms`.
 3. Outdoors with a fix, record for a minute and export the full CSV: GPS speed rows
    should be about 200 ms apart (`timestamp_ms` steps of roughly 200).

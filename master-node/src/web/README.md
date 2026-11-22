@@ -21,7 +21,7 @@ Handlers delegate recording actions through `app_control` rather than changing l
 | `/api/logging/start`, `/api/logging/stop` | POST | Recording controls |
 | `/api/logs` | GET | Completed log listing |
 | `/api/logs/rename` | POST | Completed session rename |
-| `/api/logs/download` | GET | Binary, full CSV, or Powertrain CSV |
+| `/api/logs/download` | GET | Binary, UTC companion, full CSV, or Powertrain CSV |
 | `/api/live/signals` | GET | Available signal metadata |
 | `/api/live/start`, `/api/live/stop` | POST | Viewer lifecycle |
 | `/api/live/samples` | GET | Latest-value polling |
