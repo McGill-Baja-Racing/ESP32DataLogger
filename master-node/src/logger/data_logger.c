@@ -344,7 +344,8 @@ static bool reopen_files(void)
     if (log_fd < 0 || utc_fd < 0 ||
         !cut_file(log_fd, (off_t)records_saved * sizeof(int64_t[2])) ||
         fsync(log_fd) != 0 ||
-        !cut_file(utc_fd, (off_t)records_saved * sizeof(int64_t))) {
+        !cut_file(utc_fd, (off_t)records_saved * sizeof(int64_t)) ||
+        fsync(utc_fd) != 0) {
         close_files();
         return false;
     }
