@@ -86,8 +86,9 @@ static void auto_start_task(void *argument)
 {
     (void)argument;
     vTaskDelay(pdMS_TO_TICKS(AUTO_START_DELAY_MS));
-    /* Refused, and not retried, while a resumed firmware update holds the claim. */
-    (void)start_logging();
+    while (app_control_start_logging(NULL) == APP_CONTROL_BUSY) {
+        vTaskDelay(pdMS_TO_TICKS(5000));
+    }
     vTaskDelete(NULL);
 }
 
