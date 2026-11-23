@@ -128,6 +128,9 @@ bool firmware_update_resume_pending(void);
 /**
  * @brief Check whether an expected node runs another protocol than the master.
  *
+ * Forgets those nodes and asks every node for its identity again, so a node
+ * that no longer answers stops counting.
+ *
  * @return true if a node in MASTER_EXPECTED_NODE_MASK last reported another
  *         protocol_hash.
  */

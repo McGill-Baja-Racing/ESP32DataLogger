@@ -208,10 +208,13 @@ static esp_err_t command_handler(httpd_req_t *request)
         return send_json_error(request, "409 Conflict",
                                "Command is not valid in the current logger state");
     }
-    if (result == APP_CONTROL_BUSY) return send_claim_error(request, result);
+    if (result == APP_CONTROL_BUSY) {
+        return send_json_error(request, "409 Conflict",
+                               "Firmware is changing, or the new master image is not confirmed yet");
+    }
     if (result == APP_CONTROL_NODE_PROTOCOL) {
         return send_json_error(request, "409 Conflict",
-                               "A node runs another protocol; update its firmware first");
+                               "A node runs another protocol; update or unplug it, then try again");
     }
     if (result == APP_CONTROL_INVALID_FILENAME) {
         return send_json_error(

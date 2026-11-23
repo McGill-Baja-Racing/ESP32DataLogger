@@ -41,7 +41,7 @@ app_control_result_t app_control_start_logging(const char *filename)
         return APP_CONTROL_BUSY;
     }
     if (firmware_update_node_protocol_differs()) {
-        ESP_LOGW(TAG, "Start rejected: a node runs another protocol; update its firmware");
+        ESP_LOGW(TAG, "Start rejected: a node runs another protocol; update or unplug it, then try again");
         xSemaphoreGive(lifecycle_mutex);
         return APP_CONTROL_NODE_PROTOCOL;
     }

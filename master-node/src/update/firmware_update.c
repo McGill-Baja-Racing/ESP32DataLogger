@@ -83,15 +83,22 @@ static const uint8_t *master_hash(void)
     return esp_app_get_description()->app_elf_sha256;
 }
 
+static portMUX_TYPE nodes_lock = portMUX_INITIALIZER_UNLOCKED;
+
 /**
- * @brief Check whether a node's last identity says its image is on trial.
+ * @brief Copy a node's last identity frame.
  *
  * @param id Node ID.
- * @return true if NODE_IDENTITY_PENDING was set.
+ * @param frame Set to the frame.
+ * @return When it arrived, or 0 if never.
  */
-static bool node_on_trial(unsigned int id)
+static int64_t read_identity(unsigned int id, node_identity_frame_t *frame)
 {
-    return (nodes[id].frame.flags & NODE_IDENTITY_PENDING) != 0;
+    portENTER_CRITICAL(&nodes_lock);
+    *frame = nodes[id].frame;
+    int64_t heard_us = nodes[id].heard_us;
+    portEXIT_CRITICAL(&nodes_lock);
+    return heard_us;
 }
 
 /**
@@ -147,19 +154,29 @@ void firmware_update_handle_identity(const can_message_t *message)
             ESP_LOGW(TAG, "Node %u needs update: %s differs", id, images[id].path);
         }
     }
+    int64_t now = esp_timer_get_time();
+    portENTER_CRITICAL(&nodes_lock);
     nodes[id].frame = frame;
-    nodes[id].heard_us = esp_timer_get_time();
+    nodes[id].heard_us = now;
+    portEXIT_CRITICAL(&nodes_lock);
 }
 
 bool firmware_update_node_protocol_differs(void)
 {
+    bool differs = false;
     for (unsigned int id = 1; id < CAN_NODE_SLOT_COUNT; id++) {
         if ((MASTER_EXPECTED_NODE_MASK & (1U << id)) && nodes[id].heard_us &&
             nodes[id].frame.protocol_hash != CAN_PROTOCOL_HASH) {
-            return true;
+            differs = true;
+            portENTER_CRITICAL(&nodes_lock);
+            nodes[id].heard_us = 0;
+            portEXIT_CRITICAL(&nodes_lock);
         }
     }
-    return false;
+    if (differs) {
+        (void)firmware_update_request_identity();
+    }
+    return differs;
 }
 
 esp_err_t firmware_update_request_identity(void)
@@ -381,12 +398,14 @@ void firmware_update_get_status(firmware_update_status_t *status)
     status->percent = percent;
     for (unsigned int id = 0; id < CAN_NODE_SLOT_COUNT; id++) {
         firmware_slot_status_t *slot = &status->slots[id];
-        const uint8_t *hash = id == 0 ? master_hash() : nodes[id].frame.elf_sha256;
-        slot->known = id == 0 || nodes[id].heard_us != 0;
+        node_identity_frame_t frame;
+        slot->known = read_identity(id, &frame) != 0 || id == 0;
         if (slot->known) {
+            const uint8_t *hash = id == 0 ? master_hash() : frame.elf_sha256;
             format_hash(hash, slot->hash);
-            slot->on_trial = id == 0 ? firmware_update_on_trial() : node_on_trial(id);
-            slot->wrong_protocol = (id != 0 && nodes[id].frame.protocol_hash != CAN_PROTOCOL_HASH);
+            slot->on_trial = id == 0 ? firmware_update_on_trial()
+                                     : (frame.flags & NODE_IDENTITY_PENDING) != 0;
+            slot->wrong_protocol = id != 0 && frame.protocol_hash != CAN_PROTOCOL_HASH;
             slot->needs_update = needs_update(id, hash);
         }
         slot->image = images[id].present;
@@ -544,8 +563,10 @@ static const char *flash_node(unsigned int id, const image_t *image)
             (void)firmware_update_request_identity();
         }
         vTaskDelay(pdMS_TO_TICKS(IDENTITY_POLL_MS));
-        if (memcmp(nodes[id].frame.elf_sha256, image->hash, NODE_IDENTITY_HASH_LENGTH) == 0 &&
-            !node_on_trial(id)) {
+        node_identity_frame_t frame;
+        (void)read_identity(id, &frame);
+        if (memcmp(frame.elf_sha256, image->hash, NODE_IDENTITY_HASH_LENGTH) == 0 &&
+            !(frame.flags & NODE_IDENTITY_PENDING)) {
             return "updated";
         }
     }
@@ -567,7 +588,8 @@ static void update_nodes(void)
         if (!firmware_update_is_slot(id)) {
             continue;
         }
-        const uint8_t *hash = nodes[id].heard_us >= asked_us ? nodes[id].frame.elf_sha256 : NULL;
+        node_identity_frame_t frame;
+        const uint8_t *hash = read_identity(id, &frame) >= asked_us ? frame.elf_sha256 : NULL;
         const char *result;
         if (!images[id].present) {
             result = "no image";
