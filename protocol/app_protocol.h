@@ -134,7 +134,7 @@ typedef struct __attribute__((packed)) {
 typedef struct __attribute__((packed)) {
     uint32_t magic;
     uint8_t node_id;            /* 0 for the master */
-    uint8_t bench_only;         /* never joins the bus (serial-test node, CAN-less master),
+    uint8_t bench_only;         /* never joins the bus (serial-test node),
                                  * so an update never installs it */
     uint16_t protocol_hash;
 } firmware_identity_t;

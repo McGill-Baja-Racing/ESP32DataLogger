@@ -31,5 +31,5 @@ def copy_image(target, source, env):
     shutil.copyfile(str(target[0]), folder / image_name)
 
 
-if not re.search(r"SENSOR_SERIAL_TEST=1\b|MASTER_CAN_ENABLED=0\b", flags):
+if not re.search(r"SENSOR_SERIAL_TEST=1\b", flags):
     env.AddPostAction("$BUILD_DIR/${PROGNAME}.bin", copy_image)

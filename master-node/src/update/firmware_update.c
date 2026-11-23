@@ -52,7 +52,6 @@ static const char *results[CAN_NODE_SLOT_COUNT];
 const __attribute__((section(".rodata_custom_desc"))) firmware_identity_t firmware_identity = {
     .magic = FIRMWARE_IDENTITY_MAGIC,
     .node_id = 0,
-    .bench_only = !MASTER_CAN_ENABLED,
     .protocol_hash = CAN_PROTOCOL_HASH,
 };
 
@@ -180,7 +179,7 @@ void firmware_update_print_identity(void)
 {
     firmware_update_status_t status;
     firmware_update_get_status(&status);
-    for (unsigned int id = 0; id < (MASTER_CAN_ENABLED ? CAN_NODE_SLOT_COUNT : 1); id++) {
+    for (unsigned int id = 0; id < CAN_NODE_SLOT_COUNT; id++) {
         if (!firmware_update_is_slot(id)) {
             continue;
         }
@@ -395,7 +394,6 @@ void firmware_update_get_status(firmware_update_status_t *status)
     }
 }
 
-#if MASTER_CAN_ENABLED
 /**
  * @brief Tell a node to drop the update it is receiving.
  *
@@ -590,7 +588,6 @@ static void update_nodes(void)
         ESP_LOGI(TAG, "Node %u: %s", id, result);
     }
 }
-#endif
 
 /**
  * @brief Flash the stored master image to the next OTA slot and boot it next.
@@ -748,11 +745,9 @@ void firmware_update_run(void)
     }
     resume = false;
     ESP_LOGI(TAG, "Master: %s", results[0]);
-#if MASTER_CAN_ENABLED
     if (strncmp(results[0], "failed", 6) != 0) {
         update_nodes();
     }
-#endif
     target = -1;
     running = false;
 }
