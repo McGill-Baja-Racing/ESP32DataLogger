@@ -30,11 +30,11 @@ flowchart TD
     end
     subgraph Master[Master execution contexts]
         RX["CAN receive ISR callback"]
-        RXQ["256-entry receive queue: full drops incoming frame"]
+        RXQ["2,048-entry receive queue: full drops incoming frame"]
         DISPATCH["Dispatch task: application callback"]
         GPS["GPS receive task: local samples"]
         REG["Node liveness registry"]
-        LOGQ["256-entry logger queue: full drops incoming sample"]
+        LOGQ["32,768-entry logger queue: full drops incoming sample"]
         WRITER["SD writer task: binary and UTC companion"]
         LIVE["Latest-value cache"]
         HTTP["HTTP task: limited-rate live polling"]
@@ -65,7 +65,7 @@ using the current anchor; it does not replace the source elapsed timestamp.
 
 Stop is accepted only while running. It ends live viewing and requests logger stop, then clears recording/monitoring state and broadcasts STOP. The writer drains already accepted data asynchronously before becoming idle. Repeated API start/stop requests conflict with the current lifecycle state, even though node-level commands are idempotent.
 
-Default naming can wait up to three seconds for GPS UTC. [Logger guide](../src/logger/README.md) explains buffering, checkpoints, and companion failure behavior.
+Default naming can wait up to three seconds for GPS UTC. [Logger guide](../src/logger/README.md) explains buffering, syncing, and companion failure behavior.
 
 ## Time and liveness
 
