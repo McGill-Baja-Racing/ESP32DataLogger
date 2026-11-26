@@ -12,6 +12,8 @@
 #include "time/time_beacon.h"
 #include "update/firmware_update.h"
 
+#define LIFECYCLE_LOCK_TIMEOUT_MS 1000
+
 static const char *TAG = "AppControl";
 static SemaphoreHandle_t lifecycle_mutex;
 static bool firmware_claimed;
@@ -26,7 +28,7 @@ esp_err_t app_control_init(void)
 app_control_result_t app_control_start_logging(const char *filename)
 {
     if (!lifecycle_mutex ||
-        xSemaphoreTake(lifecycle_mutex, pdMS_TO_TICKS(1000)) != pdTRUE) {
+        xSemaphoreTake(lifecycle_mutex, pdMS_TO_TICKS(LIFECYCLE_LOCK_TIMEOUT_MS)) != pdTRUE) {
         return APP_CONTROL_FAILED;
     }
     if (data_logger_state() != LOGGER_IDLE) {
@@ -77,7 +79,7 @@ app_control_result_t app_control_start_logging(const char *filename)
 app_control_result_t app_control_stop_logging(void)
 {
     if (!lifecycle_mutex ||
-        xSemaphoreTake(lifecycle_mutex, pdMS_TO_TICKS(1000)) != pdTRUE) {
+        xSemaphoreTake(lifecycle_mutex, pdMS_TO_TICKS(LIFECYCLE_LOCK_TIMEOUT_MS)) != pdTRUE) {
         return APP_CONTROL_FAILED;
     }
     if (data_logger_state() != LOGGER_RUNNING) {
@@ -105,7 +107,7 @@ app_control_result_t app_control_stop_logging(void)
 app_control_result_t app_control_claim_firmware(void)
 {
     if (!lifecycle_mutex ||
-        xSemaphoreTake(lifecycle_mutex, pdMS_TO_TICKS(1000)) != pdTRUE) {
+        xSemaphoreTake(lifecycle_mutex, pdMS_TO_TICKS(LIFECYCLE_LOCK_TIMEOUT_MS)) != pdTRUE) {
         return APP_CONTROL_FAILED;
     }
     if (data_logger_state() != LOGGER_IDLE) {
@@ -175,7 +177,7 @@ esp_err_t app_control_resume_firmware_update(void)
 app_control_result_t app_control_start_live_data(uint32_t *token)
 {
     if (!lifecycle_mutex || !token ||
-        xSemaphoreTake(lifecycle_mutex, pdMS_TO_TICKS(1000)) != pdTRUE) {
+        xSemaphoreTake(lifecycle_mutex, pdMS_TO_TICKS(LIFECYCLE_LOCK_TIMEOUT_MS)) != pdTRUE) {
         return APP_CONTROL_FAILED;
     }
     if (data_logger_state() != LOGGER_RUNNING) {

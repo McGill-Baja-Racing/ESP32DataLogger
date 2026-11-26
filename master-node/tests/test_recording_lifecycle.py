@@ -17,6 +17,7 @@ class RecordingLifecycleTests(unittest.TestCase):
 #include "app/app_control.h"
 #define pdTRUE 1
 #define pdMS_TO_TICKS(ms) (ms)
+#define LIFECYCLE_LOCK_TIMEOUT_MS 1000
 #define ESP_OK 0
 #define ESP_LOGE(...) ((void)0)
 #define ESP_LOGW(...) ((void)0)
