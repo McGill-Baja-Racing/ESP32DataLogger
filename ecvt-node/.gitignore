@@ -1,0 +1,5 @@
+.pio/
+.vscode/
+__pycache__/
+Data/
+sdkconfig.*.old

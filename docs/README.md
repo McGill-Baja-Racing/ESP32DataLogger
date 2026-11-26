@@ -9,6 +9,7 @@ Find a guide by what you want to do. No background is required for the introduct
 | Understand what this project is | [Project introduction](../README.md) → [System overview](SYSTEM_OVERVIEW.md) |
 | Set up my computer without boards | [Getting started](GETTING_STARTED.md) |
 | Make my first contribution | [Contributing](../CONTRIBUTING.md) → [Worked documentation contribution](FIRST_CONTRIBUTION.md) |
+| Work on standalone eCVT control/tuning | [eCVT project](../ecvt-node/README.md) → [Development sequence](../ecvt-node/docs/DEVELOPMENT.md) |
 | Work on master behavior | [Master introduction](../master-node/README.md) → [Source map](../master-node/src/README.md) → [Architecture](../master-node/docs/MASTER_ARCHITECTURE.md) |
 | Add or change a sensor | [Sensor introduction](../sensor-node/README.md) → [Driver guide](../sensor-node/src/sensors/README.md) → [Extension procedure](../sensor-node/docs/ADDING_SENSORS_AND_NODES.md) |
 | Understand node scheduling and recovery | [Node architecture](../sensor-node/docs/NODE_ARCHITECTURE.md) |

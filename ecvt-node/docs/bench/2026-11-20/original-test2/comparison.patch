@@ -1,0 +1,63 @@
+--- original/src/main.c
++++ comparison/src/main.c
+@@ -977,6 +977,21 @@
+ //     }
+ // }
+ 
++static void original_test2_gate(void *arg)
++{
++    (void)arg;
++    ESP_LOGI(TAG, "COMPARISON READY: original Test 2; send 2 to start once. 1000 rpm for 3 s, then zero and disable.");
++    while (true) {
++        const int command = getchar();
++        if (command == '2') {
++            run_test2(NULL);
++            vTaskDelete(NULL);
++            return;
++        }
++        vTaskDelay(pdMS_TO_TICKS(10));
++    }
++}
++
+ /* --------------------- app_main --------------------- */
+ void app_main(void)
+ {
+@@ -1023,13 +1038,13 @@
+ 
+     esp_err_t err = esp_vfs_fat_sdmmc_mount("/sdcard", &host, &slot_config, &mount_config, &card);
+     if (err != ESP_OK) {
+-        ESP_LOGE(TAG, "Failed to mount SD card: %s", esp_err_to_name(err));
+-        return;
+-    }
+-    sdmmc_card_print_info(stdout, card);
+-
+-    create_unique_log_filename(log_path, sizeof(log_path));
+-    ESP_LOGI(TAG, "Log path: %s", log_path);
++        ESP_LOGW(TAG, "Comparison: no SD card (%s); serial diagnostics only", esp_err_to_name(err));
++        stop_logging = true;
++    } else {
++        sdmmc_card_print_info(stdout, card);
++        create_unique_log_filename(log_path, sizeof(log_path));
++        ESP_LOGI(TAG, "Log path: %s", log_path);
++    }
+ 
+     rxq_main    = xQueueCreate(64, sizeof(can_rx_item_t));
+     rxq_current = xQueueCreate(1,  sizeof(can_rx_item_t));  // overwrite queue for TPDO4 current
+@@ -1056,12 +1071,14 @@
+     ESP_ERROR_CHECK(elec_motor_driver_init(node_hdl, rxq_main, NODE_ID, TAG));
+     ESP_LOGI(TAG, "Motor driver initialized");
+ 
+-    xTaskCreate(sd_writer_task,       "sd_writer",       8192, (void *)log_path, 8, NULL);
+-    xTaskCreate(save_task,            "save_task",       4096, (void *)log_path, 8, NULL);
++    if (err == ESP_OK) {
++        xTaskCreate(sd_writer_task, "sd_writer", 8192, (void *)log_path, 8, NULL);
++        xTaskCreate(save_task, "save_task", 4096, (void *)log_path, 8, NULL);
++    }
+     xTaskCreate(statusword_logger_task, "tpdo1_logger",  4096, NULL, 8, NULL);
+     xTaskCreate(emcy_logger_task,     "emcy_logger",     4096, NULL, 8, NULL);
+     //xTaskCreate(monitor_current_task, "monitor_current", 4096, NULL, 9, NULL);
+-    xTaskCreate(run_test5,     "test",     8192, NULL, 8, NULL);
++    xTaskCreate(original_test2_gate, "original_test2", 8192, NULL, 8, NULL);
+     //xTaskCreate(console_task,         "console",         4096, NULL, 5, NULL);
+ 
+     ESP_LOGI(TAG, "Ready. Use keyboard to run tests.");

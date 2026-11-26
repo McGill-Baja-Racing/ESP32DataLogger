@@ -51,9 +51,12 @@ Read the [system overview](docs/SYSTEM_OVERVIEW.md) if you want a guided explana
 | Folder | What it contains | Start reading |
 |---|---|---|
 | `master-node/` | ESP32-P4 firmware: recording, GPS, SD storage, browser interface | [Master introduction](master-node/README.md) |
+| `ecvt-node/` | Standalone eCVT motor control and tuning development; DAQ runtime connection deferred | [eCVT introduction](ecvt-node/README.md) |
 | `sensor-node/` | ESP32-C3 firmware: sensor measurements and communication | [Sensor introduction](sensor-node/README.md) |
 | `simulators/` | ESP32-C3 bench firmware generating test signals for RPM inputs | [Simulator introduction](simulators/README.md) |
 | `docs/` | Shared learning guides, procedures, and specifications | [Find a guide](docs/README.md) |
+
+The eCVT project is colocated for development and currently controls its servo on a separate bench CAN bus. Its browser tuning interface is planned; it is not connected to DAQ sensor acquisition or master logging. See its [current development sequence](ecvt-node/docs/DEVELOPMENT.md).
 
 Each firmware project has its own PlatformIO configuration. The workspace file [baja-daq.code-workspace](baja-daq.code-workspace) opens them together in VS Code. **Firmware** is the program that runs on a microcontroller, a small computer built into hardware.
 

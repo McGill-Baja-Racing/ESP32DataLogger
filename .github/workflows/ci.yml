@@ -12,7 +12,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        project: [master-node, sensor-node, simulators/engine-rpm, simulators/wheel-rpm]
+        project: [ecvt-node, master-node, sensor-node, simulators/engine-rpm, simulators/wheel-rpm]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -34,7 +34,12 @@ jobs:
       - uses: actions/checkout@v4
       - name: Master node host tests
         run: python3 -m unittest discover -s master-node/tests
-      - name: Every project pins the same PlatformIO platform
+      - name: Standalone eCVT host tests
+        run: python3 -m unittest discover -s ecvt-node/tests
+      - name: Existing DAQ projects retain their shared platform pin
         run: |
-          grep -h '^platform *=' */platformio.ini simulators/*/platformio.ini | sort -u | tee platforms.txt
+          grep -h '^platform *=' master-node/platformio.ini sensor-node/platformio.ini simulators/*/platformio.ini | sort -u | tee platforms.txt
           test "$(wc -l < platforms.txt)" -eq 1
+      # Preserve the toolchain used for the validated production-revision P4 node.
+      - name: Standalone eCVT pins its validated platform release
+        run: grep -Fx 'platform = https://github.com/pioarduino/platform-espressif32/releases/download/55.03.313/platform-espressif32.zip' ecvt-node/platformio.ini

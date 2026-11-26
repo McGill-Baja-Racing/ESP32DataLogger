@@ -1,0 +1,182 @@
+stop
+Received: stop
+Disable requested (6040=0x0000).
+Stop: sending 6040=0x0000; drive-managed brake engagement requested.
+Drive disable confirmed: statusword=0x1250. Standstill and mechanical brake lock UNVERIFIED.
+Drive disabled; explicit start required. Standstill/brake lock UNVERIFIED.
+mode manual
+Received: mode manual
+Manual mode selected; no motion started.
+servo inspect
+Received: servo inspect
+Read-only servo inspection; no controlword, enable or output writes.
+0x6041:00 statusword=0x1250 operation_enabled=0 fault=0 (drive report; brake unverified)
+0x6064:00 position_user_units=-22 (0xffffffea)
+0x606c:00 velocity_raw=0 (0x00000000)
+0x608f:01 encoder_increments=131072 (0x00020000)
+0x608f:02 encoder_motor_revs=1 (0x00000001)
+0x6091:01 gear_motor_revs=1 (0x00000001)
+0x6091:02 gear_shaft_revs=10000 (0x00002710)
+0x6093:01 position_factor_numerator=131072 (0x00020000)
+0x6093:02 position_factor_denominator=10000 (0x00002710)
+0x60fe:01 outputs_physical=0 (0x00000000)
+0x60fe:02 outputs_mask=0 (0x00000000)
+Inspection finished. Output bits do not confirm mechanical brake state.
+servo errors
+Received: servo errors
+Read-only drive errors; no fault reset, controlword or history clear.
+0x603f:00 error_code=0x0000 (0)
+0x1001:00 error_register=0x00
+0x1003:00 error_history_count=0
+0x6079:00 dc_link_voltage_raw=47800
+limits -0.1 0.6 10
+Received: limits -0.1 0.6 10
+Limits: -0.1000 .. 0.6000 logical rev; max 10.00 rpm
+profile 10 10
+Received: profile 10 10
+Manual motion profile updated (rpm/s).
+move 0.25 10
+Received: move 0.25 10
+I (732522) ECVT: RPDO1 -> 0x6040 Controlword (16-bit)
+I (732526) ECVT: RPDO2 -> 0x607A Target position (32-bit), 0x6081 Target speed (32-bit)
+I (732529) ECVT: RPDO3 -> 0x6083 Profile acceleration (32-bit), 0x6084 Profile deceleration (32-bit)
+I (732535) ECVT: TPDO1 -> 0x6041 Statusword (16-bit)
+I (732543) ECVT: TPDO2 -> 0x6064 Position actual value (32-bit)
+I (732545) ECVT: TPDO2: transmission=255, inhibit=100us, event=2ms (drive-dependent)
+I (732554) ECVT: TPDO3 -> 0x606C Velocity actual value (32-bit)
+I (732559) ECVT: TPDO3: transmission=255, inhibit=100us, event=2ms (drive-dependent)
+I (732567) ECVT: TPDO4 -> 0x6078 Current actual value (16-bit)
+I (732573) ECVT: TPDO4: transmission=255, inhibit=100us, event=2ms (drive-dependent)
+I (732580) ECVT: ACCEL: 1667, DECEL: 1667
+I (732582) ECVT: POS logical=-0.0022 physical=-0.0022 counts=-22, SPEED: 1667
+Drive transition confirmed: controlword=0x0006 statusword=0x1231.
+Drive transition confirmed: controlword=0x0007 statusword=0x1233.
+Drive transition confirmed: controlword=0x010f statusword=0x1237.
+I (732652) ECVT: ACCEL: 1667, DECEL: 1667
+I (732653) ECVT: POS logical=0.2500 physical=0.2500 counts=2500, SPEED: 1667
+I (732659) ECVT: RPDO1 Controlword = 0x002F
+I (732662) ECVT: RPDO1 Controlword = 0x003F
+Target reached: logical_position=0.2500 feedback_counts=2503.
+Stop: sending 6040=0x0000; drive-managed brake engagement requested.
+Drive disable confirmed: statusword=0x0250. Standstill and mechanical brake lock UNVERIFIED.
+Drive disabled; explicit start required. Standstill/brake lock UNVERIFIED.
+servo inspect
+Received: servo inspect
+Read-only servo inspection; no controlword, enable or output writes.
+0x6041:00 statusword=0x0250 operation_enabled=0 fault=0 (drive report; brake unverified)
+0x6064:00 position_user_units=2495 (0x000009bf)
+0x606c:00 velocity_raw=1 (0x00000001)
+0x608f:01 encoder_increments=131072 (0x00020000)
+0x608f:02 encoder_motor_revs=1 (0x00000001)
+0x6091:01 gear_motor_revs=1 (0x00000001)
+0x6091:02 gear_shaft_revs=10000 (0x00002710)
+0x6093:01 position_factor_numerator=131072 (0x00020000)
+0x6093:02 position_factor_denominator=10000 (0x00002710)
+0x60fe:01 outputs_physical=0 (0x00000000)
+0x60fe:02 outputs_mask=0 (0x00000000)
+Inspection finished. Output bits do not confirm mechanical brake state.
+servo errors
+Received: servo errors
+Read-only drive errors; no fault reset, controlword or history clear.
+0x603f:00 error_code=0x0000 (0)
+0x1001:00 error_register=0x00
+0x1003:00 error_history_count=0
+0x6079:00 dc_link_voltage_raw=47900
+status
+Received: status
+mode=manual state=idle busy=0 error=ESP_OK log=off/draining brake=UNVERIFIED
+statusword=0x0250 position_counts=2495 velocity_counts=1 feedback_age_ms=9
+log_dropped_records=0
+brake_test_disable=no pending disable
+move 0.5 2
+Received: move 0.5 2
+I (766338) ECVT: RPDO1 -> 0x6040 Controlword (16-bit)
+I (766341) ECVT: RPDO2 -> 0x607A Target position (32-bit), 0x6081 Target speed (32-bit)
+I (766345) ECVT: RPDO3 -> 0x6083 Profile acceleration (32-bit), 0x6084 Profile deceleration (32-bit)
+I (766351) ECVT: TPDO1 -> 0x6041 Statusword (16-bit)
+I (766358) ECVT: TPDO2 -> 0x6064 Position actual value (32-bit)
+I (766361) ECVT: TPDO2: transmission=255, inhibit=100us, event=2ms (drive-dependent)
+I (766369) ECVT: TPDO3 -> 0x606C Velocity actual value (32-bit)
+I (766375) ECVT: TPDO3: transmission=255, inhibit=100us, event=2ms (drive-dependent)
+I (766383) ECVT: TPDO4 -> 0x6078 Current actual value (16-bit)
+I (766388) ECVT: TPDO4: transmission=255, inhibit=100us, event=2ms (drive-dependent)
+I (766396) ECVT: ACCEL: 1667, DECEL: 1667
+I (766417) ECVT: POS logical=0.2495 physical=0.2495 counts=2495, SPEED: 1667
+Drive transition confirmed: controlword=0x0006 statusword=0x0231.
+Drive transition confirmed: controlword=0x0007 statusword=0x0233.
+Drive transition confirmed: controlword=0x010f statusword=0x0237.
+I (766510) ECVT: ACCEL: 1667, DECEL: 1667
+I (766511) ECVT: POS logical=0.5000 physical=0.5000 counts=5000, SPEED: 333
+I (766517) ECVT: RPDO1 Controlword = 0x002F
+I (766520) ECVT: RPDO1 Controlword = 0x003F
+Target reached: logical_position=0.5000 feedback_counts=5003.
+Stop: sending 6040=0x0000; drive-managed brake engagement requested.
+Drive disable confirmed: statusword=0x0250. Standstill and mechanical brake lock UNVERIFIED.
+Drive disabled; explicit start required. Standstill/brake lock UNVERIFIED.
+move 0.5 2
+Received: move 0.5 2
+I (777376) ECVT: RPDO1 -> 0x6040 Controlword (16-bit)
+I (777379) ECVT: RPDO2 -> 0x607A Target position (32-bit), 0x6081 Target speed (32-bit)
+I (777383) ECVT: RPDO3 -> 0x6083 Profile acceleration (32-bit), 0x6084 Profile deceleration (32-bit)
+I (777389) ECVT: TPDO1 -> 0x6041 Statusword (16-bit)
+I (777397) ECVT: TPDO2 -> 0x6064 Position actual value (32-bit)
+I (777399) ECVT: TPDO2: transmission=255, inhibit=100us, event=2ms (drive-dependent)
+I (777408) ECVT: TPDO3 -> 0x606C Velocity actual value (32-bit)
+I (777413) ECVT: TPDO3: transmission=255, inhibit=100us, event=2ms (drive-dependent)
+I (777421) ECVT: TPDO4 -> 0x6078 Current actual value (16-bit)
+I (777427) ECVT: TPDO4: transmission=255, inhibit=100us, event=2ms (drive-dependent)
+I (777434) ECVT: ACCEL: 1667, DECEL: 1667
+I (777436) ECVT: POS logical=0.4995 physical=0.4995 counts=4995, SPEED: 1667
+Drive transition confirmed: controlword=0x0006 statusword=0x0231.
+Drive transition confirmed: controlword=0x0007 statusword=0x0233.
+Drive transition confirmed: controlword=0x010f statusword=0x0237.
+I (777507) ECVT: ACCEL: 1667, DECEL: 1667
+I (777507) ECVT: POS logical=0.5000 physical=0.5000 counts=5000, SPEED: 333
+I (777513) ECVT: RPDO1 Controlword = 0x002F
+I (777516) ECVT: RPDO1 Controlword = 0x003F
+Target reached: logical_position=0.5000 feedback_counts=4996.
+Stop: sending 6040=0x0000; drive-managed brake engagement requested.
+Drive disable confirmed: statusword=0x1250. Standstill and mechanical brake lock UNVERIFIED.
+Drive disabled; explicit start required. Standstill/brake lock UNVERIFIED.
+move 0.5 2
+Received: move 0.5 2
+I (781760) ECVT: RPDO1 -> 0x6040 Controlword (16-bit)
+I (781763) ECVT: RPDO2 -> 0x607A Target position (32-bit), 0x6081 Target speed (32-bit)
+I (781767) ECVT: RPDO3 -> 0x6083 Profile acceleration (32-bit), 0x6084 Profile deceleration (32-bit)
+I (781775) ECVT: TPDO1 -> 0x6041 Statusword (16-bit)
+I (781780) ECVT: TPDO2 -> 0x6064 Position actual value (32-bit)
+I (781783) ECVT: TPDO2: transmission=255, inhibit=100us, event=2ms (drive-dependent)
+I (781791) ECVT: TPDO3 -> 0x606C Velocity actual value (32-bit)
+I (781796) ECVT: TPDO3: transmission=255, inhibit=100us, event=2ms (drive-dependent)
+I (781804) ECVT: TPDO4 -> 0x6078 Current actual value (16-bit)
+I (781810) ECVT: TPDO4: transmission=255, inhibit=100us, event=2ms (drive-dependent)
+I (781817) ECVT: ACCEL: 1667, DECEL: 1667
+I (781822) ECVT: POS logical=0.4992 physical=0.4992 counts=4992, SPEED: 1667
+Drive transition confirmed: controlword=0x0006 statusword=0x1231.
+Drive transition confirmed: controlword=0x0007 statusword=0x1233.
+Drive transition confirmed: controlword=0x010f statusword=0x1237.
+I (781919) ECVT: ACCEL: 1667, DECEL: 1667
+I (781919) ECVT: POS logical=0.5000 physical=0.5000 counts=5000, SPEED: 333
+I (781925) ECVT: RPDO1 Controlword = 0x002F
+I (781928) ECVT: RPDO1 Controlword = 0x003F
+sTarget reached: logical_position=0.5000 feedback_counts=5003.
+Stop: sending 6040=0x0000; drive-managed brake engagement requested.
+Drive disable confirmed: statusword=0x0250. Standstill and mechanical brake lock UNVERIFIED.
+Drive disabled; explicit start required. Standstill/brake lock UNVERIFIED.
+move -0.5 2
+Invalid command received (31 bytes): 6D 6F 76 65 20 30 2E 35 20 32 1B 5B 44 1B 5B 44 1B 5B 44 1B 5B 44 1B 5B 44 2D 30 2E 35 20 32. Type help; retype without arrow keys/terminal escape sequences.
+servo inspect
+Invalid command received (19 bytes): 1B 5B 41 1B 5B 42 73 65 72 76 6F 20 69 6E 73 70 65 63 74. Type help; retype without arrow keys/terminal escape sequences.
+servo errors
+Received: servo errors
+Read-only drive errors; no fault reset, controlword or history clear.
+0x603f:00 error_code=0x0000 (0)
+0x1001:00 error_register=0x00
+0x1003:00 error_history_count=0
+0x6079:00 dc_link_voltage_raw=47800
+status
+Received: status
+mode=manual state=idle busy=0 error=ESP_OK log=off/draining brake=UNVERIFIED
+statusword=0x0250 position_counts=4998 velocity_counts=-1 feedback_age_ms=26
+log_dropped_records=0
+brake_test_disable=no pending disable

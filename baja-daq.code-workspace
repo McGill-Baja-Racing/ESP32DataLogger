@@ -1,5 +1,6 @@
 {
   "folders": [
+    { "name": "ecvt-node", "path": "ecvt-node" },
     { "name": "master-node", "path": "master-node" },
     { "name": "sensor-node", "path": "sensor-node" },
     { "name": "sim-engine-rpm", "path": "simulators/engine-rpm" },
@@ -24,6 +25,7 @@
     "cmake.configureOnOpen": false,
     // The projects already have their own folders above.
     "files.exclude": {
+      "ecvt-node": true,
       "master-node": true,
       "sensor-node": true,
       "simulators": true,

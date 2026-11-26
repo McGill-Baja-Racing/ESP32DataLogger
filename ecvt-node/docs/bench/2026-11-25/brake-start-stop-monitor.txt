@@ -1,0 +1,332 @@
+ *  Executing task: platformio device monitor --environment esp32-p4
+
+--- Terminal on /dev/cu.usbmodem5CF71544971 | 115200 8-N-1
+--- Available filters and text transformations: debug, default, direct, esp32_exception_decoder, hexlify, log2file, nocontrol, printable, send_on_enter, time
+--- More details at https://bit.ly/pio-monitor-filters
+--- Quit: Ctrl+C | Menu: Ctrl+T | Help: Ctrl+T followed by Ctrl+H
+status
+Invalid command received (7 bytes): FF 73 74 61 74 75 73. Type help; retype without arrow keys/terminal escape sequences.
+mode manual
+Received: mode manual
+Manual mode selected; no motion started.
+status
+Received: status
+mode=manual state=idle busy=0 error=ESP_OK log=off/draining brake=UNVERIFIED
+statusword=0x0000 position_counts=0 velocity_counts=0 feedback_age_ms=-1
+log_dropped_records=0
+brake_test_disable=no pending disable
+servo ping
+Received: servo ping
+Servo replied: node=1 object=0x6061:00 mode=1. Read-only; no enable/motion command sent.
+servo inspect
+Received: servo inspect
+Read-only servo inspection; no controlword, enable or output writes.
+0x6041:00 statusword=0x0250 operation_enabled=0 fault=0 (drive report; brake unverified)
+0x6064:00 position_user_units=-1 (0xffffffff)
+0x606c:00 velocity_raw=0 (0x00000000)
+0x608f:01 encoder_increments=131072 (0x00020000)
+0x608f:02 encoder_motor_revs=1 (0x00000001)
+0x6091:01 gear_motor_revs=1 (0x00000001)
+0x6091:02 gear_shaft_revs=10000 (0x00002710)
+0x6093:01 position_factor_numerator=131072 (0x00020000)
+0x6093:02 position_factor_denominator=10000 (0x00002710)
+0x60fe:01 outputs_physical=0 (0x00000000)
+0x60fe:02 outputs_mask=0 (0x00000000)
+Inspection finished. Output bits do not confirm mechanical brake state.
+servo errors
+Received: servo errors
+Read-only drive errors; no fault reset, controlword or history clear.
+0x603f:00 error_code=0x0000 (0)
+0x1001:00 error_register=0x00
+0x1003:00 error_history_count=0
+0x6079:00 dc_link_voltage_raw=47900
+stop
+Received: stop
+Disable requested (6040=0x0000).
+Stop: sending 6040=0x0000; drive-managed brake engagement requested.
+Drive disable confirmed: statusword=0x0250. Standstill and mechanical brake lock UNVERIFIED.
+Drive disabled; explicit start required. Standstill/brake lock UNVERIFIED.
+servo cw 0x0000
+Received: servo cw 0x0000
+Disable requested (6040=0x0000).
+Stop: sending 6040=0x0000; drive-managed brake engagement requested.
+Drive disable confirmed: statusword=0x0250. Standstill and mechanical brake lock UNVERIFIED.
+Drive disabled; explicit start required. Standstill/brake lock UNVERIFIED.
+servo brake-test
+Received: servo brake-test
+Velocity mode verified: mode=3 target=0 statusword=0x0250 error_register=0. Drive remains disabled; no controlword sent.
+Brake test: sending 6040=0x0006.
+Brake test: statusword=0x0231, state confirmed.
+Brake test: sending 6040=0x0007.
+Brake test: statusword=0x0233, state confirmed.
+Brake test: sending target velocity 60FF=0 immediately before enable.
+Brake test: sending 6040=0x000f.
+Brake test: statusword=0x0237, state confirmed.
+BRAKE RELEASE WINDOW: servo enabled at zero target velocity for 10 seconds; observe brake. Motor torque is enabled; actual-velocity checks bypassed.
+Brake test: statusword=0x0237, state confirmed.
+Brake test: statusword=0x0237, state confirmed.
+Brake test: statusword=0x0237, state confirmed.
+Brake test: statusword=0x1237, state confirmed.
+Brake test: statusword=0x1237, state confirmed.
+Brake test: statusword=0x1237, state confirmed.
+Brake test: statusword=0x1237, state confirmed.
+Brake test: statusword=0x1237, state confirmed.
+Brake test: statusword=0x1237, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+sBrake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+tBrake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+oBrake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+pBrake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+
+Received: stop
+Disable requested (6040=0x0000).
+Stop: sending 6040=0x0000; drive-managed brake engagement requested.
+Drive disable confirmed: statusword=0x1250. Standstill and mechanical brake lock UNVERIFIED.
+Brake state test: ESP_ERR_INVALID_STATE; disable=no pending disable; mechanical_brake=UNVERIFIED
+Stop: sending 6040=0x0000; drive-managed brake engagement requested.
+Drive disable confirmed: statusword=0x1250. Standstill and mechanical brake lock UNVERIFIED.
+Drive disabled; explicit start required. Standstill/brake lock UNVERIFIED.
+servo inspect
+Received: servo inspect
+Read-only servo inspection; no controlword, enable or output writes.
+0x6041:00 statusword=0x1250 operation_enabled=0 fault=0 (drive report; brake unverified)
+0x6064:00 position_user_units=-23 (0xffffffe9)
+0x606c:00 velocity_raw=0 (0x00000000)
+0x608f:01 encoder_increments=131072 (0x00020000)
+0x608f:02 encoder_motor_revs=1 (0x00000001)
+0x6091:01 gear_motor_revs=1 (0x00000001)
+0x6091:02 gear_shaft_revs=10000 (0x00002710)
+0x6093:01 position_factor_numerator=131072 (0x00020000)
+0x6093:02 position_factor_denominator=10000 (0x00002710)
+0x60fe:01 outputs_physical=0 (0x00000000)
+0x60fe:02 outputs_mask=0 (0x00000000)
+Inspection finished. Output bits do not confirm mechanical brake state.
+servo errors
+Received: servo errors
+Read-only drive errors; no fault reset, controlword or history clear.
+0x603f:00 error_code=0x0000 (0)
+0x1001:00 error_register=0x00
+0x1003:00 error_history_count=0
+0x6079:00 dc_link_voltage_raw=47900
+servo brake-test
+Received: servo brake-test
+Velocity mode verified: mode=3 target=0 statusword=0x1250 error_register=0. Drive remains disabled; no controlword sent.
+Brake test: sending 6040=0x0006.
+Brake test: statusword=0x1231, state confirmed.
+Brake test: sending 6040=0x0007.
+Brake test: statusword=0x1233, state confirmed.
+Brake test: sending target velocity 60FF=0 immediately before enable.
+Brake test: sending 6040=0x000f.
+Brake test: statusword=0x1237, state confirmed.
+BRAKE RELEASE WINDOW: servo enabled at zero target velocity for 10 seconds; observe brake. Motor torque is enabled; actual-velocity checks bypassed.
+Brake test: statusword=0x1237, state confirmed.
+Brake test: statusword=0x1237, state confirmed.
+Brake test: statusword=0x1237, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x0637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x0637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x0637, state confirmed.
+Brake test: statusword=0x0637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x0637, state confirmed.
+Brake test: statusword=0x0637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x0637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Brake test: statusword=0x1637, state confirmed.
+Stop: sending 6040=0x0000; drive-managed brake engagement requested.
+Drive disable confirmed: statusword=0x1650. Standstill and mechanical brake lock UNVERIFIED.
+Brake state test: ESP_OK; disable=no pending disable; mechanical_brake=UNVERIFIED
+servo inspect
+Received: servo inspect
+Read-only servo inspection; no controlword, enable or output writes.
+0x6041:00 statusword=0x1250 operation_enabled=0 fault=0 (drive report; brake unverified)
+0x6064:00 position_user_units=-22 (0xffffffea)
+0x606c:00 velocity_raw=0 (0x00000000)
+0x608f:01 encoder_increments=131072 (0x00020000)
+0x608f:02 encoder_motor_revs=1 (0x00000001)
+0x6091:01 gear_motor_revs=1 (0x00000001)
+0x6091:02 gear_shaft_revs=10000 (0x00002710)
+0x6093:01 position_factor_numerator=131072 (0x00020000)
+0x6093:02 position_factor_denominator=10000 (0x00002710)
+0x60fe:01 outputs_physical=0 (0x00000000)
+0x60fe:02 outputs_mask=0 (0x00000000)
+Inspection finished. Output bits do not confirm mechanical brake state.
+servo errors
+Received: servo errors
+Read-only drive errors; no fault reset, controlword or history clear.
+0x603f:00 error_code=0x0000 (0)
+0x1001:00 error_register=0x00
+0x1003:00 error_history_count=0
+0x6079:00 dc_link_voltage_raw=47900

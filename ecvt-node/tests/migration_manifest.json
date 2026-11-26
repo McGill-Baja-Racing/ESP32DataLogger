@@ -1,0 +1,93 @@
+{
+  "source": "ECVT/src/main.cpp",
+  "functions": {
+    "control/ecvt_controller.cpp": [
+      "calculate_running_rpm_adjustment",
+      "calculate_running_target_init_from_throttle",
+      "clamp_running_target_rpm",
+      "calculate_position_from_wheel_rpm",
+      "ecvt_fsm_motor_actions_enabled",
+      "update_transition_counter",
+      "moving_median_reset",
+      "moving_median_update",
+      "issue_running_position_command",
+      "decode_sample",
+      "calc_task"
+    ],
+    "inputs/sensor_inputs.cpp": [
+      "decode_sensor_value_u32",
+      "decode_sensor_value_f32",
+      "can_sensor_id_value",
+      "enqueue_replay_sensor",
+      "enqueue_replay_sensor_f32"
+    ],
+    "inputs/rpm_acquisition.cpp": [
+      "configure_rpm_sensor_adc_channels",
+      "sample_rpm_task"
+    ],
+    "inputs/csv_replay.cpp": [
+      "parse_optional_u32_field",
+      "parse_optional_f32_field",
+      "parse_replay_row",
+      "read_sample_data"
+    ],
+    "can/can_transport.cpp": [
+      "twai_rx_cb",
+      "rx_dispatch_task"
+    ],
+    "logger/ecvt_logger.cpp": [
+      "rpm_to_centi",
+      "enqueue_log_record",
+      "queue_servo_feedback_log",
+      "queue_sensor_snapshot_log",
+      "queue_controller_command_log",
+      "close_log_file_if_open",
+      "reopen_log_file_append",
+      "write_log_block",
+      "save_task",
+      "sd_writer_task",
+      "create_unique_log_filename"
+    ],
+    "main.cpp": [
+      "app_main"
+    ]
+  },
+  "copies": {
+    "ECVT/lib/ECVT_motor.c": "src/servo/ECVT_motor.c",
+    "ECVT/include/ECVT_motor.h": "src/servo/ECVT_motor.h",
+    "ECVT/lib/ecvt_fsm.c": "src/control/ecvt_fsm.c",
+    "ECVT/include/ecvt_fsm.h": "src/control/ecvt_fsm.h",
+    "ECVT/lib/can_sensor_map.c": "src/inputs/can_sensor_map.c",
+    "ECVT/include/can_sensor_map.h": "src/inputs/can_sensor_map.h",
+    "ECVT/include/can_sensor_map_entries.inc": "src/inputs/can_sensor_map_entries.inc",
+    "ECVT/lib/can_sensor_map.csv": "src/inputs/can_sensor_map.csv",
+    "ECVT/platformio.ini": "platformio.ini",
+    "ECVT/CMakeLists.txt": "CMakeLists.txt",
+    "ECVT/sdkconfig.esp32-p4": "sdkconfig.esp32-p4",
+    "ECVT/decoder.py": "tools/decode_log.py",
+    "BAJA_ECVT/pull_sd_logs.py": "tools/pull_sd_logs.py",
+    "ECVT/test/data_low_eng_rpm.csv": "test-data/data_low_eng_rpm.csv",
+    "ECVT/test/data_brake_throttle_eng_wheel.csv": "test-data/data_brake_throttle_eng_wheel.csv"
+  },
+  "baseline_sha256": "be9b851e561c2ea9d6aad5adcecee3e3a1458d7a83418c288b189dea9084391b",
+  "intentional_behavior_changes": {
+    "app_main": "Idle startup; terminal/motor owner; optional SD; no automatic controller/replay.",
+    "calc_task": "Owned cancellable automatic operation; preparation moved to app; responsive polling retains one-second sample timeout.",
+    "ecvt_fsm_motor_actions_enabled": "Suppress state-entry motor actions on terminal cancellation.",
+    "issue_running_position_command": "Enforce explicit limits, propagate errors and observe cancellation.",
+    "read_sample_data": "Cooperative replay cancellation and return to caller; no readiness semaphore.",
+    "sample_rpm_task": "Pause and reset pulse timing between automatic runs.",
+    "rx_dispatch_task": "Capture synchronized servo feedback for stop/target confirmation.",
+    "sd_writer_task": "Persistent writer, explicit repeatable sessions, drain on stop.",
+    "enqueue_log_record": "Nonblocking admission independent of SD writes, closed-session rejection and counted drops.",
+    "write_log_block": "Count write losses and stop recording on a short write without stopping control.",
+    "twai_rx_cb": "Timestamp received frames before queueing for stale-feedback rejection.",
+    "enqueue_replay_sensor": "Initialize the new local receive metadata in synthetic frames."
+  },
+  "changed_copies": {
+    "src/servo/ECVT_motor.c": "Bounded persistent TX storage, error propagation, cancellation and serialization guards; tested by motor harness.",
+    "src/control/ecvt_fsm.c": "Cancellation-aware actions/waits and error propagation; no zero capture on cancelled wait.",
+    "platformio.ini": "Terminal line entry uses the send_on_enter monitor filter.",
+    "src/servo/ECVT_motor.h": "Adds bounded SDO reads for actual operating-mode verification and read-only drive/output inspection."
+  }
+}
