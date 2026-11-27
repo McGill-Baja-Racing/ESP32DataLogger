@@ -96,11 +96,32 @@ int main(void)
 
 COUNTER_HARNESS = r'''
 #include <stdio.h>
+#include <string.h>
 #define HEALTH_SHARED_COUNTERS 2
 #include "protocol/health_counters.c"
 
 static int failures;
 #define CHECK(condition) do { if (!(condition)) { printf("FAIL line %d: %s\n", __LINE__, #condition); failures++; } } while (0)
+
+/* Counts made before a recording are dropped, except the boot event, and never go backwards. */
+static void test_skip_counts(void)
+{
+    health_state_t baseline, reported;
+    node_health_count(HEALTH_SAMPLES_MISSED, 5, 0x0B1, ESP_OK);
+    node_health_copy_counts(&baseline);
+    CHECK(baseline.counters[HEALTH_BOOT].count > 0);
+    memset(&reported, 0, sizeof(reported));
+    node_health_skip_counts(&reported, &baseline);
+    for (size_t i = 0; i < HEALTH_COUNTER_COUNT; i++) {
+        uint32_t expected = baseline.counters[i].code == HEALTH_BOOT ? 0 : baseline.counters[i].count;
+        CHECK(reported.counters[i].count == expected);
+    }
+    size_t k = 0;
+    while (baseline.counters[k].code != HEALTH_SAMPLES_MISSED) k++;
+    reported.counters[k].count = baseline.counters[k].count + 3;
+    node_health_skip_counts(&reported, &baseline);
+    CHECK(reported.counters[k].count == baseline.counters[k].count + 3);
+}
 
 int main(void)
 {
@@ -143,6 +164,7 @@ int main(void)
     node_health_copy_counts(&now);
     CHECK(node_health_get_faults(&now, &previous) == 0);
 
+    test_skip_counts();
     if (!failures) printf("OK\n");
     return failures != 0;
 }

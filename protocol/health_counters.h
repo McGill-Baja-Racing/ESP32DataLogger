@@ -91,3 +91,15 @@ uint32_t node_health_get_faults(const health_state_t *now, const health_state_t 
  */
 health_event_frame_t node_health_pack_event(uint8_t code, uint32_t subject, uint8_t sequence,
                                             uint32_t count, esp_err_t error, uint32_t timestamp_ms);
+
+/**
+ * @brief Mark the counts made before a recording as already reported.
+ *
+ * Called when recording starts, so events only describe the recording. The
+ * boot event is kept, and a count already reported past the baseline is never
+ * moved back.
+ *
+ * @param reported Counts already reported; advanced to the baseline.
+ * @param baseline Counts copied when recording started.
+ */
+void node_health_skip_counts(health_state_t *reported, const health_state_t *baseline);

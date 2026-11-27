@@ -158,3 +158,15 @@ void node_health_count_boot(uint8_t *resets, uint8_t *reset_reason)
     *reset_reason = (uint8_t)reason;
     node_health_count(HEALTH_BOOT, 1, reason, ESP_OK);
 }
+
+void node_health_skip_counts(health_state_t *reported, const health_state_t *baseline)
+{
+    for (size_t i = 0; i < HEALTH_COUNTER_COUNT; i++) {
+        const health_counter_t *counter = &baseline->counters[i];
+        /* Signed difference: counts wrap, and a later report must never be undone. */
+        if (counter->code != HEALTH_BOOT &&
+            (int32_t)(counter->count - reported->counters[i].count) > 0) {
+            reported->counters[i].count = counter->count;
+        }
+    }
+}
