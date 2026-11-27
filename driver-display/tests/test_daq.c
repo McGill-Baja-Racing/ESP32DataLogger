@@ -184,6 +184,10 @@ static void test_signal_table(void)
     CHECK(brake >= 0 && !strcmp(signals[brake].unit, "psi") && signals[brake].node == 1);
     int aim = daq_signal_index(CAN_ID_AIM_WIRE);
     CHECK(aim >= 0 && signals[aim].node == 0);
+    /* Every sample ID the protocol defines has a row, so nothing indexes past the table. */
+    for (uint32_t id = CAN_ID_FRONT_BRAKE; id < CAN_ID_SENSOR_END; id++) {
+        if (protocol_is_sensor_id(id)) CHECK(daq_signal_index(id) >= 0);
+    }
     for (size_t i = 0; i < count; i++) {
         CHECK(signals[i].name && signals[i].name[0]);
         CHECK(daq_signal_index(signals[i].id) == (int)i);
@@ -280,6 +284,25 @@ static void test_state_event_gaps(void)
     CHECK(state.nodes[2].sequence_gaps == 64);
 }
 
+static void test_state_event_duplicate_and_power_on_boot(void)
+{
+    static daq_state_t state;
+    daq_state_init(&state);
+    daq_raw_frame_t first = event_frame(6, 10);
+    daq_state_feed(&state, &first, 100);
+    daq_state_feed(&state, &first, 101);                 /* CAN delivered it twice */
+    CHECK(state.nodes[6].sequence_gaps == 0);
+    CHECK(state.nodes[6].event_total == 1);              /* the copy is not a new event */
+    /* Power-on reboot: resets stays 0, so only the boot event restarts the check. */
+    health_event_frame_t boot = {.code = HEALTH_BOOT, .sequence = 0, .count = 1};
+    daq_raw_frame_t boot_frame = frame(CAN_ID_NODE_EVENT_BASE + 6, (const uint8_t *)&boot, 8);
+    daq_state_feed(&state, &boot_frame, 200);
+    CHECK(state.nodes[6].sequence_gaps == 0);
+    daq_raw_frame_t next = event_frame(6, 1);
+    daq_state_feed(&state, &next, 300);
+    CHECK(state.nodes[6].sequence_gaps == 0);
+}
+
 static void test_state_event_history(void)
 {
     static daq_state_t state;
@@ -359,6 +382,7 @@ int main(void)
     test_state_online_then_offline();
     test_state_rate();
     test_state_event_gaps();
+    test_state_event_duplicate_and_power_on_boot();
     test_state_event_history();
     test_state_master_and_counters();
     test_state_node_reports();

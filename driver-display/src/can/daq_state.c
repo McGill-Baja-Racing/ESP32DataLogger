@@ -28,11 +28,13 @@ static void record_signal(daq_state_t *state, uint32_t id, int32_t value, uint32
     signal->count++;
 }
 
-/* Same rule as the master's check_sequence(): count the sequence numbers skipped. */
+/* Same rule as the master's check_sequence(): a boot event restarts the check,
+ * a repeated sequence is a copy CAN delivered twice, and skipped numbers are gaps. */
 static void record_event(daq_node_state_t *node, const daq_frame_t *event, uint64_t now_ms)
 {
     uint8_t sequence = event->u.event.sequence;
-    if (node->sequence_seen) {
+    if (node->sequence_seen && event->u.event.code != HEALTH_BOOT) {
+        if (sequence == node->last_sequence) return;
         node->sequence_gaps += (uint8_t)(sequence - node->last_sequence - 1) & HEALTH_EVENT_SEQUENCE_MASK;
     }
     node->sequence_seen = true;

@@ -68,9 +68,9 @@ static void format_frame(const daq_frame_t *frame, char *out, size_t size)
         break;
     case DAQ_FRAME_SAMPLE: {
         int index = daq_signal_index(frame->u.sample.id);
-        const daq_signal_t *signal = &daq_signals(NULL)[index];
-        snprintf(out, size, "%s = %" PRId32 " %s @ %" PRIu32 " ms", signal->name, frame->u.sample.value,
-                 signal->unit, frame->u.sample.timestamp_ms);
+        const daq_signal_t *signal = index >= 0 ? &daq_signals(NULL)[index] : NULL;
+        snprintf(out, size, "%s = %" PRId32 " %s @ %" PRIu32 " ms", signal ? signal->name : "unlisted signal",
+                 frame->u.sample.value, signal ? signal->unit : "", frame->u.sample.timestamp_ms);
         break;
     }
     case DAQ_FRAME_STATUS: {
