@@ -1,5 +1,12 @@
 # Standalone firmware source map
 
+The actuator is a servo motor with its own servo drive. The ESP32 communicates
+with that drive over CANopen; it does not control the motor phases directly.
+`motor/` and `servo/` refer to software responsibilities for this same actuator,
+not two devices: operation ownership/sequencing versus drive protocol/feedback.
+The names and some small helper files still need consolidation; this map describes
+the current implementation, not a requirement to retain that split.
+
 | Directory | Responsibility |
 | --- | --- |
 | `main.cpp` | Start servo CAN, the idle motor owner and the serial console |

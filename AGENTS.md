@@ -24,6 +24,16 @@ component README. Explicit user instructions take precedence over this guidance.
   dependencies or readability justify an independent module.
 - Keep modules focused; do not turn an existing file into a collection of
   unrelated helpers. There is no arbitrary file-count or line-count target.
+- Ownership is a responsibility, not a requirement for a separate file. Related
+  operations can share a module while retaining explicit function boundaries and
+  one state/transaction owner. Do not split code solely for a test, command or
+  minor variation of an existing operation.
+- Balance cohesion with navigation: a reader should follow an ordinary operation
+  without jumping through many tiny files. A new file or directory should have a
+  distinct purpose that is easy to explain in one sentence. Use names that
+  describe responsibilities; avoid near-synonyms that imply separate subsystems
+  where there is only one. Consolidate overlapping modules when that improves
+  understanding, without combining transport, control policy and UI into one file.
 - Keep `main` for startup and wiring. Keep terminal, web and other interface
   handlers thin: parse/validate input, submit operations and present results.
 - Keep hardware access, unit conversion and protocol encoding in their owning
@@ -89,9 +99,15 @@ component README. Explicit user instructions take precedence over this guidance.
   Do not reconnect legacy automatic control, sensor inputs, replay or SD logging
   as part of a refactor. Web control, tuning and scripts are separate development
   steps; do not claim that they exist before implementing them.
-- In eCVT, `motor/` owns operations, mode preparation and drive sequencing;
-  `servo/` owns CANopen encoding and feedback/drive-state primitives; `can/`
-  owns transport; `app/` and `console/` adapt user commands to the motor API.
+- The eCVT actuator is one servo motor controlled through its servo drive. The
+  ESP32 communicates with that drive; `motor` and `servo` are not separate
+  hardware subsystems. Make that relationship clear in naming and documentation.
+- The current eCVT layout puts operation ownership/sequencing in `motor/`,
+  CANopen access and feedback helpers in `servo/`, transport in `can/`, and user
+  command adapters in `app/` and `console/`. This describes the current layout,
+  not a requirement to preserve every directory or tiny helper file. Prefer
+  cohesive drive operations, protocol access and transport with clear boundaries;
+  do not create parallel motor/servo control paths.
 - Preserve the single motor-operation owner. New interfaces submit requests;
   they must not issue concurrent drive transactions around that owner.
 - Preserve validated motor behavior during structural changes, including zero
