@@ -8,7 +8,8 @@ UI_SOURCES := $(wildcard src/ui/*.c src/ui/fonts/*.c src/views/*.c)
 UI_OBJECTS := $(UI_SOURCES:%.c=$(OBJ)/%.o)
 HEADERS := src/lv_conf.h $(wildcard src/*.h src/ui/*.h src/ui/fonts/*.h src/views/*.h)
 
-CPPFLAGS := -DLV_CONF_INCLUDE_SIMPLE -Isrc -Ithird_party/lvgl \
+# The repository root, for the shared protocol/app_protocol.h.
+CPPFLAGS := -DLV_CONF_INCLUDE_SIMPLE -Isrc -I.. -Ithird_party/lvgl \
 	-Ithird_party/libdrm/include -Ithird_party/libdrm/include/libdrm
 # The Pi has the libdrm library but no libdrm.so link, which comes with libdrm-dev.
 DRM_LIBS := -l:libdrm.so.2 -lm
@@ -64,7 +65,17 @@ autostart-off:
 	sudo systemctl daemon-reload
 	@echo "The driver display no longer starts at power-up."
 
+# Host tests of the CAN decoder and live table; no Pi, screen or LVGL needed.
+DAQ_SOURCES := src/can/daq_decode.c
+
+test: build/test-daq
+	@./build/test-daq
+
+build/test-daq: tests/test_daq.c $(DAQ_SOURCES) $(wildcard src/can/*.h) ../protocol/app_protocol.h
+	@mkdir -p build
+	$(CC) -std=gnu11 -O2 -Wall -Wextra -Werror -Isrc -I.. tests/test_daq.c $(DAQ_SOURCES) -o $@
+
 clean:
 	rm -rf build
 
-.PHONY: all snapshots autostart-on autostart-off clean
+.PHONY: all snapshots test autostart-on autostart-off clean
