@@ -14,7 +14,7 @@ class TerminalAdapterTests(unittest.TestCase):
 #include "app/ecvt_app.h"
 #include "motor/motor_core.h"
 #include <cassert>
-static unsigned submissions, help, recording;
+static unsigned submissions, help;
 static MotorRequest submitted;
 const char *esp_err_to_name(int) {return "test";}
 int64_t esp_timer_get_time() {return 0;}
@@ -22,21 +22,18 @@ bool motor_operation_cancelled() {return false;}
 bool motor_operation_wait_ms(unsigned) {return true;}
 bool motor_position_allowed(float,float) {return true;}
 void motor_operation_error(int) {}
-MotorCoreServices legacy_motor_services(bool) {return {};}
 int motor_core_start(const MotorCoreServices&) {return 0;}
-int motor_core_start_recording() {++recording; return 0;}
-void motor_core_stop_recording() {++recording;}
 MotorStatus motor_core_status() {return {};}
 MotorReceipt motor_core_submit(const MotorRequest &request) {++submissions;submitted=request;return {0,submissions};}
 void serial_console_print_help() {++help;}
 int main() {
     ConsoleCommand command; MotorRequest request;
-    const char *local[]={"help","status","test list","log start","log stop"};
+    const char *local[]={"help","status"};
     for(auto text:local) {
         assert(parse_console_command(text,&command));
         assert(!ecvt_app_motor_request(command,&request)); ecvt_app_submit(command);
     }
-    assert(submissions==0 && help==1 && recording==2);
+    assert(submissions==0 && help==1);
     assert(parse_console_command("move 0.25 10",&command));ecvt_app_submit(command);
     assert(submitted.kind==MotorCommand::Move && submitted.values[0]==0.25f && submitted.values[1]==10);
     for(auto text:{"stop","controller stop","test cancel"}) {

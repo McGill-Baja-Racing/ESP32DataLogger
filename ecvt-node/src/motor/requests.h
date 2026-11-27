@@ -3,10 +3,9 @@
 #include "esp_err.h"
 
 enum class MotorCommand {
-    Stop, ModeManual, ModeAuto, AutoStart, Limits, Profile, Move,
-    PositionStep, PositionProfile, StepResponse,
+    Stop, ModeManual, Limits, Profile, Move,
     ServoPing, ServoInspect, ServoErrors, ServoResetFault, ServoRead,
-    BrakeProbe, BrakeRestore, ThreeRevolutions, BenchHold, ServoControlword,
+    BrakeProbe, BrakeRestore, ServoControlword,
     ServoVelocityZero, ServoTorqueZeroTest, ServoPositionMode,
     ParameterRead, ParameterWrite, ParameterSnapshot
 };

@@ -1,3 +1,5 @@
+> Historical checkpoint: the current firmware has since been reduced to the standalone motor core. Legacy controller, sensors, replay, SD logging and fixed movement presets are removed. See [current README](../README.md) and [motor API](MOTOR_CORE.md).
+
 # eCVT node readiness for DAQ integration
 
 The current [motor-core refactor](MOTOR_CORE.md) supersedes application-file paths in the historical audit below. Terminal and drive sequences are retained; the optional legacy services and neutral core API are now separate.

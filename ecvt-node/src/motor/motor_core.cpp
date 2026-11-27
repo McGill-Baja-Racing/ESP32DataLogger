@@ -7,7 +7,6 @@
 #include "servo/velocity_zero.h"
 #include "experiments/motor_tests.h"
 #include "experiments/brake_probe.h"
-#include "experiments/three_revolutions.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
@@ -26,7 +25,6 @@ OperationGate gate;
 auto &stop_epoch = gate.stop_epoch;
 auto &active_epoch = gate.active_epoch;
 auto &busy = gate.busy;
-std::atomic<bool> automatic{false};
 std::atomic<RunState> state{RunState::Idle};
 std::atomic<esp_err_t> last_error{ESP_OK};
 MotorCoreServices services;
@@ -56,21 +54,17 @@ void publish_pending_stop(esp_err_t error)
 }
 bool drive_touched = false;
 MotionLimits limits;
-bool limits_explicit = false;
 float profile_accel = 2300.0f, profile_decel = 2300.0f;
 
 esp_err_t finish_operation()
 {
-    if (services.stop_inputs) services.stop_inputs(services.context);
     // Disable first, even after an MCU-only reboot or partial setup. Do not
-    // wait for mode/velocity/feedback checks or replay/SD shutdown to send it.
+    // wait for mode/velocity/feedback checks to send it.
     const esp_err_t result = brake_probe_restore();
     last_disable_error=result;
     const bool confirmed = result == ESP_OK;
     if (confirmed) drive_touched = false;
     else last_error.store(result);
-    // Replay cooperatively returns; never delete a task while it owns FILE/vector state.
-    if (services.wait_inputs) services.wait_inputs(services.context);
     state.store(confirmed ? RunState::Idle : RunState::DisableUnconfirmed);
     xQueueReset(commands);
     const uint32_t cancelled_id=queued_id.exchange(0);
@@ -89,70 +83,15 @@ esp_err_t run_motion(const MotorRequest &command)
 {
     float position = command.values[0], rpm = command.values[1];
     float accel = profile_accel, decel = profile_decel;
-    const bool bench_test = command.kind == MotorCommand::ThreeRevolutions || command.kind == MotorCommand::BenchHold;
-    if (bench_test) {
-        // Fresh-boot manual bench test: software zero has not been recaptured.
-        if (drive_touched || state.load() != RunState::Idle || automatic.load()) {
-            puts("Three-revolution test requires idle manual mode with drive disabled; inspect first.");
-            busy.store(false); return ESP_ERR_INVALID_STATE;
-        }
-        uint32_t numerator = 0, denominator = 0, raw_start = 0, output_mask = 0;
-        uint16_t drive_status = 0;
-        esp_err_t result = ecvt_motor_sdo_read_u16(0x6041, 0, &drive_status);
-        if (result == ESP_OK && (drive_status & 0x0008)) {
-            printf("Three-revolution test refused before setup: drive fault, statusword=0x%04x; use servo errors.\n", drive_status);
-            busy.store(false); return ESP_ERR_INVALID_STATE;
-        }
-        if (result == ESP_OK) result = ecvt_motor_sdo_read_u32(0x60FE, 2, &output_mask);
-        if (result == ESP_OK && output_mask != 0) result = ESP_ERR_INVALID_STATE;
-        if (result == ESP_OK) result = ecvt_motor_sdo_read_u32(0x6091, 1, &numerator);
-        if (result == ESP_OK) result = ecvt_motor_sdo_read_u32(0x6091, 2, &denominator);
-        if (result == ESP_OK) result = ecvt_motor_sdo_read_u32(0x6064, 0, &raw_start);
-        float start = 0;
-        if (result == ESP_OK && !three_revolution_target(numerator, denominator, static_cast<int32_t>(raw_start), start, position))
-            result = ESP_ERR_INVALID_ARG;
-        if (result != ESP_OK) {
-            printf("Three-revolution test refused before enable: error=%s mask=0x%08" PRIx32
-                   " 6091:01=%" PRIu32 " 6091:02=%" PRIu32 ". Requires verified 10000 command units/motor rev and representable endpoints; run servo inspect.\n",
-                   esp_err_to_name(result), output_mask, numerator, denominator);
-            busy.store(false); return ESP_ERR_INVALID_STATE;
-        }
-        rpm = 60;
-        if (!limits_explicit) {
-            // The user approved this exact relative distance and speed.
-            portENTER_CRITICAL(&status_mux);
-            limits = {true, start, position, rpm};
-            portEXIT_CRITICAL(&status_mux);
-        }
-        if (!within_limits(limits, start, rpm) || !within_limits(limits, position, rpm)) {
-            puts("Three-revolution test refused: configured limits do not cover both endpoints at 60 rpm.");
-            busy.store(false); return ESP_ERR_INVALID_STATE;
-        }
-        if (command.kind == MotorCommand::BenchHold)
-            printf("Unloaded HOLD ONLY test: measured start=%" PRId32 "; no three-turn target will be sent.\n", static_cast<int32_t>(raw_start));
-        else printf("Unloaded bench test: start=%" PRId32 " target=%" PRId64 " command units; +3 motor rev at 60 rpm. Normal drive enable/brake sequencing; no forced brake output.\n",
-                    static_cast<int32_t>(raw_start), static_cast<int64_t>(static_cast<int32_t>(raw_start)) + 30000);
-    }
-    if (command.kind == MotorCommand::PositionStep) { position = 100; rpm = 1000; accel = 500; decel = 100; }
-    if (command.kind == MotorCommand::PositionProfile) { position = 75; rpm = 2000; accel = decel = 1666; }
-    if (command.kind == MotorCommand::StepResponse) { position = 10; rpm = 2000; accel = decel = 1000; }
-    const bool auto_run = command.kind == MotorCommand::AutoStart;
-    if (auto_run && !services.run_automatic) {
-        puts("No automatic controller service installed; no setup or enable sent.");
+    if (command.kind != MotorCommand::Move) return ESP_ERR_INVALID_ARG;
+    if (!within_limits(limits, position, rpm)) {
+        puts("Movement rejected: configure explicit limits covering the requested operation.");
         return ESP_ERR_INVALID_STATE;
     }
-    if (automatic.load() != auto_run) { puts("Select the matching mode while stopped first."); busy.store(false); return ESP_ERR_INVALID_STATE; }
-    if (auto_run ? (!within_limits(limits, -6.9f, 3000) || !within_limits(limits, 0, 3000)) :
-        (!within_limits(limits, position, rpm) ||
-         (command.kind == MotorCommand::StepResponse && !within_limits(limits, -10, rpm)))) {
-        puts("Movement rejected: configure explicit limits covering the requested operation."); busy.store(false); return ESP_ERR_INVALID_STATE;
-    }
     state.store(RunState::Busy);
-    esp_err_t result = motor_prepare_position({profile_accel,profile_decel,limits.max_rpm,NODE_ID},bench_test,drive_touched);
+    esp_err_t result = motor_prepare_position({profile_accel,profile_decel,limits.max_rpm,NODE_ID},drive_touched);
     if (result == ESP_OK && !motor_operation_cancelled()) {
-        if (auto_run) {
-            result = services.run_automatic ? services.run_automatic(services.context) : ESP_ERR_INVALID_STATE;
-        } else result = motor_test_run(command.kind, position, rpm, accel, decel);
+        result = motor_test_run(command.kind, position, rpm, accel, decel);
     }
     if (result != ESP_OK && !motor_operation_cancelled()) {
         last_error.store(result);
@@ -192,18 +131,18 @@ void worker(void *)
         }
         switch (command.kind) {
         case MotorCommand::ServoVelocityZero: {
-            const esp_err_t result = note(automatic.load() ? ESP_ERR_INVALID_STATE : servo_prepare_velocity_zero());
+            const esp_err_t result = note(servo_prepare_velocity_zero());
             printf("Velocity-zero preparation: %s. No automatic state sequence or speed run.\n", esp_err_to_name(result));
             break;
         }
         case MotorCommand::ServoTorqueZeroTest: {
-            const esp_err_t result = note(automatic.load() ? ESP_ERR_INVALID_STATE : motor_torque_zero_brake_test(drive_touched));
+            const esp_err_t result = note(motor_torque_zero_brake_test(drive_touched));
             last_error.store(result);
             printf("Torque-zero brake test: %s.\n", esp_err_to_name(result));
             break;
         }
         case MotorCommand::ServoPositionMode: {
-            const esp_err_t result = note(automatic.load() ? ESP_ERR_INVALID_STATE : motor_prepare_position_mode());
+            const esp_err_t result = note(motor_prepare_position_mode());
             printf("Position-mode preparation: %s. No target or enable command sent.\n", esp_err_to_name(result));
             break;
         }
@@ -214,7 +153,6 @@ void worker(void *)
             if (word == 0) { outcome=finish_operation(); break; }
             uint16_t before = 0, after = 0;
             esp_err_t result = note(ecvt_motor_sdo_read_u16(0x6041, 0, &before));
-            if (automatic.load()) result = note(ESP_ERR_INVALID_STATE);
             // Nonzero state steps remain supervised. The 0000 path above
             // bypasses these start-only restrictions.
             if (result == ESP_OK && (before & 0x0004)) result = note(ESP_ERR_INVALID_STATE);
@@ -264,7 +202,7 @@ void worker(void *)
             outcome=motor_read_snapshot(command.objects,command.object_count,active_result);
             break;
         case MotorCommand::ServoResetFault: {
-            if (drive_touched || state.load() != RunState::Idle || automatic.load()) {
+            if (drive_touched || state.load() != RunState::Idle) {
                 outcome=ESP_ERR_INVALID_STATE; puts("Fault reset requires idle manual bench mode before motion this boot; no reset sent."); break;
             }
             uint16_t word = 0;
@@ -323,7 +261,7 @@ void worker(void *)
         case MotorCommand::BrakeProbe:
         case MotorCommand::BrakeRestore: {
             if (command.kind == MotorCommand::BrakeProbe &&
-                (drive_touched || state.load() != RunState::Idle || automatic.load())) {
+                (drive_touched || state.load() != RunState::Idle)) {
                 outcome=ESP_ERR_INVALID_STATE; puts("Brake test requires idle manual mode before motion; inspect first.");
                 break;
             }
@@ -376,14 +314,12 @@ void worker(void *)
             }
             break;
         }
-        case MotorCommand::ModeManual: automatic.store(false); puts("Manual mode selected; no motion started."); break;
-        case MotorCommand::ModeAuto: automatic.store(true); puts("Automatic mode selected; use controller start."); break;
+        case MotorCommand::ModeManual: puts("Manual mode selected; no motion started."); break;
         case MotorCommand::Limits:
             if (valid_limits(command.values[0], command.values[1], command.values[2])) {
                 portENTER_CRITICAL(&status_mux);
                 limits = {true, command.values[0], command.values[1], command.values[2]};
                 portEXIT_CRITICAL(&status_mux);
-                limits_explicit = true;
                 printf("Limits: %.4f .. %.4f logical rev; max %.2f rpm\n", limits.min_revs, limits.max_revs, limits.max_rpm);
             } else { outcome=ESP_ERR_INVALID_ARG; puts("Invalid limits."); }
             break;
@@ -429,23 +365,10 @@ bool motor_operation_wait_ms(unsigned milliseconds)
     return !motor_operation_cancelled();
 }
 
-esp_err_t motor_core_start_recording()
-{
-    return services.start_recording ? services.start_recording(services.context) : ESP_ERR_INVALID_STATE;
-}
-void motor_core_stop_recording()
-{
-    if (services.stop_recording) services.stop_recording(services.context);
-}
-void motor_core_record_command(float position, float rpm)
-{
-    if (services.record_command) services.record_command(services.context,position,rpm);
-}
-
 MotorStatus motor_core_status()
 {
     MotorStatus snapshot;
-    snapshot.state=state.load(); snapshot.busy=busy.load(); snapshot.automatic=automatic.load();
+    snapshot.state=state.load(); snapshot.busy=busy.load();
     snapshot.active_request_id=active_id.load();
     if (!snapshot.active_request_id) snapshot.active_request_id=queued_id.load();
     snapshot.disable_pending=brake_probe_restore_pending(); snapshot.error=last_error.load();
@@ -456,8 +379,6 @@ MotorStatus motor_core_status()
     snapshot.acceleration_rpm_s=profile_accel; snapshot.deceleration_rpm_s=profile_decel;
     snapshot.last_result=last_result;
     portEXIT_CRITICAL(&status_mux);
-    snapshot.recording_stopped=services.recording_stopped ? services.recording_stopped(services.context) : true;
-    snapshot.dropped_records=services.dropped_records ? services.dropped_records(services.context) : 0;
     return snapshot;
 }
 

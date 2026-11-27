@@ -30,7 +30,6 @@ bool parse_console_command(const char *line, ConsoleCommand *command)
     else if (count == 2 && is(0, "servo") && is(1, "inspect")) parsed.kind = CommandKind::ServoInspect;
     else if (count == 2 && is(0, "servo") && is(1, "errors")) parsed.kind = CommandKind::ServoErrors;
     else if (count == 2 && is(0, "servo") && is(1, "reset-fault")) parsed.kind = CommandKind::ServoResetFault;
-    else if (count == 2 && is(0, "servo") && is(1, "hold-test")) parsed.kind = CommandKind::BenchHold;
     else if (count == 2 && is(0, "servo") && is(1, "velocity-zero")) parsed.kind = CommandKind::ServoVelocityZero;
     else if (count == 2 && is(0, "servo") && is(1, "position-mode")) parsed.kind = CommandKind::ServoPositionMode;
     else if (count == 2 && is(0, "servo") && is(1, "torque-zero-test")) parsed.kind = CommandKind::ServoTorqueZeroTest;
@@ -64,19 +63,10 @@ bool parse_console_command(const char *line, ConsoleCommand *command)
     else if ((count == 1 && is(0, "stop")) ||
              (count == 2 && is(0, "test") && is(1, "cancel"))) parsed.kind = CommandKind::Stop;
     else if (count == 2 && is(0, "mode") && is(1, "manual")) parsed.kind = CommandKind::ModeManual;
-    else if (count == 2 && is(0, "mode") && is(1, "auto")) parsed.kind = CommandKind::ModeAuto;
-    else if (count == 2 && is(0, "controller") && is(1, "start")) parsed.kind = CommandKind::AutoStart;
     else if (count == 2 && is(0, "controller") && is(1, "stop")) parsed.kind = CommandKind::Stop;
     else if (count == 4 && is(0, "limits")) { parsed.kind = CommandKind::Limits; numbers = 3; }
     else if (count == 3 && is(0, "profile")) { parsed.kind = CommandKind::Profile; numbers = 2; }
     else if (count == 3 && is(0, "move")) { parsed.kind = CommandKind::Move; numbers = 2; }
-    else if (count == 2 && is(0, "test") && is(1, "list")) parsed.kind = CommandKind::TestList;
-    else if (count == 3 && is(0, "test") && is(1, "run") && is(2, "position-step")) parsed.kind = CommandKind::PositionStep;
-    else if (count == 3 && is(0, "test") && is(1, "run") && is(2, "position-profile")) parsed.kind = CommandKind::PositionProfile;
-    else if (count == 3 && is(0, "test") && is(1, "run") && is(2, "step-response")) parsed.kind = CommandKind::StepResponse;
-    else if (count == 3 && is(0, "test") && is(1, "run") && is(2, "three-revolutions")) parsed.kind = CommandKind::ThreeRevolutions;
-    else if (count == 2 && is(0, "log") && is(1, "start")) parsed.kind = CommandKind::LogStart;
-    else if (count == 2 && is(0, "log") && is(1, "stop")) parsed.kind = CommandKind::LogStop;
     else return false;
     for (unsigned i = 0; i < numbers; ++i) {
         char *end = nullptr;

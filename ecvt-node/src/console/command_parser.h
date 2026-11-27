@@ -1,9 +1,9 @@
 #pragma once
 
 enum class CommandKind {
-    Help, Status, Stop, ModeManual, ModeAuto, AutoStart, Limits, Profile,
-    Move, TestList, PositionStep, PositionProfile, StepResponse, LogStart, LogStop, ServoPing, ServoInspect,
-    BrakeProbe, BrakeRestore, ThreeRevolutions, ServoErrors, ServoResetFault, ServoRead, BenchHold, ServoControlword, ServoVelocityZero, ServoTorqueZeroTest, ServoPositionMode
+    Help, Status, Stop, ModeManual, Limits, Profile,
+    Move, ServoPing, ServoInspect,
+    BrakeProbe, BrakeRestore, ServoErrors, ServoResetFault, ServoRead, ServoControlword, ServoVelocityZero, ServoTorqueZeroTest, ServoPositionMode
 };
 
 struct ConsoleCommand {

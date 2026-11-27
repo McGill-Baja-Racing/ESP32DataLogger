@@ -156,12 +156,7 @@ int main() {
     assert(zero<control && target_velocity==0);
     auto explicit_disable=submit(MotorCommand::ServoControlword,0); pump();
     assert(result_for(explicit_disable.id).error==0 && drive_status==0x0250);
-    // Automatic behavior is optional and must not enable without an adapter.
-    auto auto_mode=submit(MotorCommand::ModeAuto); pump();
-    submit(MotorCommand::Limits,-6.9f,0,3000); pump(); bus.clear();
-    auto automatic=submit(MotorCommand::AutoStart); pump();
-    assert(result_for(automatic.id).error==ESP_ERR_INVALID_STATE && bus.empty());
-    submit(MotorCommand::ModeManual); pump(); submit(MotorCommand::Limits,-0.1f,0.6f,10); pump();
+
     // The ten-second brake sequence remains available through the neutral API.
     drive_mode=3; auto brake=submit(MotorCommand::BrakeProbe); int64_t before=now; pump();
     assert(result_for(brake.id).error==0 && now-before>=10000000 && drive_status==0x0250);
@@ -187,9 +182,9 @@ int main() {
     assert(read_result.object_count==2 && read_result.objects[0].sampled_us<read_result.objects[1].sampled_us);
     cancel_snapshot=true; read=motor_core_submit(object); pump(); read_result=result_for(read.id);
     assert(read_result.cancelled && read_result.object_count==1 && result_for(requested_stop).error==0);
-    // Stop remains unconditional with auto selected, faults, missing acknowledgements and failed reads.
-    submit(MotorCommand::ModeAuto); pump(); drive_status=0x0637; drive_mode=3; bus.clear(); stop();
-    assert(bus.front()=="disable" && motor_core_status().automatic);
+    // Stop remains unconditional in mode 3, with faults, missing acknowledgements and failed reads.
+    drive_status=0x0637; drive_mode=3; bus.clear(); stop();
+    assert(bus.front()=="disable");
     drive_status=0x0637; write_fails=true; stop(); write_fails=false;
     read_fails=true; auto failed=submit(MotorCommand::Stop); pump();
     assert(result_for(failed.id).error!=0 && motor_core_status().disable_pending);

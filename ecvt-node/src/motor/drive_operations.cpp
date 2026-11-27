@@ -2,7 +2,6 @@
 #include "runtime.h"
 #include "servo/ECVT_motor.h"
 #include "servo/servo_feedback.h"
-#include "experiments/three_revolutions.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -122,23 +121,7 @@ esp_err_t motor_prepare_position_mode()
     return result;
 }
 
-esp_err_t wait_for_hold_target_ack(bool high)
-{
-    const int64_t deadline = esp_timer_get_time() + 1000000;
-    while (esp_timer_get_time() < deadline) {
-        if (motor_operation_cancelled()) return ESP_ERR_INVALID_STATE;
-        uint16_t word = 0;
-        const esp_err_t result = ecvt_motor_sdo_read_u16(0x6041, 0, &word);
-        if (result != ESP_OK) return result;
-        if ((word & 0x006F) != 0x0027) return ESP_ERR_INVALID_STATE;
-        if (static_cast<bool>(word & 0x1000) == high) return ESP_OK;
-        if (!motor_operation_wait_ms(20)) return ESP_ERR_INVALID_STATE;
-    }
-    puts("Current-position hold target was not acknowledged; Halt remains set, move not triggered.");
-    return ESP_ERR_TIMEOUT;
-}
-
-esp_err_t motor_prepare_position(const MotorPositionSetup &setup, bool brake_release_wait, bool &drive_touched)
+esp_err_t motor_prepare_position(const MotorPositionSetup &setup, bool &drive_touched)
 {
     drive_touched = true;
 #define PREPARE(call) do { if (motor_operation_cancelled()) return ESP_ERR_INVALID_STATE; \
@@ -178,44 +161,6 @@ esp_err_t motor_prepare_position(const MotorPositionSetup &setup, bool brake_rel
     for (uint16_t word : {uint16_t(0x0006), uint16_t(0x0007), uint16_t(0x010F)}) {
         PREPARE(ecvt_motor_send_controlword(word));
         PREPARE(wait_for_drive_state(word == 0x0006 ? 0x0021 : word == 0x0007 ? 0x0023 : 0x0027, word));
-    }
-    if (brake_release_wait) {
-        // Latch the measured hold target with Halt set before clearing Halt.
-        // Clearing Halt must not resume a target from a previous operation.
-        uint32_t held_position = 0;
-        PREPARE(ecvt_motor_sdo_read_u32(0x6064, 0, &held_position));
-        PREPARE(ecvt_motor_sdo_write_u32(0x607A, 0, held_position));
-        PREPARE(ecvt_motor_sdo_write_u16(0x6040, 0, 0x012F));
-        PREPARE(wait_for_hold_target_ack(false));
-        PREPARE(ecvt_motor_sdo_write_u16(0x6040, 0, 0x013F));
-        PREPARE(wait_for_hold_target_ack(true));
-        uint32_t demanded_position = 0;
-        PREPARE(ecvt_motor_sdo_read_u32(0x6062, 0, &demanded_position));
-        if (!hold_demand_matches(held_position, demanded_position)) {
-            printf("Hold refused BEFORE clearing Halt: requested=%" PRId32 " demanded=%" PRId32 "; no active-wait or rotation target sent.\n",
-                   static_cast<int32_t>(held_position), static_cast<int32_t>(demanded_position));
-            return ESP_ERR_INVALID_STATE;
-        }
-        PREPARE(ecvt_motor_sdo_write_u16(0x6040, 0, 0x000F));
-        PREPARE(wait_for_drive_state(0x0027, 0x000F));
-        puts("ACTIVE HOLD: waiting 1000 ms for drive-managed brake release before the bench measurement/move.");
-        const int64_t release_ready_us = esp_timer_get_time() + 1000000;
-        while (esp_timer_get_time() < release_ready_us) {
-            uint16_t observed = 0;
-            PREPARE(ecvt_motor_sdo_read_u16(0x6041, 0, &observed));
-            PREPARE(ecvt_motor_sdo_read_u32(0x6062, 0, &demanded_position));
-            if (!hold_demand_matches(held_position, demanded_position)) {
-                printf("Active hold aborted: requested=%" PRId32 " demanded=%" PRId32 "; three-turn target not sent.\n",
-                       static_cast<int32_t>(held_position), static_cast<int32_t>(demanded_position));
-                return ESP_ERR_INVALID_STATE;
-            }
-            if ((observed & 0x006F) != 0x0027) {
-                printf("Active-hold wait failed: statusword=0x%04x; three-turn target not sent.\n", observed);
-                return ESP_ERR_INVALID_STATE;
-            }
-            if (!motor_operation_wait_ms(20)) return ESP_ERR_INVALID_STATE;
-        }
-        puts("Active-hold wait complete. Mechanical brake release remains unverified.");
     }
 #undef PREPARE
     return ESP_OK;

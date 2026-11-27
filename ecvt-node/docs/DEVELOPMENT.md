@@ -10,7 +10,7 @@ sequence. Moving files is not evidence of DAQ compatibility or deployment.
 
 The branch is `BajaRemy/ecvt-standalone`, based on DAQ main
 `5fa2917e4d311e9a419ffd37b93ba92420df3806`. The imported eCVT source checkpoint is
-`6e033d5c100ef7d887510a19da2e0f2c0f31b65d`. Runtime sources are unchanged.
+`6e033d5c100ef7d887510a19da2e0f2c0f31b65d`. The runtime was subsequently reduced to the standalone motor core.
 
 ## Development stages
 
@@ -34,19 +34,18 @@ The branch is `BajaRemy/ecvt-standalone`, based on DAQ main
 
 ## Motor core checkpoint
 
-The [motor core](MOTOR_CORE.md) now provides the shared operation, status/result and parameter-access API. The terminal is an adapter; optional legacy controller/replay/recording services are separate. Web and script frontends can use this API without duplicating drive ownership. No DAQ runtime connection or web server was added.
+The [motor core](MOTOR_CORE.md) now provides the shared operation, status/result and parameter-access API. The terminal is an adapter. Legacy controller, acquisition, replay and recording implementations and their service hooks have been removed. Web and script frontends can use this API without duplicating drive ownership. No DAQ runtime connection or web server was added.
 
 ## Decisions for the interface stage
 
-- Confirm how the browser connects: a computer-hosted interface over USB serial,
-  or a device-hosted interface using an available network companion. The current
-  ESP32-P4 firmware has no network setup; verify the actual board/network hardware
-  rather than assuming it has the master's Wi-Fi arrangement.
+- Implement the device-hosted interface using the board's network companion.
+  The user confirmed it is the same board type as the master, on a newer revision.
+  Network setup and the web server are not implemented in this firmware yet.
 - Select parameter groups and engineering units. Read the current drive values,
   display saved/current differences, and distinguish temporary writes from
   persistent storage. No blanket factory reset or guessed motor/encoder settings.
 - Define the manual operations and test-script actions the user needs first.
-  Existing presets do not yet constitute a general script engine or tuning UI.
+  No general script engine or tuning UI is implemented.
 - Choose plots and exported results: target/actual position and velocity,
   current/torque, state/faults, parameter snapshot, timestamps and loss counts.
 - Keep stop/0000 accessible during an active test; opening a page or reconnecting
@@ -68,5 +67,5 @@ pio run -d ecvt-node -e esp32-p4
 
 CI includes the standalone project and its host checks. Its toolchain pin is
 checked separately from the unchanged DAQ projects. The import provenance
-records hashes of all runtime files; the migration checks use local immutable
-fixtures. No hardware upload or actuation is part of this migration.
+records hashes of the initial import, not the current refactored source. Legacy
+comparison fixtures were removed with the old runtime. No hardware upload or actuation is part of this migration.

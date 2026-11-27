@@ -38,7 +38,7 @@ SDK and linker are incompatible; the checks were run using
 `SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk` before the Python
 command. Other platforms should follow the repository's [test prerequisites](../docs/TESTING.md).
 
-The owner has since been extracted behind a [motor-control API](docs/MOTOR_CORE.md), with a terminal adapter and optional legacy services. The current refactor preserves the validated command sequences; it has not yet been physically retested.
+The owner has since been extracted behind a [motor-control API](docs/MOTOR_CORE.md), with a terminal adapter. The legacy automatic controller, sensors, CSV replay, SD logger and fixed movement presets have now been removed from the project. The current refactor preserves the validated command sequences; it has not yet been physically retested.
 
 ## Current standing
 
@@ -47,8 +47,8 @@ The owner has since been extracted behind a [motor-control API](docs/MOTOR_CORE.
 | Idle boot and manual terminal control | Implemented |
 | Servo diagnostics and drive errors | Implemented |
 | Zero-speed brake cycle, small position moves and stop during motion | Passed user-run bare-motor checks; [evidence](docs/bench/2026-11-25/README.md) |
-| Stop/0000 | Shared unconditional disable path, including busy/auto and MCU-restart cases; host tests cover additional failure/retry paths |
-| Local SD recording, CSV replay and legacy automatic controller | Retained; broader hardware/controller validation incomplete |
+| Stop/0000 | Shared unconditional disable path, including busy and MCU-restart cases; host tests cover additional failure/retry paths |
+| Legacy controller, sensor acquisition, CSV replay, SD recording and fixed movement presets | Removed; recoverable from Git history |
 | Motor-core API, typed parameter access and configuration snapshots | Implemented backend; terminal uses the same operation owner |
 | Motor tuning interface and user-authored test scripts | Planned; no browser interface or script editor implemented yet |
 | DAQ sensors, shared CAN protocol and master logging | Deferred until standalone control/tuning is ready |
@@ -69,13 +69,12 @@ separate build. `sdkconfig.defaults` preserves the prior effective settings,
 including revision selection, 1 kHz FreeRTOS tick and the 2 MB firmware layout.
 The layout is not a measurement of the physical flash capacity.
 
-Migration tests use immutable [reference fixtures](tests/fixtures/migration-baseline/README.md),
-so a fresh DAQ clone needs neither the old repository nor a local Downloads folder.
-Original motor experiments remain documented in the [catalogue](src/experiments/README.md);
-the full legacy projects remain in the source repository.
+The current host suite exercises the standalone core, actual CANopen serialization,
+manual moves and cancellation, parameter access, brake sequencing and terminal.
+The import checkpoint and original experiments remain recoverable from Git
+history; historical import documents describe that earlier checkpoint.
 
 Known limitations include the first-command FF serial byte, noisy repeated brake
-status messages, incomplete full command/input provenance, unresolved legacy
-shared-sensor snapshots, and incomplete restart/mode/fault hardware coverage.
+status messages and incomplete restart/fault hardware coverage.
 Drive parameters are not reset by moving this project. Save a read-back export
 of the working motor configuration before changing tuning.

@@ -10,6 +10,6 @@ struct MotorPositionSetup {
 };
 // Owner-only drive sequences. touched reports whether setup may have changed
 // the drive even when an acknowledgement fails. No console/legacy dependency.
-esp_err_t motor_prepare_position(const MotorPositionSetup &, bool brake_release_wait, bool &touched);
+esp_err_t motor_prepare_position(const MotorPositionSetup &, bool &touched);
 esp_err_t motor_prepare_position_mode();
 esp_err_t motor_torque_zero_brake_test(bool &touched);

@@ -1,3 +1,5 @@
+> Historical checkpoint: the current firmware has since been reduced to the standalone motor core. Legacy controller, sensors, replay, SD logging and fixed movement presets are removed. See [current README](../README.md) and [motor API](MOTOR_CORE.md).
+
 # Standalone import validation, 2026-11-26
 
 Destination branch: `BajaRemy/ecvt-standalone` in

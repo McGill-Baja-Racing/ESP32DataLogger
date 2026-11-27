@@ -1,8 +1,6 @@
 #pragma once
-#include "app/runtime_internal.h"
+#include "esp_err.h"
 
-bool twai_rx_cb(twai_node_handle_t node,
-                       const twai_rx_done_event_data_t *edata,
-                       void *user_ctx);
-
-void rx_dispatch_task(void *arg);
+// Standalone servo bus: TX=5, RX=4, 500 kbit/s, drive node 1.
+// Creates the receiver and driver; never sends an enable or motion command.
+esp_err_t servo_can_start();

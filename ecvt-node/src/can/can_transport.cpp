@@ -1,133 +1,90 @@
-#include "app/modules_internal.h"
+#include "can_transport.h"
+#include "servo_frame.h"
+#include "servo/ECVT_motor.h"
 #include "servo/servo_feedback.h"
+#include "esp_twai_onchip.h"
+#include "esp_timer.h"
+#include "esp_log.h"
+#include "freertos/task.h"
+#include <cstring>
 
-QueueHandle_t twai_rx_raw_queue;
-QueueHandle_t twai_rx_sample_queue;
-QueueHandle_t twai_rx_servo_SDO_queue;
-twai_node_handle_t node_hdl = NULL;
-twai_onchip_node_config_t node_cfg{};
-twai_event_callbacks_t cbs{};
-volatile uint32_t s_latest_throttle = 0;
-volatile float s_latest_engine_rpm = 0.0f;
-volatile float s_latest_wheel_rpm = 0.0f;
-volatile bool s_latest_brake_state = false;
-volatile uint16_t s_latest_tpdo1_statusword = 0;
-volatile int64_t s_latest_tpdo1_rx_us = 0;
+namespace {
+constexpr const char *TAG = "ECVT";
+QueueHandle_t raw_queue, sdo_queue;
+twai_node_handle_t node;
 
-bool twai_rx_cb(twai_node_handle_t node,
-                       const twai_rx_done_event_data_t *edata,
-                       void *user_ctx)
+bool receive(twai_node_handle_t handle, const twai_rx_done_event_data_t *, void *)
 {
-    (void)edata;
-    (void)user_ctx;
-
-    BaseType_t hp_woken = pdFALSE;
-
-    uint8_t raw[8] = {0};
-    twai_frame_t fr{};
-    fr.buffer = raw;
-    fr.buffer_len = sizeof(raw);
-
-
-    if (twai_node_receive_from_isr(node, &fr) == ESP_OK) {
-        can_rx_item_t item = {0};
+    BaseType_t woken = pdFALSE;
+    uint8_t data[8] = {};
+    twai_frame_t frame{};
+    frame.buffer = data;
+    frame.buffer_len = sizeof(data);
+    if (twai_node_receive_from_isr(handle, &frame) == ESP_OK) {
+        ecvt_motor_can_rx_item_t item{};
         item.received_us = esp_timer_get_time();
-        item.id  = fr.header.id;
-        item.dlc = fr.header.dlc > 8 ? 8 : fr.header.dlc;
-        memcpy(item.data, raw, item.dlc);
-        xQueueSendFromISR(twai_rx_raw_queue, &item, &hp_woken);
+        item.id = frame.header.id;
+        item.dlc = frame.header.dlc > 8 ? 8 : frame.header.dlc;
+        std::memcpy(item.data, data, item.dlc);
+        xQueueSendFromISR(raw_queue, &item, &woken);
     }
-
-    return hp_woken == pdTRUE;
+    return woken == pdTRUE;
 }
 
-void rx_dispatch_task(void *arg)
+void dispatch(void *)
 {
-    (void)arg;
-
-    while (1) {
-        can_rx_item_t item;
-        if (xQueueReceive(twai_rx_raw_queue, &item, pdMS_TO_TICKS(500)) != pdTRUE) {
-            continue;
+    while (true) {
+        ecvt_motor_can_rx_item_t item{};
+        if (xQueueReceive(raw_queue, &item, portMAX_DELAY) != pdTRUE) continue;
+        switch (servo_frame_kind(item.id, item.dlc)) {
+        case ServoFrameKind::Sdo:
+            if (xQueueSend(sdo_queue, &item, 1) != pdPASS)
+                ESP_LOGW(TAG, "Servo SDO queue full; reply dropped");
+            break;
+        case ServoFrameKind::Status:
+            servo_feedback_record(1, servo_frame_u16(item.data), item.received_us);
+            break;
+        case ServoFrameKind::Position: {
+            const int32_t value = static_cast<int32_t>(servo_frame_u32(item.data));
+            (void)ecvt_motor_set_actual_position_feedback(float(value) / 10000.0f);
+            servo_feedback_record(2, value, item.received_us);
+            break;
         }
-
-        const can_sensor_map_entry_t *map_entry = can_sensor_map_find_by_id(item.id, NODE_ID);
-        if (!map_entry) {
-            continue;
-        }
-
-        if (map_entry->sensor_id == CAN_SENSOR_SERVO_SDO_RX) {
-            if (xQueueSend(twai_rx_servo_SDO_queue, &item, 1) != pdPASS) {
-                ESP_LOGW(TAG, "Servo Queue FULL — item dropped");
-            }
-        }
-        else if (map_entry->sensor_id == CAN_SENSOR_SERVO_TPDO1) {
-            if (item.dlc >= 2) {
-                s_latest_tpdo1_statusword = (uint16_t)(item.data[0] | (item.data[1] << 8));
-                s_latest_tpdo1_rx_us = item.received_us;
-                servo_feedback_record(1, s_latest_tpdo1_statusword, s_latest_tpdo1_rx_us);
-            }
-        }
-        else if (map_entry->message_type == CAN_SENSOR_MAP_TYPE_SENSOR_DATA) {
-            const uint32_t sensor_value = decode_sensor_value_u32(&item);
-
-            switch (map_entry->sensor_id) {
-            case CAN_SENSOR_ENGINE_RPM:
-                s_latest_engine_rpm = decode_sensor_value_f32(&item);
-                if (!stop_logging) {
-                    queue_sensor_snapshot_log(LOG_RECORD_TYPE_SENSOR_ENGINE_RPM);
-                }
-                break;
-            case CAN_SENSOR_BRAKE_STATE:
-                s_latest_brake_state = (sensor_value != 0U);
-                if (!stop_logging) {
-                    queue_sensor_snapshot_log(LOG_RECORD_TYPE_SENSOR_BRAKE_STATE);
-                }
-                break;
-            case CAN_SENSOR_THROTTLE:
-                s_latest_throttle = sensor_value;
-                if (!stop_logging) {
-                    queue_sensor_snapshot_log(LOG_RECORD_TYPE_SENSOR_THROTTLE);
-                }
-                break;
-            case CAN_SENSOR_WHEEL_RPM:
-                s_latest_wheel_rpm = decode_sensor_value_f32(&item);
-                if (!stop_logging) {
-                    queue_sensor_snapshot_log(LOG_RECORD_TYPE_SENSOR_WHEEL_RPM);
-                }
-                break;
-            default:
-                break;
-            }
-
-            if (xQueueSend(twai_rx_sample_queue, &item, 1) != pdPASS) {
-                ESP_LOGW(TAG, "Sample Queue FULL — item dropped");
-            }
-        }
-        else if (map_entry->sensor_id == CAN_SENSOR_SERVO_TPDO2) {
-            if (item.dlc >= 4) {
-                const int32_t position_counts = (int32_t)decode_sensor_value_u32(&item);
-                (void)ecvt_motor_set_actual_position_feedback((float)position_counts / 10000.0f);
-                servo_feedback_record(2, position_counts, item.received_us);
-            }
-            if (!stop_logging) {
-                queue_servo_feedback_log(LOG_RECORD_TYPE_SERVO_TPDO2,
-                                         item.dlc >= 4 ? (int32_t)decode_sensor_value_u32(&item) : 0);
-            }
-        }
-        else if (map_entry->sensor_id == CAN_SENSOR_SERVO_TPDO3) {
-            if (item.dlc >= 4) servo_feedback_record(3, (int32_t)decode_sensor_value_u32(&item), item.received_us);
-            if (!stop_logging) {
-                queue_servo_feedback_log(LOG_RECORD_TYPE_SERVO_TPDO3,
-                                         item.dlc >= 4 ? (int32_t)decode_sensor_value_u32(&item) : 0);
-            }
-        }
-        else if (map_entry->sensor_id == CAN_SENSOR_SERVO_TPDO4) {
-            if (item.dlc >= 2) servo_feedback_record(4, static_cast<int16_t>(decode_sensor_value_u32(&item)), item.received_us);
-            if (!stop_logging) {
-                queue_servo_feedback_log(LOG_RECORD_TYPE_SERVO_TPDO4,
-                                         item.dlc >= 2 ? (int32_t)(int16_t)decode_sensor_value_u32(&item) : 0);
-            }
+        case ServoFrameKind::Velocity:
+            servo_feedback_record(3, static_cast<int32_t>(servo_frame_u32(item.data)), item.received_us);
+            break;
+        case ServoFrameKind::Current:
+            servo_feedback_record(4, static_cast<int16_t>(servo_frame_u16(item.data)), item.received_us);
+            break;
+        case ServoFrameKind::Ignore: break;
         }
     }
+}
+} // namespace
+
+esp_err_t servo_can_start()
+{
+    if (raw_queue || sdo_queue || node) return ESP_ERR_INVALID_STATE;
+    raw_queue = xQueueCreate(256, sizeof(ecvt_motor_can_rx_item_t));
+    sdo_queue = xQueueCreate(256, sizeof(ecvt_motor_can_rx_item_t));
+    if (!raw_queue || !sdo_queue) return ESP_ERR_NO_MEM;
+    twai_onchip_node_config_t config{};
+    config.io_cfg.tx = GPIO_NUM_5;
+    config.io_cfg.rx = GPIO_NUM_4;
+    config.bit_timing.bitrate = 500000;
+    config.tx_queue_depth = 8;
+    esp_err_t error = twai_new_node_onchip(&config, &node);
+    if (error != ESP_OK) return error;
+    twai_event_callbacks_t callbacks{};
+    callbacks.on_rx_done = receive;
+    error = twai_node_register_event_callbacks(node, &callbacks, nullptr);
+    if (error != ESP_OK) return error;
+    error = twai_node_enable(node);
+    if (error != ESP_OK) return error;
+    error = ecvt_motor_init(node, sdo_queue, 1, TAG);
+    if (error != ESP_OK) return error;
+    if (xTaskCreate(dispatch, "servo_rx", 4096, nullptr, 7, nullptr) != pdPASS)
+        return ESP_ERR_NO_MEM;
+    ESP_LOGI(TAG, "Standalone servo CAN ready: 500 kbit/s, node 1, TX5/RX4");
+    return ESP_OK;
 }

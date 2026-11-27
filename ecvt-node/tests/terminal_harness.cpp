@@ -1,6 +1,5 @@
 #include "console/command_parser.h"
 #include "console/line_input.h"
-#include "experiments/three_revolutions.h"
 #include "motor/limits.h"
 #include "motor/operation_gate.h"
 #include <cassert>
@@ -44,13 +43,13 @@ int main()
     assert(input.push('\n') == LineResult::Ready);
 
     ConsoleCommand command;
-    const char *valid[] = {"help", "status", "servo ping", "servo inspect", "servo errors", "servo reset-fault", "servo brake-test", "servo brake-restore", "stop", "test cancel", "mode manual", "mode auto",
-        "controller start", "controller stop", "test list", "test run position-step", "test run three-revolutions", "servo hold-test",
+    const char *valid[] = {"help", "status", "servo ping", "servo inspect", "servo errors", "servo reset-fault", "servo brake-test", "servo brake-restore", "stop", "test cancel", "mode manual",
+        "controller stop",
         "servo read 0x6040 0 u16", "servo read 5120 1 u32", "servo read 0x1001 0x00 u8", "servo cw 0x0006", "servo cw 7", "servo cw 0x000F", "servo velocity-zero", "servo torque-zero-test", "servo position-mode",
-        "test run position-profile", "test run step-response", "log start", "log stop",
+
         "limits -6.9 0 3000", "profile 2300 2300", "move -1.25 1000", " \tmove 0 50\r\n"};
     for (const char *line : valid) assert(parse_console_command(line, &command));
-    const char *invalid[] = {"", " ", "move", "move 1", "move 1 2 3", "move nan 1",
+    const char *invalid[] = {"mode auto", "controller start", "test list", "test run position-step", "test run three-revolutions", "servo hold-test", "test run position-profile", "test run step-response", "log start", "log stop", "", " ", "move", "move 1", "move 1 2 3", "move nan 1",
         "move 1 inf", "move 1e100 2", "move 1x 2", "limits 0 1", "profile 1 2x",
         "mode manual go", "test run torque", "test run position-profile extra", "test run three-revolutions 3", "stop now", "servo ping now", "servo inspect extra", "servo brake-test 10", "servo brake-restore extra",
         "servo read -1 0 u8", "servo read 65536 0 u32", "servo read 0x6040 256 u16", "servo read 0x6040 0 u64", "servo read 0x6040 0 u16 extra", "servo read 1.5 0 u16", "servo cw 0x003f", "servo cw -1", "servo cw 65542", "servo cw 6 extra"};
@@ -63,18 +62,6 @@ int main()
     assert(command.kind == CommandKind::Move && command.values[0] == -1.25f && command.values[1] == 1000);
     assert(parse_console_command("servo read 0x6040 0 u16", &command));
     assert(command.kind == CommandKind::ServoRead && command.values[0] == 0x6040 && command.values[1] == 0 && command.values[2] == 2);
-
-    float start, target;
-    assert(hold_demand_matches(0, 0) && hold_demand_matches(0, 1) && hold_demand_matches(0, 0xffffffffu));
-    assert(!hold_demand_matches(0, 29255) && !hold_demand_matches(0, 2));
-    assert(!hold_demand_matches(0x80000000u, 0x7fffffffu));
-    assert(three_revolution_target(1, 10000, 12500, start, target) && start==1.25f && target==4.25f);
-    assert(three_revolution_target(2, 20000, -12500, start, target) && start==-1.25f && target==1.75f);
-    assert(!three_revolution_target(0, 10000, 0, start, target));
-    assert(!three_revolution_target(1, 1, 0, start, target));
-    assert(!three_revolution_target(131072, 1, 0, start, target));
-    assert(!three_revolution_target(1, 10000, INT32_MAX-100, start, target));
-    assert(!three_revolution_target(1, 10000, 2000000001, start, target)); // float wire precision
 
     MotionLimits limits;
     assert(direct_bench_enable_allowed(0x0233, 1, 0, 75));
