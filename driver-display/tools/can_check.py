@@ -12,13 +12,15 @@ Steps:
               crystal and the INT line, and checks that every byte comes back.
   3. Listen   Listen-only on the bus. Prints "NO DATA" when nothing arrives,
               otherwise decodes the DAQ frames (beacon, sensors, health...).
-  4. TX       Sends one frame in normal mode. With no other node on the bus,
+  4. TX       Only with --tx. Sends one frame in normal mode. With no other node on the bus,
               nobody acknowledges it, so a working transceiver ends in
               ERROR-PASSIVE. Bit errors (BUS-OFF) mean the controller cannot
               read back what it sends: transceiver not powered, in standby,
-              or TX/RX wiring. Skipped when the listen step heard traffic.
+              or TX/RX wiring. Skipped when the listen step heard traffic or
+              had to fall back to another bitrate (a wrong crystal hears nothing
+              on the car's bus, yet its frames would disturb it).
               Runs at 125 kbit/s; keep jumper J1 (120 ohm) fitted on the bench.
-              Use --no-tx on the car: it puts frames on the bus.
+              Never use --tx on the car: it puts frames on the bus.
 
 can0 is left down at the end.
 """
@@ -436,6 +438,7 @@ def step_listen(bitrate, seconds):
             report("FAIL", "listen", str(e))
             return None
     report("INFO", "listen", f"listening at {used} bit/s")
+    fallback = used != bitrate
 
     sock = open_socket()
     frames, errors = {}, []
@@ -477,7 +480,7 @@ def step_listen(bitrate, seconds):
     if counters["rx_over_errors"] or counters["rx_dropped"]:
         report("WARN", "listen", f"frames lost since boot: overruns {counters['rx_over_errors']}, "
                f"dropped {counters['rx_dropped']}")
-    return {"frames": len(frames), "errors": len(errors)}
+    return {"frames": len(frames), "errors": len(errors), "fallback": fallback}
 
 
 def step_transmit(bitrate):
@@ -539,14 +542,29 @@ def step_transmit(bitrate):
 
 # ---------------------------------------------------------------- main
 
+def transmit_decision(want_tx, heard, loop_ok):
+    """(run step 4?, why not). Transmits only when asked, on a quiet bus, at the asked bitrate."""
+    if not want_tx:
+        return False, "skipped: transmitting needs --tx (never on the car)"
+    if heard is None:
+        return False, "skipped: the listen step failed"
+    if heard["fallback"]:
+        return False, "skipped: listening fell back to another bitrate, so the bus may be busy at a speed we cannot hear"
+    if heard["frames"] or heard["errors"]:
+        return False, "skipped: traffic or errors on the bus, not transmitting onto it"
+    if not loop_ok:
+        return False, "skipped: fix the loopback step first"
+    return True, ""
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--bitrate", type=int, default=CAR_BITRATE,
                         help=f"bus bitrate for the listen step (default {CAR_BITRATE}, the car's)")
     parser.add_argument("--listen", type=float, default=5.0, metavar="SECONDS",
                         help="how long to listen (default 5)")
-    parser.add_argument("--no-tx", action="store_true",
-                        help="skip the transmit step (use this on the car's bus)")
+    parser.add_argument("--tx", action="store_true",
+                        help="run the transmit step on a bench bus (never on the car)")
     args = parser.parse_args()
 
     print(_c("1", "Driver display CAN check") + f"  ({time.strftime('%Y-%m-%d %H:%M:%S')})")
@@ -554,19 +572,12 @@ def main():
         if step_setup():
             loop_ok = step_loopback()
             heard = step_listen(args.bitrate, args.listen)
-            if args.no_tx:
-                header("4. Transceiver")
-                report("INFO", "tx", "skipped (--no-tx)")
-            elif heard is None:
-                pass
-            elif heard["frames"] or heard["errors"]:
-                header("4. Transceiver")
-                report("INFO", "tx", "skipped: traffic or errors on the bus, not transmitting onto it")
-            elif loop_ok:
+            run, reason = transmit_decision(args.tx, heard, loop_ok)
+            if run:
                 step_transmit(TX_TEST_BITRATE)
             else:
                 header("4. Transceiver")
-                report("INFO", "tx", "skipped: fix the loopback step first")
+                report("INFO", "tx", reason)
     except KeyboardInterrupt:
         print("\ninterrupted")
     finally:

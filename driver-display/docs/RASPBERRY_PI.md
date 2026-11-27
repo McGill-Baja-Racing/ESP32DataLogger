@@ -61,4 +61,4 @@ dtoverlay=mcp2515-can0,oscillator=8000000,interrupt=25,spimaxfrequency=1000000
 
 The copy from before the overlay line is `/boot/firmware/config.txt.bak-can`. `oscillator` must match the module's crystal: after fitting the 16 MHz crystal the car needs, change it to `oscillator=16000000` and reboot.
 
-Bring the bus up listen-only at every power-up with `make can-on` (1 Mbit/s), or `make can-on BITRATE=500000` while the 8 MHz crystal is fitted. `./build/can-monitor` then shows the bus; see [Read the CAN bus](../README.md#read-the-can-bus). To check the module itself, run `sudo python3 tools/can_check.py`, with `--no-tx` on the car.
+Bring the bus up listen-only at every power-up with `make can-on` (1 Mbit/s), or `make can-on BITRATE=500000` while the 8 MHz crystal is fitted. `./build/can-monitor` then shows the bus; see [Read the CAN bus](../README.md#read-the-can-bus). To check the module itself, run `sudo python3 tools/can_check.py`; it only transmits with `--tx`, which is for a bench bus, never the car.

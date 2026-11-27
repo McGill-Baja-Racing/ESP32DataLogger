@@ -147,7 +147,7 @@ ssh -t baja@baja.local 'sudo python3 can_check.py'
 | 3. Listen | Listen-only for 5 s at 1 Mbit/s, or 500 kbit/s if the crystal cannot do 1 Mbit/s. Prints `NO DATA` when the bus is silent, otherwise decodes the DAQ frames |
 | 4. Transceiver | Sends one frame at 125 kbit/s. With no other node, ERROR-PASSIVE means the transceiver works and BUS-OFF means it does not. Keep J1 fitted on the bench. Skipped if step 3 heard traffic |
 
-On the car, run it with `--no-tx` so step 4 does not put frames on the bus. The script leaves `can0` down.
+Step 4 transmits, so it runs only with `--tx`, on a bench bus. It is also skipped when step 3 heard traffic or had to fall back to another bitrate. Never use `--tx` on the car. The script leaves `can0` down.
 
 ## Current state on the Pi
 
