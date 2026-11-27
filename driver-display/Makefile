@@ -66,7 +66,7 @@ autostart-off:
 	@echo "The driver display no longer starts at power-up."
 
 # Host tests of the CAN decoder and live table; no Pi, screen or LVGL needed.
-DAQ_SOURCES := src/can/daq_decode.c
+DAQ_SOURCES := src/can/daq_decode.c src/can/daq_state.c
 
 test: build/test-daq
 	@./build/test-daq

@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "can/daq_decode.h"
+#include "can/daq_state.h"
 
 static int failures;
 #define CHECK(condition) do { if (!(condition)) { \
@@ -189,6 +190,156 @@ static void test_signal_table(void)
     }
 }
 
+/* ---- live table ---- */
+
+static daq_raw_frame_t sample_frame(uint32_t id, int32_t value)
+{
+    uint8_t bytes[8] = {0};
+    for (int i = 0; i < 4; i++) bytes[i] = (uint8_t)((uint32_t)value >> (8 * i));
+    return frame(id, bytes, 8);
+}
+
+static daq_raw_frame_t event_frame(uint8_t node, uint8_t sequence)
+{
+    health_event_frame_t event = {.code = HEALTH_SAMPLES_MISSED, .sequence = sequence, .count = 1};
+    return frame(CAN_ID_NODE_EVENT_BASE + node, (const uint8_t *)&event, 8);
+}
+
+static daq_raw_frame_t diagnostics_frame(uint8_t node, uint8_t resets)
+{
+    return frame(CAN_ID_NODE_DIAGNOSTICS_BASE + node, (const uint8_t[]){0, 0, resets, 1}, 4);
+}
+
+static void test_state_fresh_then_stale(void)
+{
+    static daq_state_t state;
+    daq_state_init(&state);
+    int brake = daq_signal_index(CAN_ID_FRONT_BRAKE);
+    int rear = daq_signal_index(CAN_ID_REAR_BRAKE);
+    daq_raw_frame_t raw = sample_frame(CAN_ID_FRONT_BRAKE, 1500);
+    daq_state_feed(&state, &raw, 1000);
+    CHECK(state.signals[brake].seen && state.signals[brake].value == 1500);
+    CHECK(daq_signal_fresh(&state, brake, 1499));
+    CHECK(!daq_signal_fresh(&state, brake, 1000 + DAQ_STALE_MS));
+    CHECK(!daq_signal_fresh(&state, rear, 0));        /* never seen is never fresh */
+    CHECK(!daq_signal_fresh(&state, -1, 1000));
+}
+
+static void test_state_online_then_offline(void)
+{
+    static daq_state_t state;
+    daq_state_init(&state);
+    daq_raw_frame_t raw = sample_frame(CAN_ID_FRONT_BRAKE, 1);
+    daq_state_feed(&state, &raw, 1000);
+    CHECK(daq_node_online(&state, 1, 3999));
+    CHECK(!daq_node_online(&state, 1, 1000 + DAQ_NODE_OFFLINE_MS));
+    CHECK(!daq_node_online(&state, 4, 1000));       /* never seen */
+    CHECK(!daq_node_online(&state, 0, 1000) && !daq_node_online(&state, 9, 1000));
+    daq_raw_frame_t status = frame(CAN_ID_NODE_STATUS_BASE + 3, (const uint8_t[]){0, 0, 0, 0}, 4);
+    daq_state_feed(&state, &status, 2000);         /* health alone keeps a node online */
+    CHECK(daq_node_online(&state, 3, 2000) && state.nodes[3].status_seen);
+}
+
+static void test_state_rate(void)
+{
+    static daq_state_t state;
+    daq_state_init(&state);
+    int accel = daq_signal_index(CAN_ID_MPU_ACCEL_X);
+    daq_state_update_rates(&state, 0);
+    for (int i = 0; i < 100; i++) {
+        daq_raw_frame_t raw = sample_frame(CAN_ID_MPU_ACCEL_X, i);
+        daq_state_feed(&state, &raw, (uint64_t)i * 10);
+    }
+    daq_state_update_rates(&state, 1000);
+    CHECK(state.signals[accel].rate_hz > 99.5f && state.signals[accel].rate_hz < 100.5f);
+    daq_state_update_rates(&state, 1500);          /* under a second: unchanged */
+    CHECK(state.signals[accel].rate_hz > 99.5f);
+    daq_state_update_rates(&state, 2000);          /* a silent second */
+    CHECK(state.signals[accel].rate_hz == 0.0f);
+}
+
+static void test_state_event_gaps(void)
+{
+    static daq_state_t state;
+    daq_state_init(&state);
+    const uint8_t sequences[] = {0, 1, 4};
+    for (int i = 0; i < 3; i++) {
+        daq_raw_frame_t raw = event_frame(2, sequences[i]);
+        daq_state_feed(&state, &raw, 100);
+    }
+    CHECK(state.nodes[2].sequence_gaps == 2);
+    daq_raw_frame_t first = diagnostics_frame(2, 0);
+    daq_state_feed(&state, &first, 200);
+    daq_raw_frame_t rebooted = diagnostics_frame(2, 1);  /* resets changed: the node rebooted */
+    daq_state_feed(&state, &rebooted, 300);
+    daq_raw_frame_t restart = event_frame(2, 0);
+    daq_state_feed(&state, &restart, 400);
+    CHECK(state.nodes[2].sequence_gaps == 2);
+    daq_raw_frame_t wrapped = event_frame(2, 63);         /* 0 -> 63 wraps: 62 missed */
+    daq_state_feed(&state, &wrapped, 500);
+    CHECK(state.nodes[2].sequence_gaps == 64);
+}
+
+static void test_state_event_history(void)
+{
+    static daq_state_t state;
+    daq_state_init(&state);
+    for (int i = 0; i < 20; i++) {
+        daq_raw_frame_t raw = event_frame(5, (uint8_t)i);
+        daq_state_feed(&state, &raw, (uint64_t)i);
+    }
+    const daq_node_state_t *node = &state.nodes[5];
+    CHECK(node->event_total == 20);
+    unsigned newest = (node->event_next + DAQ_EVENT_HISTORY - 1) % DAQ_EVENT_HISTORY;
+    CHECK(node->events[newest].u.event.sequence == 19 && node->event_ms[newest] == 19);
+    CHECK(node->sequence_gaps == 0);
+}
+
+static void test_state_master_and_counters(void)
+{
+    static daq_state_t state;
+    daq_state_init(&state);
+    uint8_t bytes[8] = {0};
+    bytes[7] = 0x80;                                  /* recording bit */
+    bytes[0] = 0x40;
+    daq_raw_frame_t beacon = frame(CAN_ID_MASTER_TIME, bytes, 8);
+    daq_state_feed(&state, &beacon, 50);
+    CHECK(state.master.beacon_seen && state.master.recording && state.master.beacon_ms == 50);
+    CHECK(state.master.master_us == 0x40);
+    daq_raw_frame_t start = frame(CAN_ID_START, NULL, 0);
+    daq_state_feed(&state, &start, 60);
+    CHECK(state.master.last_command == DAQ_FRAME_START && state.master.command_ms == 60);
+    daq_raw_frame_t other = frame(0x123, bytes, 8);
+    daq_state_feed(&state, &other, 70);
+    daq_raw_frame_t bad = frame(CAN_ID_FRONT_BRAKE, bytes, 3);
+    daq_state_feed(&state, &bad, 80);
+    CHECK(state.unknown_frames == 1 && state.malformed_frames == 1 && state.frames == 4);
+    daq_raw_frame_t data = frame(CAN_ID_UPDATE_DATA, bytes, 8);
+    daq_state_feed(&state, &data, 90);
+    CHECK(state.update_frames == 1);
+    daq_raw_frame_t aim = frame(CAN_ID_AIM_WIRE, (const uint8_t[]){0xD0, 0x07, 1, 0}, 4);
+    daq_state_feed(&state, &aim, 100);
+    int aim_index = daq_signal_index(CAN_ID_AIM_WIRE);
+    CHECK(state.signals[aim_index].value == 2000 && daq_signal_fresh(&state, aim_index, 100));
+}
+
+static void test_state_node_reports(void)
+{
+    static daq_state_t state;
+    daq_state_init(&state);
+    daq_raw_frame_t report = frame(CAN_ID_NODE_STATE_BASE + 7, (const uint8_t[]){1, 3, 0}, 3);
+    daq_state_feed(&state, &report, 10);
+    CHECK(state.nodes[7].state_seen && state.nodes[7].state == 1 && state.nodes[7].reason == 3);
+    node_identity_frame_t identity = {.elf_sha256 = {9, 8, 7, 6, 5}, .protocol_hash = 0x1234};
+    daq_raw_frame_t id_frame = frame(CAN_ID_NODE_IDENTITY_BASE + 7, (const uint8_t *)&identity, 8);
+    daq_state_feed(&state, &id_frame, 20);
+    CHECK(state.nodes[7].identity_seen && state.nodes[7].protocol_hash == 0x1234);
+    daq_raw_frame_t diag = frame(CAN_ID_NODE_DIAGNOSTICS_BASE + 7, (const uint8_t[]){3, 4, 5, 6}, 4);
+    daq_state_feed(&state, &diag, 30);
+    CHECK(state.nodes[7].tx_errors == 3 && state.nodes[7].rx_errors == 4 && state.nodes[7].resets == 5);
+    CHECK(state.nodes[7].last_ms == 30);
+}
+
 int main(void)
 {
     test_decode_brake_sample();
@@ -204,6 +355,13 @@ int main(void)
     test_decode_aim();
     test_decode_malformed_and_unknown();
     test_signal_table();
+    test_state_fresh_then_stale();
+    test_state_online_then_offline();
+    test_state_rate();
+    test_state_event_gaps();
+    test_state_event_history();
+    test_state_master_and_counters();
+    test_state_node_reports();
     if (failures) {
         printf("%d check(s) failed\n", failures);
         return 1;
