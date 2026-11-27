@@ -13,6 +13,8 @@
 #include "protocol/node_config.h"
 
 #define SENSOR_STARTUP_DELAY_MS 3000
+/* How long a booting node waits for the master's clock before sampling anyway. */
+#define FIRST_BEACON_WAIT_MS (3 * CAN_MASTER_TIME_PERIOD_MS)
 
 /*
  * Application composition root
@@ -66,7 +68,14 @@ void app_main(void)
     can_node_report_state(NODE_STATE_IDLE, NODE_STATE_REASON_BOOT);
     firmware_update_report_identity();
     ESP_ERROR_CHECK(node_health_init());
-    /* Sample with or without a master: until the first beacon, timestamps use this node's own clock. */
+    /* A node that reboots during a recording must not send samples on its own
+     * clock: the master would log them. Wait briefly for the beacon, then sample
+     * with or without a master (timestamps then use this node's own clock). */
+    for (uint32_t waited_ms = 0;
+         waited_ms < FIRST_BEACON_WAIT_MS && !time_sync_is_current(FIRST_BEACON_WAIT_MS);
+         waited_ms += 10) {
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
     sampler_start();
     /* A new image confirms itself only once every init step above passed and the master answered. */
     while (!time_sync_is_current(3 * CAN_MASTER_TIME_PERIOD_MS)) {

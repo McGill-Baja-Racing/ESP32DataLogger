@@ -22,7 +22,7 @@ clock_offset_us = master_time_us - node_local_time_us
 sample_timestamp_ms = (local_sample_time_us + clock_offset_us) / 1000
 ```
 
-A node follows beacon recording state as well as explicit commands. This lets a node that rebooted during a recording rejoin it. Until a node hears its first beacon, its samples carry its own clock (offset zero) and its status shows `no_time_sync`; the master logs nothing before START, so such samples never reach a log. Elapsed time starts again when the master reboots; it is not UTC.
+A node follows beacon recording state as well as explicit commands. This lets a node that rebooted during a recording rejoin it. A booting node waits up to 300 ms for the first beacon before it samples, so a node that reboots during a recording sends only master-clock samples. Without a master it samples anyway: its samples then carry its own clock (offset zero) and its status shows `no_time_sync`; the master logs nothing before START, so such samples never reach a log. Elapsed time starts again when the master reboots; it is not UTC.
 
 The offset is a receive/dispatch-time estimate, not a measured clock-accuracy
 guarantee. `time_sync` starts with zero offset, so samples before the first beacon
