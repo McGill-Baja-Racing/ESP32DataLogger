@@ -169,13 +169,6 @@ live_data_result_t live_data_stop(uint32_t token)
     return LIVE_DATA_OK;
 }
 
-void live_data_force_stop(void)
-{
-    portENTER_CRITICAL(&lock);
-    clear_locked();
-    portEXIT_CRITICAL(&lock);
-}
-
 bool live_data_is_enabled(void)
 {
     portENTER_CRITICAL(&lock);

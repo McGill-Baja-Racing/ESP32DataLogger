@@ -216,12 +216,6 @@ esp_err_t can_master_error_counts(uint32_t *rx_errors, uint32_t *tx_errors)
     return error;
 }
 
-/* Caller holds the recording lock, so START cannot clear a frame already in use. */
-void can_master_clear_receive_queue(void)
-{
-    if (rx_queue) xQueueReset(rx_queue);
-}
-
 /* Keep dequeue and handler admission in the same START/STOP critical section to avoid race conditions. */
 static void dispatch_next_message(void)
 {

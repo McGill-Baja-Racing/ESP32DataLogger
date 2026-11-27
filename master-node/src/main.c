@@ -44,8 +44,8 @@ static void handle_can_message(const can_message_t *message)
     /* Route external AiM data separately from our timestamped, DAQ-controlled nodes. */
     if (message->id == AIM_CAN_ID) {
         can_message_t sample;
-        if (aim_adapter_receive(message, &sample) && data_logger_state() == LOGGER_RUNNING) {
-            data_logger_enqueue(&sample);
+        if (aim_adapter_receive(message, &sample)) {
+            if (data_logger_state() == LOGGER_RUNNING) data_logger_enqueue(&sample);
             live_data_record(&sample);
         }
         return;

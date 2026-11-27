@@ -448,6 +448,36 @@ static void log_events(const health_state_t *now, health_state_t *reported)
     }
 }
 
+/* Counts when recording last started, applied by health_task before it logs events. */
+static health_state_t baseline;
+static bool baseline_pending;
+static portMUX_TYPE baseline_lock = portMUX_INITIALIZER_UNLOCKED;
+
+void node_health_recording_started(void)
+{
+    static health_state_t counts;
+    node_health_copy_counts(&counts);
+    portENTER_CRITICAL(&baseline_lock);
+    baseline = counts;
+    baseline_pending = true;
+    portEXIT_CRITICAL(&baseline_lock);
+}
+
+/**
+ * @brief Mark everything counted before recording started as reported.
+ *
+ * @param reported Counts already reported; only ever moved forward.
+ */
+static void apply_baseline(health_state_t *reported)
+{
+    portENTER_CRITICAL(&baseline_lock);
+    if (baseline_pending) {
+        node_health_skip_counts(reported, &baseline);
+        baseline_pending = false;
+    }
+    portEXIT_CRITICAL(&baseline_lock);
+}
+
 /**
  * @brief Task that reports the master's health. See node_health_init().
  */
@@ -471,6 +501,7 @@ static void health_task(void *argument)
         };
         log_own_frame(CAN_ID_NODE_STATUS_BASE, &status);
         log_diagnostics();
+        apply_baseline(&reported);
         if (recording) log_events(&now, &reported);
     }
 }

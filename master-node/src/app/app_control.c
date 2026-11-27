@@ -7,6 +7,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
+#include "health/node_health.h"
 #include "node_state/node_registry.h"
 #include "live/live_data.h"
 #include "time/time_beacon.h"
@@ -15,14 +16,19 @@
 #define LIFECYCLE_LOCK_TIMEOUT_MS 1000
 
 static const char *TAG = "AppControl";
+/* Held through a whole Start, Stop or firmware claim, including the GPS naming wait. */
 static SemaphoreHandle_t lifecycle_mutex;
+/* Taken by CAN dispatch for each frame, and by Start/Stop only around the quick
+ * logger state change, so a slow Start never stalls reception. */
+static SemaphoreHandle_t processing_mutex;
 static bool firmware_claimed;
 
 esp_err_t app_control_init(void)
 {
     lifecycle_mutex = xSemaphoreCreateMutex();
+    processing_mutex = xSemaphoreCreateMutex();
     firmware_claimed = firmware_update_resume_pending();
-    return lifecycle_mutex ? ESP_OK : ESP_ERR_NO_MEM;
+    return lifecycle_mutex && processing_mutex ? ESP_OK : ESP_ERR_NO_MEM;
 }
 
 app_control_result_t app_control_start_logging(const char *filename)
@@ -61,12 +67,15 @@ app_control_result_t app_control_start_logging(const char *filename)
         }
         return APP_CONTROL_FAILED;
     }
-    /* Files are ready. Clear both queues under the recording lock before we restart recording. */
+    /* Files are ready. Switch the logger on under the dispatch lock, so no frame
+     * is half-admitted. Nodes always send, so the CAN queue is not cleared: it
+     * holds live and health frames, and samples from just before Start are harmless. */
+    xSemaphoreTake(processing_mutex, portMAX_DELAY);
     data_logger_clear_queue();
-    can_master_clear_receive_queue();
+    node_health_recording_started();
     data_logger_start();
-    node_registry_set_monitoring(true);
     time_beacon_set_recording(true);
+    xSemaphoreGive(processing_mutex);
     esp_err_t error = can_master_start_nodes();
     xSemaphoreGive(lifecycle_mutex);
     if (error != ESP_OK) {
@@ -88,13 +97,14 @@ app_control_result_t app_control_stop_logging(void)
         xSemaphoreGive(lifecycle_mutex);
         return APP_CONTROL_CONFLICT;
     }
-    live_data_force_stop();
+    xSemaphoreTake(processing_mutex, portMAX_DELAY);
     if (!data_logger_stop()) {
+        xSemaphoreGive(processing_mutex);
         xSemaphoreGive(lifecycle_mutex);
         return APP_CONTROL_FAILED;
     }
     time_beacon_set_recording(false);
-    node_registry_set_monitoring(false);
+    xSemaphoreGive(processing_mutex);
     esp_err_t error = can_master_stop_nodes();
     xSemaphoreGive(lifecycle_mutex);
     if (error != ESP_OK) {
@@ -180,25 +190,22 @@ app_control_result_t app_control_start_live_data(uint32_t *token)
         xSemaphoreTake(lifecycle_mutex, pdMS_TO_TICKS(LIFECYCLE_LOCK_TIMEOUT_MS)) != pdTRUE) {
         return APP_CONTROL_FAILED;
     }
-    if (data_logger_state() != LOGGER_RUNNING) {
-        xSemaphoreGive(lifecycle_mutex);
-        return APP_CONTROL_CONFLICT;
-    }
+    /* Nodes always send, so live data works whether or not the logger runs. */
     live_data_result_t result = live_data_start(token);
     xSemaphoreGive(lifecycle_mutex);
     if (result == LIVE_DATA_BUSY) return APP_CONTROL_BUSY;
     return result == LIVE_DATA_OK ? APP_CONTROL_OK : APP_CONTROL_FAILED;
 }
 
-/* CAN dispatch holds this same lock from dequeue through handler completion. */
+/* CAN dispatch holds this lock from dequeue through handler completion. */
 void app_control_lock_can_processing(void)
 {
-    (void)xSemaphoreTake(lifecycle_mutex, portMAX_DELAY);
+    (void)xSemaphoreTake(processing_mutex, portMAX_DELAY);
 }
 
 void app_control_unlock_can_processing(void)
 {
-    xSemaphoreGive(lifecycle_mutex);
+    xSemaphoreGive(processing_mutex);
 }
 
 /* Collect logger, CAN, and source health for both web and serial status. */

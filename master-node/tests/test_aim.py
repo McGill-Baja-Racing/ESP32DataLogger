@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 class AimTests(unittest.TestCase):
     def test_decoder_status_and_dispatch_lock(self):
         can = (ROOT / 'src/can/can_master.c').read_text()
-        dispatch = can[can.index('void can_master_clear_receive_queue('):can.index('static void dispatch_task(')]
+        dispatch = can[can.index('/* Keep dequeue'):can.index('static void dispatch_task(')]
         main = (ROOT / 'src/main.c').read_text()
         start = main.index('static void handle_can_message(')
         handler = main[start:main.index('static void handle_gps_sample(', start)]
@@ -27,7 +27,6 @@ static can_message_t queued_frame;
 #define LOGGER_RUNNING 1
 static void app_control_lock_can_processing(void) { assert(!locked);locked=true; }
 static void app_control_unlock_can_processing(void) { assert(locked);locked=false; }
-static int xQueueReset(int q) { (void)q;assert(locked);queued=false;return pdTRUE; }
 static int xQueueReceive(int q,can_message_t *out,int wait) {
     (void)q;assert(locked && wait==0);
     if(!queued)return 0;
@@ -79,23 +78,17 @@ int main(void) {
     assert(t.malformed_frames==3 && t.valid_frames==5);
     f.id=0x501;assert(!aim_decode(&t,&f,&s));assert(t.malformed_frames==3);
     f.id=AIM_CAN_ID;
-    /* Idle dispatch updates health but does not log. */
+    /* Idle dispatch updates health and live data but does not log. */
     rx_queue=1;queued_frame=f;queued=true;
-    dispatch_next_message();assert(!locked && handled==1 && logged==0);
+    dispatch_next_message();assert(!locked && handled==1 && logged==0 && live==1);
     assert(app_tracker.valid_frames==1);
-    /* START clears idle backlog under the same lock as dequeue. */
-    queued=true;app_control_lock_can_processing();
-    recording=true;can_master_clear_receive_queue();app_control_unlock_can_processing();
-    dispatch_next_message();assert(handled==1 && logged==0); /* queue cleared after peek */
-    queued=true;dispatch_next_message();assert(handled==2 && logged==1 && live==1);
-    queued=true;dispatch_next_message();assert(logged==2); /* repeated values retained */
-    /* STOP prevents admission but leaves health monitoring active. */
+    /* While recording, AiM reaches both the log and live data. */
+    app_control_lock_can_processing();recording=true;app_control_unlock_can_processing();
+    queued=true;dispatch_next_message();assert(handled==2 && logged==1 && live==2);
+    queued=true;dispatch_next_message();assert(logged==2 && live==3); /* repeated values retained */
+    /* STOP prevents admission; health and live data keep going. */
     app_control_lock_can_processing();recording=false;app_control_unlock_can_processing();
-    queued=true;dispatch_next_message();assert(logged==2 && app_tracker.valid_frames==4);
-    queued=true;app_control_lock_can_processing();
-    can_master_clear_receive_queue();recording=true;app_control_unlock_can_processing();
-    dispatch_next_message();assert(logged==2);
-    queued=true;dispatch_next_message();assert(logged==3 && live==3);
+    queued=true;dispatch_next_message();assert(logged==2 && live==4 && app_tracker.valid_frames==4);
     return 0;
 }
 '''

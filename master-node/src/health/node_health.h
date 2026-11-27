@@ -142,3 +142,11 @@ const char *node_health_label_fault(health_code_t fault);
  * @return The label.
  */
 const char *node_health_label_sensor_state(sensor_state_t state);
+
+/**
+ * @brief Drop the master's counts made so far from the events still to log.
+ *
+ * Call when recording starts, so the log only describes the recording. The
+ * boot event is still logged. Safe from any task.
+ */
+void node_health_recording_started(void);

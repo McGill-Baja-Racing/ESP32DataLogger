@@ -116,11 +116,15 @@ esp_err_t app_control_resume_firmware_update(void);
  * live_data_start().
  *
  * @param token Set to the viewer's token on success.
- * @return APP_CONTROL_OK, CONFLICT if not running, BUSY if another viewer holds
- *         the lease, or FAILED if token is NULL or the lock was held over 1 s.
+ * Works whether or not a recording runs.
+ *
+ * @return APP_CONTROL_OK, BUSY if another viewer holds the lease, or FAILED if
+ *         token is NULL or the lock was held over 1 s.
  */
 app_control_result_t app_control_start_live_data(uint32_t *token);
-/* Initialized before CAN dispatch starts. Never wait for CAN data while holding this lock. */
+/* The CAN dispatch lock, separate from the Start/Stop lock: Start and Stop take it
+ * only around the logger state change. Initialized before CAN dispatch starts.
+ * Never wait for CAN data while holding this lock. */
 void app_control_lock_can_processing(void);
 void app_control_unlock_can_processing(void);
 

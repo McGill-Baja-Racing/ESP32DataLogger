@@ -60,8 +60,6 @@ esp_err_t can_master_start_nodes(void);
  * @return ESP_OK if every copy was sent, else the first error.
  */
 esp_err_t can_master_stop_nodes(void);
-/* Discard pending CAN frames on START; caller must hold the recording lock. */
-void can_master_clear_receive_queue(void);
 
 /**
  * @brief Count received frames lost because the receive queue was full.

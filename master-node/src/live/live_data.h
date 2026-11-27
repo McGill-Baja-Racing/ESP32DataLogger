@@ -93,11 +93,6 @@ live_data_result_t live_data_snapshot(uint32_t token, live_sample_t *samples,
 live_data_result_t live_data_stop(uint32_t token);
 
 /**
- * @brief End any lease and clear the cache.
- */
-void live_data_force_stop(void);
-
-/**
  * @brief Check whether a viewer holds the lease.
  *
  * @return true if a lease is held and has not expired.

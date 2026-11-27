@@ -598,10 +598,6 @@ static esp_err_t live_start_handler(httpd_req_t *request)
 {
     uint32_t token;
     app_control_result_t result = app_control_start_live_data(&token);
-    if (result == APP_CONTROL_CONFLICT) {
-        return send_json_error(request, "409 Conflict",
-                               "Live data is available only while recording");
-    }
     if (result == APP_CONTROL_BUSY) {
         return send_json_error(request, "503 Service Unavailable",
                                "Another live viewer is active");
