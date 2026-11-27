@@ -49,8 +49,34 @@ component README. Explicit user instructions take precedence over this guidance.
 - Handle failures explicitly. Do not silently substitute success, stale feedback
   or a zero measurement for an unsuccessful read. Keep waits bounded and long
   operations cancellable where the existing control flow requires cancellation.
-- Comment intent, units and non-obvious constraints. Avoid comments that merely
-  repeat the code and avoid leaving dead code or unfinished scaffolding.
+- Avoid leaving dead code or unfinished scaffolding.
+
+## Document purpose without clutter
+
+- Aim for an experienced programmer new to this code to understand what a file
+  or substantial function does, where it fits and why its non-obvious choices
+  exist without needing the original conversation.
+- Start source and header files with a short description of their purpose and
+  responsibility, usually one to three lines. Mention an important ownership or
+  dependency boundary when it helps explain the design. Do not merely restate the
+  filename or include a full change history.
+- Add a brief docstring or documentation comment for substantial, public or
+  non-obvious functions. Explain the operation's purpose and any relevant caller
+  requirements, units, side effects, ownership, completion/error semantics or
+  cancellation behavior. Document only the details a caller or maintainer needs;
+  do not require a template or parameter-by-parameter narration for every helper.
+- Explain surprising implementation choices near the relevant code: why an
+  ordering, constant, workaround or state transition is required. Include the
+  supporting device/manual reference when applicable. Prefer explaining intent
+  and constraints over translating statements into English.
+- Keep names and structure as the first explanation. Skip comments for obvious
+  getters, assignments, loops and self-explanatory helpers. Put shared API
+  contracts at their declarations and implementation rationale at the definition;
+  do not duplicate the same description in both places.
+- Keep comments accurate when behavior changes. Apply this standard to code being
+  added or meaningfully changed; avoid an unrelated repository-wide comment pass
+  unless that is the task. A description must match the actual implementation,
+  not an intended future behavior.
 
 ## Respect component boundaries
 
