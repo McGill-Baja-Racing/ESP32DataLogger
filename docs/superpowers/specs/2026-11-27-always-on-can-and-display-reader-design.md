@@ -2,7 +2,7 @@
 
 Design, 2026-11-27.
 
-**Branch:** `lucasl/always-on-can`. It is the driver-screen PoC (`lucasl/driver-screen-poc`, which only touches `driver-display/`) replayed onto current `main`, and it holds both the firmware and the display work. The repository is squash-merge only: if the PoC is merged on its own first, rebase this branch onto the new `main`.
+**Branch:** `lucasl/driver-screen-integration`. It is the driver-screen PoC (`lucasl/driver-screen-poc`, which only touches `driver-display/`) replayed onto current `main`, and it holds both the firmware and the display work. The repository is squash-merge only: if the PoC is merged on its own first, rebase this branch onto the new `main`.
 
 ## Why
 
