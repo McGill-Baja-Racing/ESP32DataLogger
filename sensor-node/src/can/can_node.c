@@ -30,7 +30,7 @@
 #endif
 
 #define CAN_TX_QUEUE_DEPTH      5
-#define CAN_RX_QUEUE_LENGTH     16
+#define CAN_RX_QUEUE_LENGTH     (UPDATE_CHUNK_FRAMES + 8)
 #define CAN_TX_TIMEOUT_MS       50
 #define CAN_RECOVERY_POLL_MS    250
 #define CAN_RECOVERY_WARN_MS    5000
@@ -143,7 +143,7 @@ static bool receive_callback(twai_node_handle_t node,
 }
 
 /**
- * @brief Check whether a START or STOP command is for this node.
+ * @brief Check whether a master command is for this node.
  *
  * Byte 0 is the target node ID, 0xFF for all. No data also means all.
  *
@@ -199,6 +199,22 @@ esp_err_t can_node_send(uint32_t can_id, const uint8_t *payload, uint8_t length)
     return error;
 }
 
+esp_err_t can_node_flush(uint32_t timeout_ms)
+{
+    if (!tx_mutex || xSemaphoreTake(tx_mutex, pdMS_TO_TICKS(timeout_ms)) != pdTRUE) {
+        return ESP_ERR_TIMEOUT;
+    }
+    esp_err_t error = ESP_OK;
+    if (tx_pending) {
+        error = twai_node_transmit_wait_all_done(can_handle, timeout_ms);
+        if (error == ESP_OK) {
+            tx_pending = false;
+        }
+    }
+    xSemaphoreGive(tx_mutex);
+    return error;
+}
+
 void can_node_error_counts(uint8_t *tx_errors, uint8_t *rx_errors)
 {
     twai_node_status_t status = {0};
@@ -224,12 +240,18 @@ void can_node_report_state(node_state_t state, node_state_reason_t reason)
     }
 }
 
+node_state_t can_node_state(void)
+{
+    return current_state;
+}
+
 /**
  * @brief Task that handles master commands from rx_queue.
  *
  * A beacon gives the master time to on_time_beacon, and starts or stops the
  * node if its recording flag disagrees with the node state. START and STOP
  * call their callback only on a state change, but every copy is acknowledged.
+ * Update commands for this node and update data go to their callbacks.
  */
 static void dispatch_task(void *argument)
 {
@@ -276,6 +298,15 @@ static void dispatch_task(void *argument)
             }
             /* As with START, repeat only the acknowledgement, not the action. */
             can_node_report_state(NODE_STATE_IDLE, NODE_STATE_REASON_STOP);
+        } else if (message.id == CAN_ID_UPDATE_COMMAND && targets_this_node(&message)) {
+            /* The ESP32 is little-endian, so data's bytes in memory are the frame bytes in bus order. */
+            if (app_callbacks.on_update_command) {
+                app_callbacks.on_update_command((const uint8_t *)&message.data, message.dlc);
+            }
+        } else if (message.id == CAN_ID_UPDATE_DATA) {
+            if (app_callbacks.on_update_data) {
+                app_callbacks.on_update_data((const uint8_t *)&message.data, message.dlc);
+            }
         }
     }
 }
@@ -403,8 +434,8 @@ esp_err_t can_node_init(const can_node_callbacks_t *callbacks,
     if (error != ESP_OK) {
         return error;
     }
-    /* Sensor nodes only consume the master command range 0x0A0-0x0A3. */
-    twai_mask_filter_config_t filter = {.id = CAN_ID_STOP, .mask = 0x7FC};
+    /* Sensor nodes only consume the master command range 0x0A0-0x0A7. */
+    twai_mask_filter_config_t filter = {.id = CAN_ID_STOP, .mask = 0x7F8};
     error = twai_node_config_mask_filter(can_handle, 0, &filter);
     if (error != ESP_OK) {
         return error;

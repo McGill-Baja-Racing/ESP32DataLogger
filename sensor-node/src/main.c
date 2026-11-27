@@ -8,6 +8,7 @@
 #include "health/node_health.h"
 #include "sampler/sampler.h"
 #include "time/time_sync.h"
+#include "update/firmware_update.h"
 
 #include "protocol/node_config.h"
 
@@ -40,6 +41,10 @@ void app_main(void)
      */
     vTaskDelay(pdMS_TO_TICKS(SENSOR_STARTUP_DELAY_MS));
 
+#if !SENSOR_SERIAL_TEST
+    /* Before the sensors, so a new image that hangs in their init still rolls back. */
+    ESP_ERROR_CHECK(firmware_update_init());
+#endif
     /* Sensor hardware and sampling tasks exist before CAN can issue START. */
     ESP_ERROR_CHECK(sampler_init());
 
@@ -55,10 +60,18 @@ void app_main(void)
         .on_stop = handle_stop,
         .on_time_beacon = time_sync_update,
         .on_bus_off = sampler_discard_pending,
+        .on_update_command = firmware_update_handle_command,
+        .on_update_data = firmware_update_handle_data,
     };
     ESP_ERROR_CHECK(can_node_init(&callbacks, (uint8_t)esp_reset_reason()));
     /* The master uses this acknowledgement to register the node after boot. */
     can_node_report_state(NODE_STATE_IDLE, NODE_STATE_REASON_BOOT);
+    firmware_update_report_identity();
     ESP_ERROR_CHECK(node_health_init());
+    /* A new image confirms itself only once every init step above passed and the master answered. */
+    while (!time_sync_is_current(3 * CAN_MASTER_TIME_PERIOD_MS)) {
+        vTaskDelay(pdMS_TO_TICKS(CAN_MASTER_TIME_PERIOD_MS));
+    }
+    firmware_update_confirm();
 #endif
 }

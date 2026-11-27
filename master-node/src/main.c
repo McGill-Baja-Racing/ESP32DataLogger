@@ -16,6 +16,7 @@
 #include "protocol/app_protocol.h"
 #include "storage/sd_card.h"
 #include "time/time_beacon.h"
+#include "update/firmware_update.h"
 #include "web/web_server.h"
 
 #define AUTO_START_DELAY_MS 5000
@@ -35,6 +36,7 @@ static bool stop_logging(void)
 static void print_status(void)
 {
     app_control_print_status();
+    firmware_update_print_identity();
 }
 
 static void handle_can_message(const can_message_t *message)
@@ -53,6 +55,10 @@ static void handle_can_message(const can_message_t *message)
     } else if (node_health_is_frame(message)) {
         node_registry_record_health_frame(node_health_node_id(message));
         node_health_handle_frame(message);
+    } else if (firmware_update_is_identity_frame(message)) {
+        firmware_update_handle_identity(message);
+    } else if (firmware_update_is_reply_frame(message)) {
+        firmware_update_handle_reply(message);
     } else if (protocol_is_sensor_id(message->id) && message->dlc == 8) {
         uint32_t timestamp_ms = (uint32_t)(message->data >> 32);
         if ((message->id == CAN_ID_ENGINE_SPARK ||
@@ -80,7 +86,9 @@ static void auto_start_task(void *argument)
 {
     (void)argument;
     vTaskDelay(pdMS_TO_TICKS(AUTO_START_DELAY_MS));
-    (void)start_logging();
+    while (app_control_start_logging(NULL) == APP_CONTROL_BUSY) {
+        vTaskDelay(pdMS_TO_TICKS(5000));
+    }
     vTaskDelete(NULL);
 }
 
@@ -91,6 +99,7 @@ void app_main(void)
     ESP_ERROR_CHECK(node_health_init());
     ESP_ERROR_CHECK(live_data_init());
     ESP_ERROR_CHECK(node_registry_init());
+    ESP_ERROR_CHECK(firmware_update_init());
     /* The CAN dispatch task uses the recording lock as soon as it starts. */
     ESP_ERROR_CHECK(app_control_init());
     ESP_ERROR_CHECK(can_master_init(handle_can_message));
@@ -101,6 +110,7 @@ void app_main(void)
         ESP_ERROR_CHECK_WITHOUT_ABORT(can_master_stop_nodes());
         vTaskDelay(pdMS_TO_TICKS(50));
     }
+    ESP_ERROR_CHECK_WITHOUT_ABORT(firmware_update_request_identity());
 
     serial_console_callbacks_t console = {
         .start = start_logging,
@@ -112,8 +122,14 @@ void app_main(void)
     ESP_ERROR_CHECK(xTaskCreate(auto_start_task, "auto_start", 3072, NULL, 5, NULL)
                     == pdPASS ? ESP_OK : ESP_ERR_NO_MEM);
     esp_err_t web_error = web_server_start();
-    if (web_error != ESP_OK) {
-        ESP_LOGE(TAG, "Wi-Fi controls unavailable: %s", esp_err_to_name(web_error));
-    }
     ESP_LOGI(TAG, "Logger ready; node clocks synchronize every 100 ms");
+    /* Without the web page nothing could update a bad image, so only a working one is confirmed. */
+    if (web_error == ESP_OK) {
+        firmware_update_confirm();
+    } else {
+        ESP_LOGE(TAG, "Wi-Fi controls unavailable: %s; a new image stays on trial and rolls back",
+                 esp_err_to_name(web_error));
+    }
+    /* Node updates need only CAN, so a confirmed image with a leftover marker still updates nodes. */
+    ESP_ERROR_CHECK_WITHOUT_ABORT(app_control_resume_firmware_update());
 }

@@ -434,25 +434,25 @@ static void writer_task(void *argument)
             count = 0;
         }
         if (flush_due) last_flush = now;
-        bool close_log = false;
         if (state == LOGGER_STOPPING &&
             delay_has_passed(stop_tick, now, LOG_STOP_GRACE_MS) &&
             xSemaphoreTake(health_admission_mutex, portMAX_DELAY) == pdTRUE) {
+            bool close_log = false;
             if (state == LOGGER_STOPPING) {
                 health_admission_open = false;
                 close_log = uxQueueMessagesWaiting(log_queue) == 0;
             }
             xSemaphoreGive(health_admission_mutex);
-        }
-        if (close_log) {
-            if (count > 0) save_records(records, utc, count);
-            count = 0;
-            xSemaphoreTake(file_mutex, portMAX_DELAY);
-            close_files();
-            xSemaphoreGive(file_mutex);
-            state = LOGGER_IDLE;
-            node_health_set(HEALTH_SD_WRITE, false);
-            ESP_LOGI(TAG, "Logging stopped and file closed");
+            if (close_log) {
+                if (count > 0) save_records(records, utc, count);
+                count = 0;
+                xSemaphoreTake(file_mutex, portMAX_DELAY);
+                close_files();
+                xSemaphoreGive(file_mutex);
+                state = LOGGER_IDLE;
+                node_health_set(HEALTH_SD_WRITE, false);
+                ESP_LOGI(TAG, "Logging stopped and file closed");
+            }
         }
     }
 }

@@ -46,6 +46,10 @@ static void node_health_count(health_code_t c,uint32_t n,uint32_t id,int e) { (v
 static bool node_registry_is_state_frame(const can_message_t *s) { (void)s;return false; }
 static void node_registry_update(const can_message_t *s) { (void)s; }
 static void node_registry_record_sensor_frame(const can_message_t *s) { (void)s; }
+static bool firmware_update_is_identity_frame(const can_message_t *s) { (void)s;return false; }
+static void firmware_update_handle_identity(const can_message_t *s) { (void)s; }
+static bool firmware_update_is_reply_frame(const can_message_t *s) { (void)s;return false; }
+static void firmware_update_handle_reply(const can_message_t *s) { (void)s; }
 #define ESP_LOGW(...) ((void)0)
 ''' + handler + r'''
 static void handle(const can_message_t *s) { assert(locked);handled++;handle_can_message(s); }

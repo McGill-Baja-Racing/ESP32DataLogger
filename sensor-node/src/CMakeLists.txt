@@ -15,6 +15,7 @@ idf_component_register(
         "sensors/shock_displacement.c"
         "sensors/mpu6500.c"
         "time/time_sync.c"
+        "update/firmware_update.c"
     INCLUDE_DIRS
         "."
         "../.."
@@ -23,3 +24,6 @@ idf_component_register(
         "sensors"
         "time"
 )
+
+# Nothing references the image identity, so the linker would drop it.
+target_link_libraries(${COMPONENT_LIB} INTERFACE "-u firmware_identity")
