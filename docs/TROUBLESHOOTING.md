@@ -9,7 +9,7 @@ Use this guide after [Getting started](GETTING_STARTED.md) or [Flashing](FLASHIN
 | Host tests fail to start | Check Python 3.9+ and `cc`; Windows users can use Linux/WSL for these host harnesses | Versions and compiler/test error |
 | No USB port or serial output | Use a data cable, check power and `pio device list`, select the correct port, close other monitors, use 115200 baud; allow sensor startup delay | Port list, board role, reset/startup log |
 | Simulator build unexpectedly asks for a port | Use explicit `-t buildprog`; simulator defaults include upload/monitor | Command and selected target |
-| Node sends no measurements | Confirm vehicle versus serial-test profile, active recording, correct node role, CAN transceiver/pins, common ground, bitrate, termination; inspect local sensor init errors | Node startup log, master status, error/drop counters |
+| Node sends no measurements | Confirm vehicle versus serial-test profile (nodes send from boot; recording is not needed), correct node role, CAN transceiver/pins, common ground, bitrate, termination; inspect local sensor init errors | Node startup log, master status, error/drop counters |
 | RPM is zero or wrong | Confirm simulated/conditioned input, engine accepted interval range, bearing channel order/counts; check overflow reports | Known input speed, mode, wiring, output and counters |
 | GPS data/time absent | Confirm UART direction/pins/baud, power and reception; telemetry needs valid active RMC data; UTC also needs a valid date/time | Startup/parser messages and receiver conditions |
 | GPS at 1 Hz instead of 5 Hz | Look for `Receiver acknowledged N of 6 rate commands` at boot; check the master GPIO32 → receiver RX wire | Boot log and RMC times (should step by 0.2 s) |

@@ -463,9 +463,9 @@ queue drops, and scheduling; the descriptor period is a nominal target.
 With `SENSOR_SERIAL_TEST=0`, verify:
 
 1. the node boots and reports the intended node ID;
-2. no sensor samples are sent before START;
-3. every configured sensor begins reporting after START;
-4. every configured sensor stops after STOP;
+2. every configured sensor reports from boot, before any START;
+3. after START the node's state report and status show recording;
+4. every configured sensor keeps reporting after STOP, and the state shows idle;
 5. CAN IDs are accepted and attributed to the correct node by the Master;
 6. timestamps, units, signs, and logging columns are correct; and
 7. disconnects and hardware read errors fail in the documented way.

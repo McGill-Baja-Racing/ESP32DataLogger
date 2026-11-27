@@ -18,9 +18,9 @@ Every board has its own clock. The master repeatedly broadcasts its time so node
 
 ## A recording has a lifecycle
 
-The ESP32-P4 master opens a new SD log before telling nodes to start. During recording it accepts samples into a queue, a temporary waiting line, and writes them in groups. It also monitors whether configured nodes are still sending data.
+Sensor nodes sample and send all the time, from boot, so the master's live view and the driver display always have data. A recording decides only what the ESP32-P4 master writes: it opens a new SD log, then tells nodes that recording started. During recording it accepts samples into a queue, a temporary waiting line, and writes them in groups. It monitors whether configured nodes are still sending data at all times.
 
-On Stop, the master stops accepting new log samples and tells nodes to stop. Its writer finishes queued samples and closes the files. Wait for the logger to become idle before removing power or the card. The master attempts automatic recording five seconds after initialization; an unnamed start can wait briefly for GPS time to choose a date-based filename.
+On Stop, the master stops accepting new log samples and tells nodes that recording stopped; they keep sending. Its writer finishes queued samples and closes the files. Wait for the logger to become idle before removing power or the card. The master attempts automatic recording five seconds after initialization; an unnamed start can wait briefly for GPS time to choose a date-based filename.
 
 The periodic time message also carries the recording state. A node that reboots can rejoin a recording on its next beacon.
 

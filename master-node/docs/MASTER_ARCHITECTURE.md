@@ -61,9 +61,9 @@ using the current anchor; it does not replace the source elapsed timestamp.
 
 ## Session policy
 
-`app_control` serializes serial and HTTP lifecycle requests with a mutex. Start is accepted only while idle. The logger opens a unique session first; application policy then enables monitoring/recording beacons and broadcasts START. Failed command transmission is reported without rolling back the already-open logger.
+`app_control` serializes serial and HTTP lifecycle requests with a lifecycle mutex. CAN dispatch uses a separate processing mutex, which Start and Stop take only around the logger state change, so the GPS naming wait never stalls CAN reception. Start is accepted only while idle. The logger opens a unique session first; under the processing mutex, application policy then clears the log queue, drops the master's health counts made while idle, starts the logger and sets the beacon's recording bit; it then broadcasts START. The CAN queue is not cleared: nodes always send, and it holds live and health frames. Failed command transmission is reported without rolling back the already-open logger.
 
-Stop is accepted only while running. It ends live viewing and requests logger stop, then clears recording/monitoring state and broadcasts STOP. The writer drains already accepted data asynchronously before becoming idle. Repeated API start/stop requests conflict with the current lifecycle state, even though node-level commands are idempotent.
+Stop is accepted only while running. Under the processing mutex it requests logger stop and clears the beacon's recording bit, then broadcasts STOP. Live viewing continues. The writer drains already accepted data asynchronously before becoming idle. Repeated API start/stop requests conflict with the current lifecycle state, even though node-level commands are idempotent.
 
 Default naming can wait up to three seconds for GPS UTC. [Logger guide](../src/logger/README.md) explains buffering, syncing, and companion failure behavior.
 
@@ -71,7 +71,7 @@ Default naming can wait up to three seconds for GPS UTC. [Logger guide](../src/l
 
 Time beacons broadcast master elapsed time and recording state periodically. Node timestamps are translated to this clock before transmission. GPS calendar synchronization is a separate concern: `absolute_clock` anchors UTC on the first valid RMC and `clock_discipline` then corrects it gradually from later sentences; see [Absolute time](ABSOLUTE_TIME.md).
 
-The registry receives explicit state transitions, but active-recording liveness comes from sensor traffic. Its expected-node mask selects monitored nodes. Idle operation disables traffic monitoring. Missing data can indicate a sensor/read problem as well as a bus or power failure.
+The registry receives explicit state transitions, but active-recording liveness comes from sensor traffic. Its expected-node mask selects monitored nodes. Monitoring runs from boot, recording or not, because nodes always send. Missing data can indicate a sensor/read problem as well as a bus or power failure.
 
 ## Recovery and limits
 

@@ -64,8 +64,8 @@ Confirm listed sensor names, signs, units, zero/stopped behavior, known input va
 
 With normal CAN profiles, a properly connected bus, and a master:
 
-1. Confirm expected node identities and that an idle master leaves nodes idle.
-2. Start recording; nodes 1, 3, 4, and 5 should become active when data arrives. Optional ADC monitoring requires an intentional mask update.
+1. Confirm expected node identities, and that nodes send samples from power-up while the master is idle and when it is off; the web live view works while idle.
+2. Start recording; nodes 1, 3, 4, and 5 should show recording in their state reports, and the log should contain no `event_lost` or problems from before the start. Optional ADC monitoring requires an intentional mask update.
 3. Exercise both brake channels, all motion axes, signed bearing rotation, engine inputs, and GPS reception. Check value scales against known inputs.
 4. Confirm synchronized timestamps and expected signal IDs in full CSV; inspect Powertrain rows when engine and bearing data exist.
 5. Repeat START/STOP. Stop must reach idle with closed files; completed downloads should decode cleanly without overwrite.

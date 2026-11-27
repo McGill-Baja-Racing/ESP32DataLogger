@@ -13,7 +13,7 @@ CAN uses standard 11-bit identifiers at 1 Mbit/s. TWAI is Espressif's CAN interf
 | `0x0A2` | Master → nodes | Eight-byte time and recording beacon |
 | `0x0C0 + node ID` | Node → master | Three-byte state report |
 
-The master sends zero-length global START/STOP frames in repeated bursts. Node receivers also accept a nonempty command whose first byte is their node ID or `0xFF` for all nodes. Repeated commands acknowledge the current state without repeating the sampler transition.
+The master sends zero-length global START/STOP frames in repeated bursts. Node receivers also accept a nonempty command whose first byte is their node ID or `0xFF` for all nodes. START and STOP set a node's recording state; they do not start or stop sampling. Nodes sample and send from boot, with or without a master, and the master decides what it logs. Repeated commands acknowledge the current state without repeating the transition.
 
 Every 100 ms, the master sends a little-endian unsigned 64-bit beacon. Bit 63 means recording is active; bits 0–62 contain elapsed master microseconds. Mask off the recording bit before computing the clock offset:
 
@@ -22,7 +22,7 @@ clock_offset_us = master_time_us - node_local_time_us
 sample_timestamp_ms = (local_sample_time_us + clock_offset_us) / 1000
 ```
 
-A node follows beacon recording state as well as explicit commands. This allows restart after a reboot during recording. Elapsed time starts again when the master reboots; it is not UTC.
+A node follows beacon recording state as well as explicit commands. This lets a node that rebooted during a recording rejoin it. Until a node hears its first beacon, its samples carry its own clock (offset zero) and its status shows `no_time_sync`; the master logs nothing before START, so such samples never reach a log. Elapsed time starts again when the master reboots; it is not UTC.
 
 The offset is a receive/dispatch-time estimate, not a measured clock-accuracy
 guarantee. `time_sync` starts with zero offset, so samples before the first beacon
@@ -42,7 +42,7 @@ Measure accuracy for applications that depend on tight timing.
 | 1 | Reason: boot `1`, stop `2`, start `3`, CAN recovery `4`, beacon synchronization `5` |
 | 2 | ESP reset reason for a boot report; otherwise zero |
 
-State frames are control information, not logged sensor samples. During recording, sensor and health traffic supply liveness. The expected-node mask enables nodes 1, 3, 4, 5, 7, and 8. A configured node is offline after three seconds without either kind of traffic; a responding node without recent sensor data shows `waiting`. Node 6 is accepted but not enabled in that mask by default.
+State frames are control information, not logged sensor samples. The state byte means "the master is recording", not "this node is sampling". Sensor and health traffic supply liveness at all times, recording or not. The expected-node mask enables nodes 1, 3, 4, 5, 7, and 8. A configured node is offline after three seconds without either kind of traffic; a responding node without recent sensor data shows `waiting`. Node 6 is accepted but not enabled in that mask by default.
 
 ## Sensor samples
 
@@ -98,7 +98,10 @@ Flash the master and sensor nodes from this integration together. Every node sen
 four-byte status and diagnostics payloads at 1 Hz on `0x0D0 + node` and
 `0x0F0 + node`. The master adds its arrival timestamp to make eight-byte log
 records. While recording, nodes also send eight-byte events on `0x0E0 + node`,
-with the time of the last occurrence. Master health is logged locally as node 0.
+with the time of the last occurrence. Problems counted while idle are dropped
+when recording starts, on the nodes and on the master, so a log only describes
+its recording; the boot event and sensor init failures are still sent. The
+status `mode` bit means "the master is recording". Master health is logged locally as node 0.
 The web health panel uses `/api/health`; AiM connection status stays separate.
 
 Status packs faults, health level, mode, and six sensor states. Events pack code,
@@ -114,6 +117,7 @@ nodes 1–7, and the previously unused bit 0 represents node 8. The master is ne
 an offline subject. The firmware CSV exporter and offline decoder use the same
 mapping. After STOP, normal samples stop entering the log immediately; health
 admission closes after a 200 ms grace period, before the final queue drain.
+Nodes keep sending samples after STOP; only logging ends.
 
 ## Changing this contract
 

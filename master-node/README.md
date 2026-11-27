@@ -8,7 +8,7 @@ The master receives sensor readings over CAN and GPS messages over a serial conn
 
 After initialization it attempts to start recording after five seconds. An unnamed start waits up to three additional seconds for GPS UTC before selecting a filename; without it, a numbered filename is used. Existing recordings are not overwritten. Serial `start`, `stop`, and `status` commands and browser controls provide manual operation.
 
-Connect to the open `BajaDAQ` network and open `http://192.168.4.1` for controls, session naming, completed-log rename/download, and up to four live graphs. Live viewing is enabled separately while recording and ends on stop or viewer lease expiry. SD collection continues independently of viewing.
+Connect to the open `BajaDAQ` network and open `http://192.168.4.1` for controls, session naming, completed-log rename/download, and up to four live graphs. Live viewing is enabled separately, whether or not a recording runs, and ends when the viewer stops or its lease expires. SD collection continues independently of viewing.
 
 ## Build profiles
 

@@ -10,22 +10,22 @@ Normal mode initializes CAN with callbacks for start, stop, time synchronization
 
 ## Commands and clock ownership
 
-CAN's receive callback copies messages into a queue; a dispatch task interprets commands and beacons. START/STOP transitions call the application sampler callbacks, while repeated copies send acknowledgements without restarting sampling. A beacon updates the protected clock offset and reconciles active/idle state with the master.
+CAN's receive callback copies messages into a queue; a dispatch task interprets commands and beacons. START/STOP transitions set the recording state and call the application callbacks, while repeated copies only send acknowledgements. Recording does not control sampling: at START the node only drops the health counts made while idle, so events describe the recording. A beacon updates the protected clock offset and reconciles recording state with the master.
 
 `time_sync` converts local capture times to master-clock milliseconds. Engine uses captured edge time rather than transmission time. Other periodic samples take a synchronized timestamp before the read callback. Serial mode has no master synchronization.
 
 ## Sampling and output
 
-On start, the sampler clears its output queue, invokes optional driver start callbacks, arms schedules, and becomes active. Periodic drivers are visited when due. Failed reads are omitted; missed schedule periods are advanced rather than emitted as fabricated catch-up samples. The task always yields at least one FreeRTOS tick, so real cadence depends on task scheduling and read duration.
+The sampler starts once at boot: it clears its output queue, invokes optional driver start callbacks, arms schedules, and becomes active. It then runs whether or not the master records. Periodic drivers are visited when due. Failed reads are omitted; missed schedule periods are advanced rather than emitted as fabricated catch-up samples. The task always yields at least one FreeRTOS tick, so real cadence depends on task scheduling and read duration.
 
 The engine build instead consumes the driver's interrupt event queue. It publishes detected sparks and valid RPM intervals, plus timeout zeros. This special path does not support arbitrary zero-period descriptors. See [Sensor driver guide](../src/sensors/README.md).
 
 The 64-entry output queue separates acquisition from CAN sending. Periodic overflow discards an older queued sample in favor of a current one. Engine CAN output reserves room for each complete event; insufficient space loses the event. Capture overflow is also reported. The send task packs values/timestamps or prints throttled serial values.
 
-On stop, sampling becomes inactive and pending output is cleared. Drivers reset session-specific state on the next start; the engine clears its capture queue then. A frame already being transmitted can still be in flight.
+Sampling stops only while a firmware update writes flash, and resumes if the update fails or is aborted; pending output is cleared. Drivers reset session-specific state when sampling starts again; the engine clears its capture queue then. A frame already being transmitted can still be in flight.
 
 ## CAN recovery
 
-CAN owns its transport mutex, queues, controller state, error counters, and recovery task. Bus-off preserves active/idle state but asks the sampler to discard pending output; the engine discard callback also clears captured events. Recovery reports a transition and subsequent beacons can reconcile recording state. Ordinary sensor traffic provides master liveness; no heartbeat task is used.
+CAN owns its transport mutex, queues, controller state, error counters, and recovery task. Bus-off preserves active/idle state but asks the sampler to discard pending output; the engine discard callback also clears captured events. Recovery reports a transition and subsequent beacons can reconcile recording state. Ordinary sensor traffic, sent from boot, provides master liveness; no heartbeat task is used.
 
 Next: [Adding sensors/nodes](ADDING_SENSORS_AND_NODES.md), [Testing](../../docs/TESTING.md), and [Troubleshooting](../../docs/TROUBLESHOOTING.md).

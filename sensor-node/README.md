@@ -27,7 +27,7 @@ Both firmwares use 1 Mbit/s CAN, configured by `CAN_BITRATE` in the [shared prot
 
 ## Normal and bench operation
 
-Vehicle profiles use `SENSOR_SERIAL_TEST=0`: initialize sensors, wait for master control, synchronize timestamps, then send samples over CAN. Repeated commands do not restart an already active sampler. A recording-state beacon lets a rebooted node rejoin.
+Vehicle profiles use `SENSOR_SERIAL_TEST=0`: initialize sensors and CAN, then sample and send over CAN from boot, with or without a master. The master's beacon synchronizes timestamps; START, STOP and the beacon's recording bit only set the node's recording state, which gates health events. A firmware update pauses sampling while it writes flash.
 
 With `SENSOR_SERIAL_TEST=1`, the node skips CAN, starts immediately after initialization, and prints each configured sensor at most twice per second. `NodeEngineBench` already selects this mode. Printed output is throttled; it does not represent the full acquisition rate. Serial bench timestamps use the local clock because no master beacon is received.
 

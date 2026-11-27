@@ -6,9 +6,9 @@ Read the [master source map](../README.md) and its concurrency vocabulary first.
 
 `data_logger` owns filenames, file handles, the file mutex, the 32,768-entry queue (in PSRAM), drop count, and writer task. `app_control` serializes callers and decides when to broadcast commands; the logger itself does not control nodes.
 
-Starting from `LOGGER_IDLE` validates/selects a name and exclusively creates the binary and UTC files before entering `LOGGER_RUNNING`. Companion-open failure prevents a successful session start. Only after that does application policy enable recording beacons and send START.
+Starting from `LOGGER_IDLE` validates/selects a name and exclusively creates the binary and UTC files before entering `LOGGER_RUNNING`. Companion-open failure prevents a successful session start. Only after that does application policy enable recording beacons and send START. Nodes sample and send all the time; START only decides that the master logs.
 
-Stop changes the logger to `LOGGER_STOPPING`, rejecting samples while accepting late health frames during the grace period. Application policy ends live viewing, clears beacon/monitoring state, and sends STOP. The writer atomically closes health admission before its final drain, writes the partial block, closes both files, and sets `LOGGER_IDLE`. A successful stop request is not yet permission to remove power; wait for idle.
+Stop changes the logger to `LOGGER_STOPPING`, rejecting samples while accepting late health frames during the grace period. Application policy clears the beacon's recording bit and sends STOP; live viewing continues. The writer atomically closes health admission before its final drain, writes the partial block, closes both files, and sets `LOGGER_IDLE`. A successful stop request is not yet permission to remove power; wait for idle.
 
 ## Buffering and failure behavior
 

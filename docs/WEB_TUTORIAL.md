@@ -41,7 +41,7 @@ The master needs its normal SD and Wi-Fi setup. It attempts automatic recording 
 
 Connect to `BajaDAQ`, open `http://192.168.4.1`, and reload the page after flashing. Confirm the new label is visible. If old text remains, verify the board/profile uploaded and reload without the cached page.
 
-On a controlled bench, start a recording if idle, enable live viewing, and select a signal with a known changing input. Switch graph refresh rates and confirm updates continue without browser console errors. Stop recording and wait for idle. Check that live viewing stops, a completed log can be downloaded, and its source timestamps remain independent of the selected graph rate. Do not infer acquisition rate from the graph animation alone.
+On a controlled bench, enable live viewing while idle, and select a signal with a known changing input. Switch graph refresh rates and confirm updates continue without browser console errors. Start then stop a recording and wait for idle. Check that live viewing keeps running through both, a completed log can be downloaded, and its source timestamps remain independent of the selected graph rate. Do not infer acquisition rate from the graph animation alone.
 
 Record the build result, board/profile, browser, observed label and controls, and checks you could not perform in your PR. Without a board, report the label edit and build evidence and explicitly leave device checks pending.
 

@@ -42,7 +42,8 @@
 #define CAN_MASTER_TIME_RECORDING_FLAG (UINT64_C(1) << 63)
 #define CAN_MASTER_TIME_VALUE_MASK     (CAN_MASTER_TIME_RECORDING_FLAG - 1)
 
-/* Node N sends state, reason and reset_reason (one byte each) on CAN_ID_NODE_STATE_BASE + N. */
+/* Node N sends state, reason and reset_reason (one byte each) on CAN_ID_NODE_STATE_BASE + N.
+ * The state means the master is recording; nodes sample and send from boot either way. */
 #define CAN_ID_NODE_STATE_BASE      0x0C0
 #define CAN_NODE_STATE_LENGTH       3
 #define CAN_NODE_ID_MASK            ((1U << 1) | (1U << 3) | (1U << 4) | (1U << 5) | (1U << 6) | (1U << 7) | (1U << 8))
@@ -153,7 +154,7 @@ _Static_assert(sizeof(firmware_identity_t) == 8, "identity must be 8 bytes");
  * diagnostics frame each second; nodes send only the payload and the master
  * stamps arrival. While recording, each node also sends one event frame per
  * code and subject counted since the last one, stamped with its last
- * occurrence. Subjects are one byte: DAQ node IDs fit directly; AiM and GPS use aliases.
+ * occurrence. Counts made while idle are dropped when recording starts. Subjects are one byte: DAQ node IDs fit directly; AiM and GPS use aliases.
  * The master finds lost events from gaps in each node's event sequence.
  */
 #define NODE_STATUS_PERIOD_MS 1000
