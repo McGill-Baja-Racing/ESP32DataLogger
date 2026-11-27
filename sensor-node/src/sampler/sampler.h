@@ -16,11 +16,16 @@ esp_err_t sampler_init(void);
 
 /**
  * @brief Clear queued samples and start sampling. Does nothing if already active.
+ *
+ * Called once at boot, and to resume after a firmware update pauses sampling.
+ * Recording on the master does not start or stop sampling.
  */
 void sampler_start(void);
 
 /**
  * @brief Stop sampling and drop queued samples. Does nothing if already stopped.
+ *
+ * Used to pause sampling while a firmware update writes flash.
  */
 void sampler_stop(void);
 
@@ -32,7 +37,7 @@ void sampler_stop(void);
 void sampler_discard_pending(void);
 
 /**
- * @brief Check whether the sampler is recording.
+ * @brief Check whether the sampler is sampling.
  *
  * @return true between sampler_start() and sampler_stop().
  */

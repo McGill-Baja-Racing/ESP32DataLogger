@@ -45,7 +45,7 @@ static volatile bool active;
 
 static void arm_schedule(void)
 {
-    /* sample_task sees START up to one idle poll late; reads due before then would count as missed. */
+    /* sample_task sees sampler_start() up to one idle poll late; reads due before then would count as missed. */
     int64_t first_us = esp_timer_get_time() + SAMPLER_IDLE_POLL_MS * 1000;
     for (size_t i = 0; i < sensor_count; i++) {
         sensors[i].next_sample_us = first_us;
@@ -173,7 +173,7 @@ static void enqueue_engine_event(const engine_event_t *event)
 #endif
 
 /**
- * @brief Task that reads the sensors while recording and queues the samples.
+ * @brief Task that reads the sensors while sampling is on and queues the samples.
  */
 static void sample_task(void *argument)
 {

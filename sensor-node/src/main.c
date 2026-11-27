@@ -22,14 +22,10 @@
  * the master clock offset. See src/README.md for the full dependency map.
  */
 
+/* The master started recording: health events from now on describe the recording. */
 static void handle_start(void)
 {
-    sampler_start();
-}
-
-static void handle_stop(void)
-{
-    sampler_stop();
+    node_health_recording_started();
 }
 
 void app_main(void)
@@ -45,7 +41,7 @@ void app_main(void)
     /* Before the sensors, so a new image that hangs in their init still rolls back. */
     ESP_ERROR_CHECK(firmware_update_init());
 #endif
-    /* Sensor hardware and sampling tasks exist before CAN can issue START. */
+    /* Sensor hardware and sampling tasks exist before CAN starts. */
     ESP_ERROR_CHECK(sampler_init());
 
 #if SENSOR_SERIAL_TEST
@@ -54,10 +50,12 @@ void app_main(void)
              "Standalone serial mode enabled; CAN is disabled");
     sampler_start();
 #else
-    /* CAN translates protocol frames into these application-level actions. */
+    /* CAN translates protocol frames into these application-level actions.
+     * Sampling no longer follows START/STOP: the node samples and sends from
+     * boot, and the master decides what it logs. */
     can_node_callbacks_t callbacks = {
         .on_start = handle_start,
-        .on_stop = handle_stop,
+        .on_stop = NULL,
         .on_time_beacon = time_sync_update,
         .on_bus_off = sampler_discard_pending,
         .on_update_command = firmware_update_handle_command,
@@ -68,6 +66,8 @@ void app_main(void)
     can_node_report_state(NODE_STATE_IDLE, NODE_STATE_REASON_BOOT);
     firmware_update_report_identity();
     ESP_ERROR_CHECK(node_health_init());
+    /* Sample with or without a master: until the first beacon, timestamps use this node's own clock. */
+    sampler_start();
     /* A new image confirms itself only once every init step above passed and the master answered. */
     while (!time_sync_is_current(3 * CAN_MASTER_TIME_PERIOD_MS)) {
         vTaskDelay(pdMS_TO_TICKS(CAN_MASTER_TIME_PERIOD_MS));

@@ -11,8 +11,8 @@
 /**
  * @brief Count this reset and start the health reporting task.
  *
- * Each period the task sends status and diagnostics, and while recording the
- * events counted since the last report. Call after can_node_init().
+ * Each period the task sends status and diagnostics, and while the master
+ * records the events counted since the last report. Call after can_node_init().
  *
  * @retval ESP_OK          The task is running.
  * @retval ESP_ERR_NO_MEM  The task could not be created.
@@ -41,3 +41,12 @@ void node_health_sensor_init(size_t index, uint32_t can_id, esp_err_t error);
  * @param error Result of the read.
  */
 void node_health_sensor_read(size_t index, esp_err_t error);
+
+/**
+ * @brief Drop the counts made so far from the events still to send.
+ *
+ * Call when the master starts recording, so the log only describes the
+ * recording. The boot event and sensor init failures are still sent. Safe from
+ * any task.
+ */
+void node_health_recording_started(void);

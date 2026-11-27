@@ -8,17 +8,17 @@
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "sampler/sampler.h"
 #include "sensors/sensor.h"
 #include "time/time_sync.h"
 
 /*
- * A count is marked reported once the CAN driver holds its event, so counts
- * made while idle are sent later, stamped with when they last happened. An
- * event the driver then drops shows up at the master as a gap in the event
- * sequence. Capping counts at HEALTH_EVENT_COUNT_MAX means a fault storm while
- * idle leaves no backlog. Occurrence times are kept on the local clock because
- * counting runs in interrupts; they are converted when sent.
+ * A count is marked reported once the CAN driver holds its event. Events go
+ * out only while the master records; counts made while idle are dropped when
+ * recording starts (node_health_recording_started()), except the boot event
+ * and sensor init failures, so a log only describes its recording. An event
+ * the driver drops shows up at the master as a gap in the event sequence.
+ * Occurrence times are kept on the local clock because counting runs in
+ * interrupts; they are converted when sent.
  */
 
 #define TIME_SYNC_TIMEOUT_MS 1000
@@ -54,6 +54,9 @@ static portMUX_TYPE lock = portMUX_INITIALIZER_UNLOCKED;
 static uint8_t resets;
 static uint8_t reset_reason;
 static uint8_t event_sequence;
+/* Counts when recording last started, applied by health_task before its next report. */
+static node_snapshot_t baseline;
+static bool baseline_pending;
 
 /**
  * @brief Get this node's own time in ms, not the master's.
@@ -99,6 +102,39 @@ void node_health_sensor_read(size_t index, esp_err_t error)
     portEXIT_CRITICAL_SAFE(&lock);
 }
 
+void node_health_recording_started(void)
+{
+    static health_state_t counts;
+    node_health_copy_counts(&counts);
+    portENTER_CRITICAL_SAFE(&lock);
+    baseline.counts = counts;
+    memcpy(baseline.sensors, sensor_health, sizeof(sensor_health));
+    baseline.sensor_count = sensor_health_count;
+    baseline_pending = true;
+    portEXIT_CRITICAL_SAFE(&lock);
+}
+
+/**
+ * @brief Mark everything counted before recording started as reported.
+ *
+ * @param reported Counts already reported; only ever moved forward.
+ */
+static void apply_baseline(node_snapshot_t *reported)
+{
+    portENTER_CRITICAL(&lock);
+    if (baseline_pending) {
+        node_health_skip_counts(&reported->counts, &baseline.counts);
+        for (size_t i = 0; i < baseline.sensor_count; i++) {
+            uint32_t failed = baseline.sensors[i].failed_reads;
+            if ((int32_t)(failed - reported->sensors[i].failed_reads) > 0) {
+                reported->sensors[i].failed_reads = failed;
+            }
+        }
+        baseline_pending = false;
+    }
+    portEXIT_CRITICAL(&lock);
+}
+
 /**
  * @brief Judge a sensor from its reads in the last status period.
  *
@@ -138,7 +174,7 @@ static bool send_event(uint8_t code, uint32_t subject, uint32_t count, esp_err_t
 {
     /* A sent event counts as delivered, so send only while the master is
      * logging: recording, with its beacons still arriving. */
-    if (!sampler_is_active() || !time_sync_is_current(TIME_SYNC_TIMEOUT_MS)) {
+    if (can_node_state() != NODE_STATE_ACTIVE || !time_sync_is_current(TIME_SYNC_TIMEOUT_MS)) {
         return false;
     }
     /* Problems from before the master's clock started are dated at its start. */
@@ -255,7 +291,7 @@ static void health_task(void *argument)
         if (!time_sync_is_current(TIME_SYNC_TIMEOUT_MS)) {
             faults |= HEALTH_BIT(HEALTH_NO_TIME_SYNC);
         }
-        bool recording = sampler_is_active();
+        bool recording = can_node_state() == NODE_STATE_ACTIVE;
         size_t working = 0;
         uint32_t sensors = 0;
         sensor_state_t worst = SENSOR_STATE_OK;
@@ -285,6 +321,7 @@ static void health_task(void *argument)
                                          NODE_HEALTH_PAYLOAD) == ESP_OK;
         send_diagnostics();
         if (status_sent) {
+            apply_baseline(&reported);
             report_events(&now, &reported, init_reported);
         }
     }

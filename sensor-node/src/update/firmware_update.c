@@ -14,6 +14,7 @@
 #include "freertos/queue.h"
 #include "freertos/task.h"
 #include "can/can_node.h"
+#include "sampler/sampler.h"
 #include "protocol/app_protocol.h"
 #include "sdkconfig.h"
 
@@ -139,13 +140,14 @@ static void send_reply(const uint8_t *payload, uint8_t length)
 }
 
 /**
- * @brief Drop the update being received, if any.
+ * @brief Drop the update being received, if any, and resume sampling.
  */
 static void stop_receiving(void)
 {
     if (receiving) {
         esp_ota_abort(ota_handle);
         receiving = false;
+        sampler_start();
     }
 }
 
@@ -223,6 +225,8 @@ static void begin_update(const uint8_t *bytes)
     }
     ESP_LOGI(TAG, "Update started, %" PRIu32 " bytes", size);
     receiving = true;
+    /* Flash writes stall sampling, so pause it; stop_receiving() resumes it. */
+    sampler_stop();
     image_size = size;
     offset = 0;
     retries = 0;
@@ -239,10 +243,12 @@ static void finish_update(void)
     receiving = false;
     esp_err_t error = esp_ota_end(ota_handle);
     if (error != ESP_OK) {
+        sampler_start();  /* receiving is already false, so fail() would not resume it */
         fail(error == ESP_ERR_OTA_VALIDATE_FAILED ? UPDATE_ERROR_BAD_IMAGE : UPDATE_ERROR_FLASH);
         return;
     }
     if (esp_ota_set_boot_partition(update_partition) != ESP_OK) {
+        sampler_start();
         fail(UPDATE_ERROR_FLASH);
         return;
     }

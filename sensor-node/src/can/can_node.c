@@ -269,7 +269,7 @@ static void dispatch_task(void *argument)
                 (message.data & CAN_MASTER_TIME_RECORDING_FLAG)
                 ? NODE_STATE_ACTIVE : NODE_STATE_IDLE;
             if (master_state != current_state) {
-                ESP_LOGI(TAG, "Beacon sync; sampler -> %s",
+                ESP_LOGI(TAG, "Beacon sync; recording -> %s",
                          master_state == NODE_STATE_ACTIVE ? "active" : "idle");
                 if (master_state == NODE_STATE_ACTIVE) {
                     if (app_callbacks.on_start) app_callbacks.on_start();
@@ -281,7 +281,7 @@ static void dispatch_task(void *argument)
             }
         } else if (message.id == CAN_ID_START && targets_this_node(&message)) {
             if (current_state != NODE_STATE_ACTIVE) {
-                ESP_LOGI(TAG, "Received START; sampler -> active");
+                ESP_LOGI(TAG, "Received START; recording -> active");
                 if (app_callbacks.on_start) {
                     app_callbacks.on_start();
                 }
@@ -291,7 +291,7 @@ static void dispatch_task(void *argument)
             can_node_report_state(NODE_STATE_ACTIVE, NODE_STATE_REASON_START);
         } else if (message.id == CAN_ID_STOP && targets_this_node(&message)) {
             if (current_state != NODE_STATE_IDLE) {
-                ESP_LOGI(TAG, "Received STOP; sampler -> idle");
+                ESP_LOGI(TAG, "Received STOP; recording -> idle");
                 if (app_callbacks.on_stop) {
                     app_callbacks.on_stop();
                 }

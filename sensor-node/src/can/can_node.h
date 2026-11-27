@@ -6,6 +6,9 @@
 #include "protocol/app_protocol.h"
 
 /* Events decoded by the CAN module and handled by the application modules. */
+/* on_start and on_stop mean the master's recording started or stopped, from a
+ * START or STOP frame or the beacon's recording bit. They do not control
+ * sampling, which runs from boot. */
 typedef struct {
     void (*on_start)(void);
     void (*on_stop)(void);
