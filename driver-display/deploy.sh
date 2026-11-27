@@ -33,9 +33,11 @@ fi
 
 # Only files whose content changed are replaced on the Pi, and they get the Pi's
 # time. make then rebuilds exactly what changed, even though the Pi's clock is wrong.
-COPYFILE_DISABLE=1 tar -cf - --no-xattrs Makefile src systemd third_party/libdrm \
+# The shared protocol header lives outside this folder; it lands in ./protocol on the Pi.
+COPYFILE_DISABLE=1 tar -cf - --no-xattrs Makefile src systemd tests tools third_party/libdrm \
     third_party/lvgl/src third_party/lvgl/include third_party/lvgl/lvgl.h \
-    third_party/lvgl/lvgl_private.h third_party/lvgl/lv_version.h |
+    third_party/lvgl/lvgl_private.h third_party/lvgl/lv_version.h \
+    -C .. protocol/app_protocol.h |
     ssh "$HOST" 'set -e
         rm -rf .driver-display-upload
         mkdir .driver-display-upload

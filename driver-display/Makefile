@@ -6,10 +6,12 @@ LVGL_SOURCES := $(shell find third_party/lvgl/src -name '*.c' 2>/dev/null)
 LVGL_OBJECTS := $(LVGL_SOURCES:%.c=$(OBJ)/%.o)
 UI_SOURCES := $(wildcard src/ui/*.c src/ui/fonts/*.c src/views/*.c)
 UI_OBJECTS := $(UI_SOURCES:%.c=$(OBJ)/%.o)
-HEADERS := src/lv_conf.h $(wildcard src/*.h src/ui/*.h src/ui/fonts/*.h src/views/*.h)
+HEADERS := src/lv_conf.h $(wildcard src/*.h src/ui/*.h src/ui/fonts/*.h src/views/*.h src/can/*.h)
+CAN_OBJECTS := $(OBJ)/src/can/daq_decode.o $(OBJ)/src/can/daq_state.o $(OBJ)/src/can/can_socket.o
 
-# The repository root, for the shared protocol/app_protocol.h.
-CPPFLAGS := -DLV_CONF_INCLUDE_SIMPLE -Isrc -I.. -Ithird_party/lvgl \
+# protocol/app_protocol.h: from the repository root here (..), or from the copy
+# deploy.sh puts next to the Makefile on the Pi (.).
+CPPFLAGS := -DLV_CONF_INCLUDE_SIMPLE -Isrc -I. -I.. -Ithird_party/lvgl \
 	-Ithird_party/libdrm/include -Ithird_party/libdrm/include/libdrm
 # The Pi has the libdrm library but no libdrm.so link, which comes with libdrm-dev.
 DRM_LIBS := -l:libdrm.so.2 -lm
@@ -18,7 +20,7 @@ SERVICE := /etc/systemd/system/driver-display.service
 
 # On the Pi: the programs that draw on the screen. Elsewhere: the screenshots.
 ifeq ($(OS),Linux)
-all: build/driver-display build/gallery build/display-poc
+all: build/driver-display build/gallery build/display-poc build/can-monitor
 else
 all: snapshots
 endif
@@ -33,6 +35,11 @@ build/gallery: $(OBJ)/src/gallery.o $(OBJ)/src/drm_app.o $(UI_OBJECTS) $(LVGL_OB
 
 build/display-poc: $(OBJ)/src/display_poc.o $(LVGL_OBJECTS)
 	@$(CC) $^ -o $@ $(DRM_LIBS)
+	@echo "Built $@"
+
+# Linux only (SocketCAN). Needs no screen and no LVGL.
+build/can-monitor: $(OBJ)/src/can_monitor.o $(CAN_OBJECTS)
+	@$(CC) $^ -o $@
 	@echo "Built $@"
 
 build/snapshot: $(OBJ)/src/snapshot.o $(UI_OBJECTS) $(LVGL_OBJECTS)
@@ -71,9 +78,9 @@ DAQ_SOURCES := src/can/daq_decode.c src/can/daq_state.c
 test: build/test-daq
 	@./build/test-daq
 
-build/test-daq: tests/test_daq.c $(DAQ_SOURCES) $(wildcard src/can/*.h) ../protocol/app_protocol.h
+build/test-daq: tests/test_daq.c $(DAQ_SOURCES) $(wildcard src/can/*.h ../protocol/app_protocol.h protocol/app_protocol.h)
 	@mkdir -p build
-	$(CC) -std=gnu11 -O2 -Wall -Wextra -Werror -Isrc -I.. tests/test_daq.c $(DAQ_SOURCES) -o $@
+	$(CC) -std=gnu11 -O2 -Wall -Wextra -Werror -Isrc -I. -I.. tests/test_daq.c $(DAQ_SOURCES) -o $@
 
 clean:
 	rm -rf build
