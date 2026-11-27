@@ -1,5 +1,5 @@
 #include "ECVT_motor.h"
-#include "app/ecvt_app.h"
+#include "motor/runtime.h"
 #include <limits.h>
 #include <stdatomic.h>
 #include "esp_timer.h"
@@ -361,7 +361,7 @@ esp_err_t ecvt_motor_send_controlword(uint16_t cw)
 
 esp_err_t ecvt_motor_send_target_position(float pos_revs)
 {
-    if (ecvt_app_stop_requested()) return ESP_ERR_INVALID_STATE;
+    if (motor_operation_cancelled()) return ESP_ERR_INVALID_STATE;
     const float physical_pos_revs = pos_revs + s_position_zero_offset_revs;
     if (!isfinite(physical_pos_revs) || (double)physical_pos_revs * 10000.0 > INT32_MAX - 1.0 ||
         (double)physical_pos_revs * 10000.0 < INT32_MIN + 1.0) return ESP_ERR_INVALID_ARG;
@@ -381,8 +381,8 @@ esp_err_t ecvt_motor_send_target_position(float pos_revs)
 
 esp_err_t ecvt_motor_send_target_position_and_speed(float pos_revs, float speed_revs_per_sec)
 {
-    if (ecvt_app_stop_requested()) return ESP_ERR_INVALID_STATE;
-    if (!ecvt_app_allow_move(pos_revs, speed_revs_per_sec)) return ESP_ERR_INVALID_ARG;
+    if (motor_operation_cancelled()) return ESP_ERR_INVALID_STATE;
+    if (!motor_position_allowed(pos_revs, speed_revs_per_sec)) return ESP_ERR_INVALID_ARG;
     const float physical_pos_revs = pos_revs + s_position_zero_offset_revs;
     if (!isfinite(physical_pos_revs) || (double)physical_pos_revs * 10000.0 > INT32_MAX - 1.0 ||
         (double)physical_pos_revs * 10000.0 < INT32_MIN + 1.0) return ESP_ERR_INVALID_ARG;
@@ -492,7 +492,7 @@ esp_err_t ecvt_motor_enable_operation_sequence_position(void)
 {
     const uint16_t seq[] = {0x0006, 0x0007, 0x000F};
     for (int i = 0; i < 3; i++) {
-        if (ecvt_app_stop_requested()) return ESP_ERR_INVALID_STATE;
+        if (motor_operation_cancelled()) return ESP_ERR_INVALID_STATE;
         ESP_LOGI(s_log_tag, "RPDO1 Controlword = 0x%04X", seq[i]);
         ESP_RETURN_ON_ERROR(ecvt_motor_send_controlword(seq[i]), s_log_tag, "Servo operation failed");
         vTaskDelay(pdMS_TO_TICKS(200));
@@ -504,7 +504,7 @@ esp_err_t ecvt_motor_enable_position(void)
 {
     const uint16_t seq[] = {0x002F, 0x003F};
     for (int i = 0; i < 2; i++) {
-        if (ecvt_app_stop_requested()) return ESP_ERR_INVALID_STATE;
+        if (motor_operation_cancelled()) return ESP_ERR_INVALID_STATE;
         ESP_LOGI(s_log_tag, "RPDO1 Controlword = 0x%04X", seq[i]);
         ESP_RETURN_ON_ERROR(ecvt_motor_send_controlword(seq[i]), s_log_tag, "Servo operation failed");
     }

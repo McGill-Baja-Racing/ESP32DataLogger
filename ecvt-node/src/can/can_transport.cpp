@@ -123,6 +123,7 @@ void rx_dispatch_task(void *arg)
             }
         }
         else if (map_entry->sensor_id == CAN_SENSOR_SERVO_TPDO4) {
+            if (item.dlc >= 2) servo_feedback_record(4, static_cast<int16_t>(decode_sensor_value_u32(&item)), item.received_us);
             if (!stop_logging) {
                 queue_servo_feedback_log(LOG_RECORD_TYPE_SERVO_TPDO4,
                                          item.dlc >= 2 ? (int32_t)(int16_t)decode_sensor_value_u32(&item) : 0);

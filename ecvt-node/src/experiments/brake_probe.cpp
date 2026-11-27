@@ -2,7 +2,7 @@
 #include "servo/ECVT_motor.h"
 #include "servo/velocity_zero.h"
 #include "servo/drive_state.h"
-#include "app/ecvt_app.h"
+#include "motor/runtime.h"
 #include "esp_timer.h"
 #include <atomic>
 #include <cstdio>
@@ -14,7 +14,7 @@ esp_err_t wait_state(uint16_t expected)
 {
     const int64_t deadline = esp_timer_get_time() + 1000000;
     do {
-        if (ecvt_app_stop_requested()) return ESP_ERR_INVALID_STATE;
+        if (motor_operation_cancelled()) return ESP_ERR_INVALID_STATE;
         uint16_t status = 0;
         esp_err_t result = ecvt_motor_sdo_read_u16(0x6041, 0, &status);
         if (result != ESP_OK) return result;
@@ -26,7 +26,7 @@ esp_err_t wait_state(uint16_t expected)
             printf("Brake test: statusword=0x%04x, state confirmed.\n", status);
             return ESP_OK;
         }
-        if (!ecvt_app_wait_ms(20)) return ESP_ERR_INVALID_STATE;
+        if (!motor_operation_wait_ms(20)) return ESP_ERR_INVALID_STATE;
     } while (esp_timer_get_time() < deadline);
     return ESP_ERR_TIMEOUT;
 }
@@ -66,7 +66,7 @@ esp_err_t brake_probe_restore()
 esp_err_t brake_probe_run()
 {
     if (disable_pending.load()) return ESP_ERR_INVALID_STATE;
-    if (ecvt_app_stop_requested()) return ESP_ERR_INVALID_STATE;
+    if (motor_operation_cancelled()) return ESP_ERR_INVALID_STATE;
     // Clear retained speed BEFORE selecting mode 3, then verify the mode,
     // zero target, disabled state and error register. No position target.
     esp_err_t result = servo_prepare_velocity_zero();
@@ -76,7 +76,7 @@ esp_err_t brake_probe_run()
     // A failed acknowledgement can still mean that a controlword took effect.
     disable_pending.store(true);
     for (unsigned i = 0; i < 3 && result == ESP_OK; ++i) {
-        if (ecvt_app_stop_requested()) { result = ESP_ERR_INVALID_STATE; break; }
+        if (motor_operation_cancelled()) { result = ESP_ERR_INVALID_STATE; break; }
         if (words[i] == 0x000F) {
             puts("Brake test: sending target velocity 60FF=0 immediately before enable.");
             result = ecvt_motor_sdo_write_u32(0x60FF, 0, 0);
@@ -84,7 +84,7 @@ esp_err_t brake_probe_run()
         }
         result = check_zero_velocity();
         if (result != ESP_OK) break;
-        if (ecvt_app_stop_requested()) { result = ESP_ERR_INVALID_STATE; break; }
+        if (motor_operation_cancelled()) { result = ESP_ERR_INVALID_STATE; break; }
         printf("Brake test: sending 6040=0x%04x.\n", words[i]);
         result = ecvt_motor_sdo_write_u16(0x6040, 0, words[i]);
         if (result == ESP_OK) result = wait_state(states[i]);
@@ -93,7 +93,7 @@ esp_err_t brake_probe_run()
         puts("BRAKE RELEASE WINDOW: servo enabled at zero target velocity for 10 seconds; observe brake. Motor torque is enabled; actual-velocity checks bypassed.");
         const int64_t deadline = esp_timer_get_time() + 10000000;
         while (result == ESP_OK && esp_timer_get_time() < deadline) {
-            if (!ecvt_app_wait_ms(50)) { result = ESP_ERR_INVALID_STATE; break; }
+            if (!motor_operation_wait_ms(50)) { result = ESP_ERR_INVALID_STATE; break; }
             result = check_zero_velocity();
             if (result == ESP_OK) result = wait_state(0x0027);
         }

@@ -10,6 +10,7 @@ void servo_feedback_record(unsigned pdo, int32_t value, int64_t received_us)
     if (pdo == 1) { feedback.statusword = static_cast<uint16_t>(value); feedback.status_us = received_us; }
     if (pdo == 2) { feedback.position_counts = value; feedback.position_us = received_us; }
     if (pdo == 3) { feedback.velocity_counts = value; feedback.velocity_us = received_us; }
+    if (pdo == 4) { feedback.current_raw = static_cast<int16_t>(value); feedback.current_us = received_us; }
     portEXIT_CRITICAL(&feedback_lock);
 }
 

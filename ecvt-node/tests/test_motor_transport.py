@@ -60,7 +60,7 @@ void vTaskDelay(TickType_t ticks);
         }
         harness = r'''
 #include "servo/ECVT_motor.h"
-#include "app/ecvt_app.h"
+#include "motor/runtime.h"
 #include <assert.h>
 #include <math.h>
 #include <string.h>
@@ -69,9 +69,9 @@ static uint8_t bytes[8];
 static unsigned id, dlc, transmissions, ticks;
 static bool cancelled, allowed=true, wait_fails, stale_reply, wrong_width, abort_reply;
 static const uint8_t *held_buffer;
-bool ecvt_app_stop_requested(void) { return cancelled; }
-bool ecvt_app_allow_move(float position, float speed) { return allowed && isfinite(position) && speed>0; }
-void ecvt_app_motor_error(esp_err_t error) { (void)error; }
+bool motor_operation_cancelled(void) { return cancelled; }
+bool motor_position_allowed(float position, float speed) { return allowed && isfinite(position) && speed>0; }
+void motor_operation_error(esp_err_t error) { (void)error; }
 TickType_t xTaskGetTickCount(void) { return ticks++; }
 int64_t esp_timer_get_time(void) { return (int64_t)ticks * 1000; }
 void vTaskDelay(TickType_t time) { ticks+=time; }

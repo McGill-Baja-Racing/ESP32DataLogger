@@ -14,7 +14,7 @@ class BrakeProbeTests(unittest.TestCase):
         headers = {
             "esp_err.h": "#pragma once\nusing esp_err_t=int;\nconstexpr int ESP_OK=0, ESP_FAIL=-1, ESP_ERR_INVALID_STATE=1, ESP_ERR_TIMEOUT=3;\n",
             "esp_timer.h": "#pragma once\n#include <cstdint>\nint64_t esp_timer_get_time();\n",
-            "app/ecvt_app.h": "#pragma once\nbool ecvt_app_stop_requested();\nbool ecvt_app_wait_ms(unsigned);\n",
+            "motor/runtime.h": "#pragma once\nbool motor_operation_cancelled();\nbool motor_operation_wait_ms(unsigned);\n",
             "freertos/FreeRTOS.h": "#pragma once\n#define pdMS_TO_TICKS(x) (x)\n",
             "freertos/task.h": "#pragma once\nvoid vTaskDelay(unsigned);\n",
             "servo/ECVT_motor.h": """#pragma once
@@ -44,8 +44,8 @@ static uint16_t last_write_index;
 static std::vector<uint16_t> words;
 int64_t esp_timer_get_time() { return now; }
 void vTaskDelay(unsigned ms) { now+=ms*1000; }
-bool ecvt_app_stop_requested() { return cancelled; }
-bool ecvt_app_wait_ms(unsigned ms) {
+bool motor_operation_cancelled() { return cancelled; }
+bool motor_operation_wait_ms(unsigned ms) {
     now+=ms*1000;
     if (status==0x0237 && now>=50000) {
         if(fault_window) { status=0x1218; errors=1; }

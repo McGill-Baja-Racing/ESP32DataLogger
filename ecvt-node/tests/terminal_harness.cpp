@@ -1,8 +1,8 @@
 #include "console/command_parser.h"
 #include "console/line_input.h"
 #include "experiments/three_revolutions.h"
-#include "app/operating_policy.h"
-#include "app/operation_gate.h"
+#include "motor/limits.h"
+#include "motor/operation_gate.h"
 #include <cassert>
 #include <cstring>
 #include <thread>

@@ -1,6 +1,6 @@
 #include "velocity_zero.h"
 #include "servo/ECVT_motor.h"
-#include "app/ecvt_app.h"
+#include "motor/runtime.h"
 #include "esp_timer.h"
 #include <cstdio>
 
@@ -9,7 +9,7 @@ esp_err_t servo_prepare_velocity_zero()
     uint16_t status = 0;
     uint8_t errors = 0, mode = 0;
     uint32_t target = 1;
-#define CHECK(call) do { if (ecvt_app_stop_requested()) return ESP_ERR_INVALID_STATE; \
+#define CHECK(call) do { if (motor_operation_cancelled()) return ESP_ERR_INVALID_STATE; \
     const esp_err_t result = (call); if (result != ESP_OK) return result; } while (0)
     CHECK(ecvt_motor_sdo_read_u16(0x6041, 0, &status));
     CHECK(ecvt_motor_sdo_read_u8(0x1001, 0, &errors));
@@ -24,7 +24,7 @@ esp_err_t servo_prepare_velocity_zero()
     do {
         CHECK(ecvt_motor_sdo_read_u8(0x6061, 0, &mode));
         if (mode == 3) break;
-        if (!ecvt_app_wait_ms(20)) return ESP_ERR_INVALID_STATE;
+        if (!motor_operation_wait_ms(20)) return ESP_ERR_INVALID_STATE;
     } while (esp_timer_get_time() < deadline);
     if (mode != 3) return ESP_ERR_TIMEOUT;
     CHECK(ecvt_motor_sdo_read_u32(0x60FF, 0, &target));

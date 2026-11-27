@@ -12,7 +12,9 @@ bool ecvt_app_allow_move(float position_revs, float speed_rpm);
 }
 
 #include "console/command_parser.h"
+#include "motor/requests.h"
 esp_err_t ecvt_app_start(bool sd_available);
+bool ecvt_app_motor_request(const ConsoleCommand &command, MotorRequest *request);
 void ecvt_app_submit(const ConsoleCommand &command);
 bool ecvt_app_wait_ms(unsigned milliseconds);
 void ecvt_app_print_status();

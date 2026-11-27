@@ -1,5 +1,7 @@
 # eCVT node readiness for DAQ integration
 
+The current [motor-core refactor](MOTOR_CORE.md) supersedes application-file paths in the historical audit below. Terminal and drive sequences are retained; the optional legacy services and neutral core API are now separate.
+
 Current direction (2026-11-26): the node is now colocated in DAQ on
 `BajaRemy/ecvt-standalone`. Runtime integration is deliberately deferred until
 the standalone manual-control/tuning interface and test-script workflow are ready.

@@ -32,6 +32,10 @@ The branch is `BajaRemy/ecvt-standalone`, based on DAQ main
    health and recovery. The [older migration plan](ECVT_MIGRATION_PLAN.md) and
    [CAN budget](ECVT_CAN_BUDGET.md) are background for this later stage.
 
+## Motor core checkpoint
+
+The [motor core](MOTOR_CORE.md) now provides the shared operation, status/result and parameter-access API. The terminal is an adapter; optional legacy controller/replay/recording services are separate. Web and script frontends can use this API without duplicating drive ownership. No DAQ runtime connection or web server was added.
+
 ## Decisions for the interface stage
 
 - Confirm how the browser connects: a computer-hosted interface over USB serial,

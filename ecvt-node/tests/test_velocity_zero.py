@@ -17,7 +17,7 @@ using esp_err_t=int;
 constexpr int ESP_OK=0, ESP_FAIL=-1, ESP_ERR_INVALID_STATE=1, ESP_ERR_TIMEOUT=3;
 """,
             "esp_timer.h": "#pragma once\n#include <cstdint>\nint64_t esp_timer_get_time();\n",
-            "app/ecvt_app.h": "#pragma once\nbool ecvt_app_stop_requested();\nbool ecvt_app_wait_ms(unsigned);\n",
+            "motor/runtime.h": "#pragma once\nbool motor_operation_cancelled();\nbool motor_operation_wait_ms(unsigned);\n",
             "servo/ECVT_motor.h": """#pragma once
 #include <cstdint>
 #include "esp_err.h"
@@ -39,8 +39,8 @@ static unsigned writes, fail_write, cancel_write;
 static bool cancelled, mode_stuck, bad_target;
 static int64_t now;
 int64_t esp_timer_get_time() { return now; }
-bool ecvt_app_stop_requested() { return cancelled; }
-bool ecvt_app_wait_ms(unsigned ms) { now+=ms*1000; return !cancelled; }
+bool motor_operation_cancelled() { return cancelled; }
+bool motor_operation_wait_ms(unsigned ms) { now+=ms*1000; return !cancelled; }
 int ecvt_motor_sdo_read_u8(uint16_t index,uint8_t sub,uint8_t *out) {
     assert(sub==0 && (index==0x1001 || index==0x6061));
     *out=index==0x1001 ? errors : mode; return 0;
