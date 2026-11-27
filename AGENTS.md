@@ -105,12 +105,17 @@ component README. Explicit user instructions take precedence over this guidance.
 
 ## Validate and report accurately
 
-- Run checks appropriate to the changed behavior. Use meaningful host tests for
-  protocol/state/ownership changes and build affected firmware. For file moves,
-  run existing relevant checks before inventing new tests.
-- Update tests to exercise the production implementation at its new location;
-  do not replace the moved logic with a test-only copy or weaken assertions to
-  make a refactor pass.
+- Do not create new test files, test harnesses, fixtures or testing frameworks
+  unless the user explicitly requests them. The repository's approach to adding
+  tests is still being defined; ordinary implementation or refactoring work does
+  not implicitly authorize new testing artifacts.
+- Run relevant existing checks and build affected firmware. Existing tests may
+  be maintained as needed for the requested change, including updating paths
+  after a move; do not replace production logic with a test-only copy or weaken
+  assertions to make a change pass.
+- If existing checks leave a meaningful validation gap, describe it and recommend
+  a focused check without automatically adding new test files. Do not block
+  ordinary work solely to request permission for optional test coverage.
 - Check the final diff for unintended changes and whitespace errors. Keep
   generated SDK configuration, build output and machine-specific settings out of
   commits; edit intentional defaults and build configuration instead.
