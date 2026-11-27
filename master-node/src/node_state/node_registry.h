@@ -12,7 +12,7 @@
  * @brief Start the task that marks silent expected nodes offline.
  *
  * A node goes offline after 3 s without a sensor or health frame; it is logged
- * and counted as HEALTH_NODE_OFFLINE. Only while monitoring is on.
+ * and counted as HEALTH_NODE_OFFLINE, whether or not a recording runs.
  *
  * @retval ESP_OK          The task is running.
  * @retval ESP_ERR_NO_MEM  Creating the task failed.
@@ -37,16 +37,6 @@ bool node_registry_is_state_frame(const can_message_t *message);
 void node_registry_update(const can_message_t *message);
 
 /**
- * @brief Turn offline monitoring on at recording start, off at stop.
- *
- * Either way, every expected node resets to online with a full 3 s grace and no
- * data seen. While off, frames are ignored.
- *
- * @param enabled true while recording.
- */
-void node_registry_set_monitoring(bool enabled);
-
-/**
  * @brief Mark the frame's node alive and sending data. See record_frame().
  *
  * @param message Received sensor frame.
@@ -65,7 +55,7 @@ void node_registry_record_health_frame(uint8_t node_id);
  *
  * @param node_id Node ID.
  * @return "active" (data in the last 3 s), "waiting" (alive, no data),
- *         "offline", "off" (not recording), "disabled" (not expected) or
+ *         "offline", "disabled" (not expected) or
  *         "unknown" (invalid ID).
  */
 const char *node_registry_state_name(uint8_t node_id);

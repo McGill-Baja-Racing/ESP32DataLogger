@@ -38,7 +38,7 @@
 
   <section class="card">
     <h2>Live Data</h2>
-    <p class="warning">Live viewing adds Wi-Fi and browser load. It is available only during recording and switches off automatically when recording stops.</p>
+    <p class="warning">Live viewing adds Wi-Fi and browser load. It works whether or not a recording is running.</p>
     <div class="controls">
       <button id="liveEnable">Enable live data</button><button id="liveDisable" disabled>Disable</button>
       <label>Display rate <select id="rate"><option>1</option><option>5</option><option selected>10</option><option>20</option></select> Hz</label>
@@ -104,9 +104,9 @@ async function refreshStatus(){
     const becameIdle=previousLoggerState!==null&&previousLoggerState!=='idle'&&s.logger_state==='idle';
     if(becameIdle)$('logName').value='';
     previousLoggerState=s.logger_state;renderFirmware();$('start').disabled=s.logger_state!=='idle'; $('stop').disabled=s.logger_state!=='running';$('logName').disabled=s.logger_state!=='idle';
-    $('liveEnable').disabled=s.logger_state!=='running'||token!==null||s.live_enabled;
+    $('liveEnable').disabled=token!==null||s.live_enabled;
     if(!token)$('liveState').textContent=s.live_enabled?'Another viewer active':'Disabled';
-    if(token&&(!s.live_enabled||s.logger_state!=='running')) endLive(false,'Live data stopped with the recording.');
+    if(token&&!s.live_enabled) endLive(false,'Live data stopped.');
     if(becameIdle)refreshLogs();
   }catch(e){$('error').textContent=e.message}
   try{const r=await fetch('/api/health');if(!r.ok)throw 0;$('health').textContent=(await r.text()).replace(/_/g,' ')}catch(e){$('health').textContent='Health unavailable'}
@@ -156,7 +156,7 @@ async function disableLive(){
   if(!token)return;try{await json('/api/live/stop?token='+encodeURIComponent(token),{method:'POST'})}catch(e){$('liveError').textContent=e.message}endLive(false)
 }
 function endLive(notice=false,message=''){
-  clearTimeout(timer);timer=null;token=null;polling=false;$('liveState').textContent='Disabled';$('liveDisable').disabled=true;$('liveEnable').disabled=loggerState!=='running';
+  clearTimeout(timer);timer=null;token=null;polling=false;$('liveState').textContent='Disabled';$('liveDisable').disabled=true;$('liveEnable').disabled=false;
   for(const chart of charts.values()){chart.points=[];chart.lastSequence=0;draw(chart)} if(message)$('liveError').textContent=message;
 }
 function schedulePoll(){clearTimeout(timer);if(!token)return;timer=setTimeout(poll,1000/Number($('rate').value))}

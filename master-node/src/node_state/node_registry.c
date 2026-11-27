@@ -27,7 +27,6 @@ typedef struct {
 
 static const char *TAG = "NodeRegistry";
 static registered_node_t nodes[CAN_NODE_SLOT_COUNT];
-static bool monitoring;
 static portMUX_TYPE registry_lock = portMUX_INITIALIZER_UNLOCKED;
 
 /**
@@ -72,25 +71,10 @@ void node_registry_update(const can_message_t *message)
     }
 }
 
-void node_registry_set_monitoring(bool enabled)
-{
-    TickType_t now = xTaskGetTickCount();
-    portENTER_CRITICAL(&registry_lock);
-    monitoring = enabled;
-    for (uint32_t id = 1; id < CAN_NODE_SLOT_COUNT; id++) {
-        if (!is_configured_node(id)) continue;
-        nodes[id].data_seen = false;
-        nodes[id].last_seen = now;
-        nodes[id].offline = false;
-    }
-    portEXIT_CRITICAL(&registry_lock);
-}
-
 /**
  * @brief Mark a node alive after one of its frames arrives.
  *
- * Only sensor frames prove data flows. Ignored while monitoring is off. Logs
- * when an offline node returns.
+ * Only sensor frames prove data flows. Logs when an offline node returns.
  *
  * @param id Node ID; 0 and out-of-range IDs are ignored.
  * @param sensor_data true for a sensor frame.
@@ -100,10 +84,6 @@ static void record_frame(uint8_t id, bool sensor_data)
     if (id == 0 || id >= CAN_NODE_SLOT_COUNT) return;
     TickType_t now = xTaskGetTickCount();
     portENTER_CRITICAL(&registry_lock);
-    if (!monitoring) {
-        portEXIT_CRITICAL(&registry_lock);
-        return;
-    }
     bool reconnected = nodes[id].offline;
     if (sensor_data) {
         nodes[id].data_seen = true;
@@ -130,7 +110,7 @@ void node_registry_record_health_frame(uint8_t node_id)
 /**
  * @brief Task that marks silent expected nodes offline.
  *
- * Every 250 ms while monitoring, a node with no frame for 3 s is marked
+ * Every 250 ms, a node with no frame for 3 s is marked
  * offline, logged, and counted as HEALTH_NODE_OFFLINE with a mask of all
  * offline nodes as the subject.
  */
@@ -146,7 +126,7 @@ static void monitor_task(void *argument)
             bool became_offline = false;
             bool is_offline;
             portENTER_CRITICAL(&registry_lock);
-            if (monitoring && !nodes[id].offline &&
+            if (!nodes[id].offline &&
                 /* Signed: dispatch can record a frame after now was read. */
                 (int32_t)(now - nodes[id].last_seen) >=
                     (int32_t)pdMS_TO_TICKS(NODE_OFFLINE_TIMEOUT_MS)) {
@@ -169,6 +149,13 @@ static void monitor_task(void *argument)
 
 esp_err_t node_registry_init(void)
 {
+    /* Nodes send from boot, so every expected node gets 3 s to be heard. */
+    TickType_t now = xTaskGetTickCount();
+    portENTER_CRITICAL(&registry_lock);
+    for (uint32_t id = 1; id < CAN_NODE_SLOT_COUNT; id++) {
+        nodes[id].last_seen = now;
+    }
+    portEXIT_CRITICAL(&registry_lock);
     return xTaskCreate(monitor_task, "node_monitor", 3072, NULL, 6, NULL) == pdPASS
          ? ESP_OK : ESP_ERR_NO_MEM;
 }
@@ -179,13 +166,11 @@ const char *node_registry_state_name(uint8_t node_id)
     if (!is_configured_node(node_id)) return "disabled";
     TickType_t now = xTaskGetTickCount();
     portENTER_CRITICAL(&registry_lock);
-    bool enabled = monitoring;
     bool offline = nodes[node_id].offline;
     bool data_recent = nodes[node_id].data_seen &&
                        (int32_t)(now - nodes[node_id].last_data) <
                            (int32_t)pdMS_TO_TICKS(NODE_OFFLINE_TIMEOUT_MS);
     portEXIT_CRITICAL(&registry_lock);
-    if (!enabled) return "off";
     if (offline) return "offline";
     return data_recent ? "active" : "waiting";
 }
