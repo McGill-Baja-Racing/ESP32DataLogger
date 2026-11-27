@@ -439,7 +439,7 @@ static void log_events(const health_state_t *now, health_state_t *reported)
 {
     for (size_t i = 0; i < HEALTH_COUNTER_COUNT; i++) {
         const health_counter_t *counter = &now->counters[i];
-        uint32_t count = counter->count - reported->counters[i].count;
+        uint32_t count = node_health_unreported(counter->count, reported->counters[i].count);
         if (count == 0) continue;
         health_event_frame_t event = node_health_pack_event(counter->code, counter->subject, 0, count,
                                                             counter->error, counter->last_ms);
@@ -489,11 +489,14 @@ static void health_task(void *argument)
     TickType_t wake = xTaskGetTickCount();
     while (true) {
         vTaskDelayUntil(&wake, pdMS_TO_TICKS(NODE_STATUS_PERIOD_MS));
+        /* Recording state and baseline before the snapshot: a Start after this
+         * point waits for the next period. */
+        bool recording = (data_logger_state() == LOGGER_RUNNING);
+        apply_baseline(&reported);
         node_health_copy_counts(&now);
         /* Status covers only the last period; events carry everything else. */
         uint32_t faults = node_health_get_faults(&now, &previous);
         previous = now;
-        bool recording = (data_logger_state() == LOGGER_RUNNING);
         node_status_frame_t status = {
             .faults = faults,
             .health = health_for(faults, SENSOR_STATE_OK, false),
@@ -501,7 +504,6 @@ static void health_task(void *argument)
         };
         log_own_frame(CAN_ID_NODE_STATUS_BASE, &status);
         log_diagnostics();
-        apply_baseline(&reported);
         if (recording) log_events(&now, &reported);
     }
 }

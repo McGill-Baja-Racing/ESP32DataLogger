@@ -104,6 +104,15 @@ static int failures;
 #define CHECK(condition) do { if (!(condition)) { printf("FAIL line %d: %s\n", __LINE__, #condition); failures++; } } while (0)
 
 /* Counts made before a recording are dropped, except the boot event, and never go backwards. */
+/* A report never sends a negative count as a huge one, and never across wrap-around wrongly. */
+static void test_unreported(void)
+{
+    CHECK(node_health_unreported(10, 4) == 6);
+    CHECK(node_health_unreported(4, 4) == 0);
+    CHECK(node_health_unreported(4, 10) == 0);          /* baseline ahead of this snapshot */
+    CHECK(node_health_unreported(2, 0xFFFFFFFEu) == 4); /* counts wrapped */
+}
+
 static void test_skip_counts(void)
 {
     health_state_t baseline, reported;
@@ -165,6 +174,7 @@ int main(void)
     CHECK(node_health_get_faults(&now, &previous) == 0);
 
     test_skip_counts();
+    test_unreported();
     if (!failures) printf("OK\n");
     return failures != 0;
 }

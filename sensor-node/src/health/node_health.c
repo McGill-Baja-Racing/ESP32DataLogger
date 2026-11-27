@@ -199,9 +199,11 @@ static bool send_event(uint8_t code, uint32_t subject, uint32_t count, esp_err_t
 static bool report_counter(const health_state_t *now, health_state_t *reported, size_t i)
 {
     const health_counter_t *counter = &now->counters[i];
-    uint32_t count = counter->count - reported->counters[i].count;
-    if (count && !send_event(counter->code, counter->subject, count, counter->error,
-                             counter->last_ms)) {
+    uint32_t count = node_health_unreported(counter->count, reported->counters[i].count);
+    if (count == 0) {
+        return true;
+    }
+    if (!send_event(counter->code, counter->subject, count, counter->error, counter->last_ms)) {
         return false;
     }
     reported->counters[i].count = counter->count;
@@ -236,9 +238,12 @@ static void report_events(const node_snapshot_t *now, node_snapshot_t *reported,
             }
             continue;
         }
-        uint32_t failed = sensor->failed_reads - reported->sensors[i].failed_reads;
-        if (failed && !send_event(HEALTH_SENSOR_READ, sensor->can_id, failed,
-                                  sensor->last_error, sensor->last_failure_ms)) {
+        uint32_t failed = node_health_unreported(sensor->failed_reads, reported->sensors[i].failed_reads);
+        if (failed == 0) {
+            continue;
+        }
+        if (!send_event(HEALTH_SENSOR_READ, sensor->can_id, failed,
+                        sensor->last_error, sensor->last_failure_ms)) {
             return;
         }
         reported->sensors[i].failed_reads = sensor->failed_reads;
@@ -280,6 +285,11 @@ static void health_task(void *argument)
     TickType_t wake = xTaskGetTickCount();
     while (true) {
         vTaskDelayUntil(&wake, pdMS_TO_TICKS(NODE_STATUS_PERIOD_MS));
+        /* Recording state and baseline before the snapshot: a Start after this
+         * point waits for the next period, so idle counts in this snapshot are
+         * never sent as recording events. */
+        bool recording = can_node_state() == NODE_STATE_ACTIVE;
+        apply_baseline(&reported);
         node_health_copy_counts(&now.counts);
         portENTER_CRITICAL(&lock);
         memcpy(now.sensors, sensor_health, sizeof(sensor_health));
@@ -291,7 +301,6 @@ static void health_task(void *argument)
         if (!time_sync_is_current(TIME_SYNC_TIMEOUT_MS)) {
             faults |= HEALTH_BIT(HEALTH_NO_TIME_SYNC);
         }
-        bool recording = can_node_state() == NODE_STATE_ACTIVE;
         size_t working = 0;
         uint32_t sensors = 0;
         sensor_state_t worst = SENSOR_STATE_OK;
@@ -320,8 +329,7 @@ static void health_task(void *argument)
         bool status_sent = can_node_send(CAN_ID_NODE_STATUS_BASE + NODE_ID, (const uint8_t *)&status,
                                          NODE_HEALTH_PAYLOAD) == ESP_OK;
         send_diagnostics();
-        if (status_sent) {
-            apply_baseline(&reported);
+        if (status_sent && recording) {
             report_events(&now, &reported, init_reported);
         }
     }

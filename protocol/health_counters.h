@@ -103,3 +103,14 @@ health_event_frame_t node_health_pack_event(uint8_t code, uint32_t subject, uint
  * @param baseline Counts copied when recording started.
  */
 void node_health_skip_counts(health_state_t *reported, const health_state_t *baseline);
+
+/**
+ * @brief Occurrences counted but not reported yet.
+ *
+ * @param count Current cumulative count.
+ * @param reported Count already reported, which a baseline may have moved
+ *                 past this snapshot.
+ * @return count - reported, or 0 if reported is not behind (never a wrapped
+ *         negative difference).
+ */
+uint32_t node_health_unreported(uint32_t count, uint32_t reported);

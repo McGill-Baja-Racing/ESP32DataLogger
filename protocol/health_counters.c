@@ -170,3 +170,9 @@ void node_health_skip_counts(health_state_t *reported, const health_state_t *bas
         }
     }
 }
+
+uint32_t node_health_unreported(uint32_t count, uint32_t reported)
+{
+    uint32_t difference = count - reported;
+    return (int32_t)difference > 0 ? difference : 0;
+}
