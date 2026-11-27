@@ -32,9 +32,9 @@ The branch is `BajaRemy/ecvt-standalone`, based on DAQ main
    health and recovery. The [older migration plan](ECVT_MIGRATION_PLAN.md) and
    [CAN budget](ECVT_CAN_BUDGET.md) are background for this later stage.
 
-## Motor core checkpoint
+## Drive-control checkpoint
 
-The [motor core](MOTOR_CORE.md) now provides the shared operation, status/result and parameter-access API. The terminal is an adapter. Legacy controller, acquisition, replay and recording implementations and their service hooks have been removed. Web and script frontends can use this API without duplicating drive ownership. No DAQ runtime connection or web server was added.
+The [drive-control core](MOTOR_CORE.md) now provides the shared operation, status/result and parameter-access API. The terminal is an adapter. Legacy controller, acquisition, replay and recording implementations and their service hooks have been removed. Web and script frontends can use this API without duplicating drive ownership. No DAQ runtime connection or web server was added.
 
 ## Decisions for the interface stage
 

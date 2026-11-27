@@ -1,129 +1,117 @@
-# Motor-control core
+# Drive-control core
 
-The core owns all drive operations for one servo (the existing node ID 1 setup).
-It does not include terminal, web, DAQ sensor, legacy runtime or SD headers.
-Platform startup still initializes CAN/receive services before starting the core.
+One owner task performs all drive transactions. The terminal submits requests to
+that owner; a future web interface can use the same API. The ESP32 communicates
+with one servo drive, so there are no separate motor and servo subsystems.
 
-## Modules
+See [the source map](../src/README.md) for the current files and command flow.
+`drive/control` owns admission, cancellation, results and typed parameter access.
+`drive/operations` groups actual mode, movement, brake and disable sequences.
+`canopen/drive` handles wire encoding and drive units; `can/transport` handles the
+hardware bus. The synchronized feedback cache is shared by RX and the owner.
 
-| Module | Responsibility |
-| --- | --- |
-| `motor/requests.h` | Frontend-independent operations, raw typed objects, admission receipts and completion results |
-| `motor/motor_core.cpp` | Single owner task, admission, cancellation, operation IDs, state/status and completion notifications |
-| `motor/drive_operations.cpp` | Existing position preparation and zero-torque diagnostic sequences, with explicit profile inputs |
-| `motor/parameters.cpp` | Owner-only 8/16/32-bit object access and bounded sequential snapshots |
-| `motor/runtime.h` | C-compatible cancellation, limits, wait and error hooks used by the driver/runners |
-| `motor/limits.h`, `operation_gate.h` | Existing motion bounds and cancellation generations |
-| `servo/` | CANopen serialization, disable/zero-velocity helpers and synchronized feedback |
-| `experiments/` | Existing finite position/brake diagnostics, using neutral motor operations |
-| `app/ecvt_app.cpp` | Terminal adapter: maps parsed commands, prints status/help only |
-
-The drive command bytes, limits, position units, profiles, enable sequences,
-zero-speed brake window and unconditional 0000 stop policy are retained.
-The firmware contains no automatic controller, DAQ/sensor acquisition, CSV replay,
-SD recorder or fixed movement presets. `mode manual` remains a compatibility
-confirmation; there is no automatic mode.
+The cleanup grouped related functions, moved their declarations and renamed the
+internal motor API to drive control. It preserved command syntax, request order,
+scaling, profiles, timeouts, zero-before-enable and the unconditional 0000 stop
+path. It added no browser server, script engine or DAQ runtime connection.
 
 ## Frontend use
 
-Include `motor/motor_core.h` rather than the console parser.
-After platform CAN initialization, call `motor_core_start()` once. Optional
-`MotorCoreServices::completed` observes completion results. There are no automatic-
-control, acquisition or recording service hooks.
+Include `drive/control.h` rather than console or protocol implementation headers.
+After platform CAN initialization, call `drive_control_start()` once. It starts
+idle and sends no drive command. An optional `DriveObserver::completed` callback
+receives completion results on the owner task; copy results if needed afterward,
+and do not block or issue drive I/O inside the callback.
+
+Configure limits and profile through requests first, as with the terminal. Then:
 
 ```cpp
-MotorRequest request;
-request.kind = MotorCommand::Move;
+DriveRequest request;
+request.kind = DriveCommand::Move;
 request.values[0] = 0.25f; // Absolute logical motor revolutions.
 request.values[1] = 10.0f; // Motor RPM.
-MotorReceipt receipt = motor_core_submit(request);
+DriveReceipt receipt = drive_control_submit(request);
 ```
 
-Configure limits/profile through requests first, as with the existing terminal.
-A successful receipt means admitted, not moved or completed. Match its ID to a
-`MotorResult` from `MotorCoreServices::completed`, or the latest result in
-`motor_core_status()`. The callback runs on the owner; copy its result before
-returning if another task needs it, and do not block or issue drive I/O there.
-The status includes owner state, busy/queued request ID, latest synchronized
-position/velocity/status/current feedback with timestamps, limits/profile,
-last error and the latest completion result.
-It is a task-safe copy, not an atomic measurement of the entire physical drive.
-Local idle state after boot does not prove that an independently powered drive
-is disabled; use the stop request/live drive diagnostics.
+A successful receipt means admitted, not completed. Match its ID to a
+`DriveResult` from the observer or the latest result in `drive_control_status()`.
+Busy rejection returns an error without an operation ID. Status is a copy of
+owner state, active/queued ID, limits/profile, last error, latest result and
+cached status/position/velocity/current feedback. Each feedback field has its own
+receive timestamp; the copy is not a simultaneous physical measurement.
 
-Only one drive operation is admitted at a time. Busy rejection returns an error
-and no operation ID. Stop and controlword 0000 bypass busy/mode admission, cancel
-queued/active work, and use the existing disable-first path. Pending repeated
-stops coalesce to the same receipt ID. A queued request cancelled before execution
-also gets a cancelled result. No queued move resumes after stop.
+Local idle after boot does not prove an independently powered drive is disabled.
+Use stop or live drive diagnostics to establish its reported state.
 
-New frontends must submit requests; they must not call the CANopen driver,
-parameter helpers or operation runner concurrently. `MotorCommand::Stop` is the
-frontend-independent way to stop. The terminal retains the stop aliases, including `stop`, `controller stop`, `test cancel`, and
-`servo cw 0x0000`.
+## Ownership and stopping
+
+Only one drive operation is admitted at a time. Frontends must submit requests;
+they must not call `drive/operations` or the CANopen client concurrently.
+`drive/operation_context.h` exposes the active operation's cancellation, limits
+and wait/error hooks to the C driver and C++ sequences. It is an internal bridge,
+not a second frontend API.
+
+`DriveCommand::Stop` and controlword 0000 bypass busy admission and cancel active
+or queued work. Pending repeated stops share a receipt ID. A queued request
+cancelled before execution gets its own cancelled result; it cannot resume.
+Disable writes 6040=0000 before checking status, without mode/velocity guards,
+even after an ESP32-only reboot. Read failure, fault or timeout reports disable
+unconfirmed; the operator can retry. Normal position completion, failure and
+cancellation also end through disable. A disabled statusword proves neither
+standstill nor mechanical brake lock.
+
+The terminal retains `stop`, `controller stop`, `test cancel` and
+`servo cw 0x0000` as stop commands. `mode manual` remains a confirmation; there is
+no automatic mode. The ten-second brake test sends zero velocity before mode 3
+and again immediately before enabling. Actual/demand velocity equality is not a
+brake-test or disable prerequisite. See [the terminal guide](../TERMINAL.md).
 
 ## Parameters and configuration snapshots
 
-Use a `MotorRequest` with `ParameterRead`, `ParameterWrite` or
-`ParameterSnapshot`, plus `objects[]` and `object_count`. Each object has an
-explicit index, subindex, `ObjectWidth` and unsigned raw-bit value. Values never
-pass through a float; signed values are interpreted using the object's known
-type. Width overflow is rejected, not truncated.
+Submit `ParameterRead`, `ParameterWrite` or `ParameterSnapshot` with `objects[]`
+and `object_count`. `DriveObject` specifies an index, subindex, `ObjectWidth` and
+unsigned raw-bit value. Values never pass through float; interpret signed values
+using the object's documented type. Width overflow is rejected.
 
-A snapshot reads up to eight objects in order, with an error and local sample
-timestamp for every attempted read. It is sequential, not an atomic configuration
-snapshot. Cancellation can leave a partial result; only entries below
-`object_count` were attempted. Failed reads have explicit errors and must not be
-interpreted as successful zero-valued measurements.
+Snapshots read up to eight objects sequentially, with an error and local sampling
+timestamp per attempted read. They are not atomic. Cancellation can leave partial
+results; only entries below `object_count` were attempted. Failed reads must not
+be interpreted as successful zero measurements.
 
 Writes report acknowledgement, not independent readback or mechanical action.
-Submit a subsequent read to verify a change. A timed-out write can have taken
-effect. No automatic retry, rollback, EEPROM save, factory reset or encoder
-calibration is performed. State/motion objects (6040, 6060, 6071, 607A, 60FF)
-and EEPROM store/restore (1010/1011) are excluded from this generic tuning-write
-path; dedicated motor operations own them. No new raw-write terminal command is
-introduced by this refactor.
+Read afterward to verify a change. A timed-out write can have taken effect.
+Generic parameter writes exclude state/motion objects 6040, 6060, 6071, 607A and
+60FF, plus EEPROM store/restore 1010/1011. Dedicated operations own those actions.
+No automatic retry, rollback, save, factory reset or encoder calibration occurs.
+There is no generic parameter-write terminal command yet.
 
-These are CANopen objects, not guessed translations of keypad P-parameter
-numbers. A supported parameter catalogue, units, before/after comparisons and
-explicit persistence workflow belong to the next tuning-interface stage.
-
-## What this refactor does not add
-
-The existing position moves and diagnostic velocity/torque sequences remain the
-implemented motion set. It does not add unrestricted velocity/torque presets,
-a general script interpreter, a browser server, or a DAQ input adapter. Those
-features can now use one operation API instead of implementing separate drive
-control paths. See [development sequence](DEVELOPMENT.md).
+These are CANopen objects, not guessed translations of keypad P-parameters. A
+parameter catalogue, engineering units, configuration comparison and persistence
+workflow remain part of [the tuning-interface stage](DEVELOPMENT.md).
 
 ## Validation
 
-The host harness compiles the complete production owner, position runner,
-parameter module, brake/disable helpers and feedback module against a fake drive,
-without any terminal, legacy sensor or SD implementation. It covers completed and
-cancelled moves, queued cancellation, stop from a rebooted owner or busy
-state, coalesced stops, acknowledgement/read failures, faults/timeouts, mode-3
-zero-before-enable, the ten-second brake window, typed object values/overflow,
-snapshots and cancellation, and current-feedback capture.
+The existing host suite compiles the production owner/sequences against a fake
+drive and checks moves, cancellation, unconditional stop/retry behavior, the brake
+window and typed parameters. Separate checks cover real C-driver payloads,
+transport routing and signed feedback, console parsing/mapping and zero-velocity
+preparation. The existing tests were updated for the consolidated sources without
+adding new test files or dropping their behavioral assertions.
 
-A separate harness compiles the real terminal adapter and parser and checks that
-help/status commands do not turn into motor requests, stop aliases
-map correctly, and object reads retain their types. Removed automatic/logging/preset commands are rejected by parser tests. Real-driver
-payload and brake/velocity preparation checks remain in the suite. Run:
+From the repository root:
 
 ```sh
 python3 -m unittest discover -s ecvt-node/tests -v
 pio run -d ecvt-node -e esp32-p4
 ```
 
-This refactored revision has not been flashed or physically revalidated. Prior
-bare-motor evidence remains in the [bench report](bench/2026-11-25/README.md).
+On the development Mac, prepend
+`SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk` to the Python
+command for the installed compiler/linker combination.
 
-The earlier 12-test import/refactor suite included legacy calculation checks. Those
-checks and reference fixtures were removed with that implementation. Current
-validation covers the firmware that remains.
+This layout revision has not been flashed or physically revalidated. Earlier
+bare-motor observations remain in the [bench report](bench/2026-11-25/README.md).
+Host checks and compilation do not establish mechanical behavior.
 
-Bare-core validation on 2026-11-27: all **7 host tests passed** and the
-`esp32-p4` firmware build succeeded. The CAN receiver test compiles the production
-transport and checks startup, SDO routing, signed TPDO decoding, timestamps and
-short/unrelated-frame rejection. No master, sensor or shared protocol files changed.
+Validation on 2026-11-27: all seven existing host tests passed and the `esp32-p4`
+firmware build succeeded. No new test files were added.

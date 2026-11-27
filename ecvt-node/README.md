@@ -38,7 +38,12 @@ SDK and linker are incompatible; the checks were run using
 `SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk` before the Python
 command. Other platforms should follow the repository's [test prerequisites](../docs/TESTING.md).
 
-The owner has since been extracted behind a [motor-control API](docs/MOTOR_CORE.md), with a terminal adapter. The legacy automatic controller, sensors, CSV replay, SD logger and fixed movement presets have now been removed from the project. The current refactor preserves the validated command sequences; it has not yet been physically retested.
+The standalone implementation now groups drive control, CANopen access, CAN
+transport and the console. Related mode, move, brake and stop functions share
+`drive/operations.cpp`; [the source map](src/README.md) explains the boundaries.
+The [drive-control API](docs/MOTOR_CORE.md) supports future frontends. Legacy
+controller, sensors, replay, SD logging and fixed movement presets remain removed.
+This structural refactor has not been physically retested.
 
 ## Current standing
 

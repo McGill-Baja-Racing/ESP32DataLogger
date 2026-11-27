@@ -59,8 +59,8 @@ void vTaskDelay(TickType_t ticks);
             "freertos/semphr.h": "#pragma once\n",
         }
         harness = r'''
-#include "servo/ECVT_motor.h"
-#include "motor/runtime.h"
+#include "canopen/drive.h"
+#include "drive/operation_context.h"
 #include <assert.h>
 #include <math.h>
 #include <string.h>
@@ -69,15 +69,15 @@ static uint8_t bytes[8];
 static unsigned id, dlc, transmissions, ticks;
 static bool cancelled, allowed=true, wait_fails, stale_reply, wrong_width, abort_reply;
 static const uint8_t *held_buffer;
-bool motor_operation_cancelled(void) { return cancelled; }
-bool motor_position_allowed(float position, float speed) { return allowed && isfinite(position) && speed>0; }
-void motor_operation_error(esp_err_t error) { (void)error; }
+bool drive_operation_cancelled(void) { return cancelled; }
+bool drive_position_allowed(float position, float speed) { return allowed && isfinite(position) && speed>0; }
+void drive_operation_error(esp_err_t error) { (void)error; }
 TickType_t xTaskGetTickCount(void) { return ticks++; }
 int64_t esp_timer_get_time(void) { return (int64_t)ticks * 1000; }
 void vTaskDelay(TickType_t time) { ticks+=time; }
 int xQueueReceive(QueueHandle_t queue, void *out, TickType_t timeout) {
     (void)queue; (void)timeout;
-    ecvt_motor_can_rx_item_t *reply=out;
+    canopen_drive_can_rx_item_t *reply=out;
     memset(reply,0,sizeof(*reply)); reply->id=0x581; reply->dlc=8;
     reply->received_us = stale_reply ? -1 : esp_timer_get_time();
     reply->data[0]=bytes[0]==0x40 ? 0x4f : 0x60;
@@ -102,57 +102,57 @@ static int32_t word(unsigned offset) {
     return (int32_t)v;
 }
 int main(void) {
-    assert(ecvt_motor_init((void*)1,(void*)2,1,"test")==ESP_OK);
+    assert(canopen_drive_init((void*)1,(void*)2,1,"test")==ESP_OK);
     uint8_t mode=0;
-    assert(ecvt_motor_sdo_read_u8(0x6061,0,&mode)==ESP_OK && mode==1);
+    assert(canopen_drive_sdo_read_u8(0x6061,0,&mode)==ESP_OK && mode==1);
     assert(transmissions==1 && id==0x601 && dlc==8);
     assert(bytes[0]==0x40 && bytes[1]==0x61 && bytes[2]==0x60 && bytes[3]==0);
     for(unsigned i=4;i<8;++i) assert(bytes[i]==0); // Only an SDO upload request.
     stale_reply=true;
-    assert(ecvt_motor_sdo_read_u8(0x6061,0,&mode)==ESP_FAIL);
+    assert(canopen_drive_sdo_read_u8(0x6061,0,&mode)==ESP_FAIL);
     stale_reply=false;
-    assert(ecvt_motor_sdo_read_u8(0x6061,0,0)==ESP_ERR_INVALID_ARG);
+    assert(canopen_drive_sdo_read_u8(0x6061,0,0)==ESP_ERR_INVALID_ARG);
     uint16_t status=0;
     uint32_t outputs=0;
-    assert(ecvt_motor_sdo_read_u16(0x6041,0,&status)==ESP_OK && status==0x1240);
-    assert(ecvt_motor_sdo_read_u32(0x60fe,1,&outputs)==ESP_OK && outputs==0x92345678u);
+    assert(canopen_drive_sdo_read_u16(0x6041,0,&status)==ESP_OK && status==0x1240);
+    assert(canopen_drive_sdo_read_u32(0x60fe,1,&outputs)==ESP_OK && outputs==0x92345678u);
     assert(id==0x601 && bytes[0]==0x40 && bytes[1]==0xfe && bytes[2]==0x60 && bytes[3]==1);
     wrong_width=true;
-    assert(ecvt_motor_sdo_read_u32(0x60fe,1,&outputs)==ESP_FAIL && outputs==0x92345678u);
+    assert(canopen_drive_sdo_read_u32(0x60fe,1,&outputs)==ESP_FAIL && outputs==0x92345678u);
     wrong_width=false; stale_reply=true;
-    assert(ecvt_motor_sdo_read_u16(0x6041,0,&status)==ESP_FAIL && status==0x1240);
+    assert(canopen_drive_sdo_read_u16(0x6041,0,&status)==ESP_FAIL && status==0x1240);
     stale_reply=false; abort_reply=true;
-    assert(ecvt_motor_sdo_read_u32(0x60fe,2,&outputs)==ESP_FAIL && outputs==0x92345678u);
+    assert(canopen_drive_sdo_read_u32(0x60fe,2,&outputs)==ESP_FAIL && outputs==0x92345678u);
     abort_reply=false;
-    assert(ecvt_motor_sdo_read_u16(0x6041,0,0)==ESP_ERR_INVALID_ARG);
-    assert(ecvt_motor_sdo_read_u32(0x60fe,1,0)==ESP_ERR_INVALID_ARG);
-    assert(ecvt_motor_send_target_position_and_speed(-1.25f,2000)==ESP_OK);
+    assert(canopen_drive_sdo_read_u16(0x6041,0,0)==ESP_ERR_INVALID_ARG);
+    assert(canopen_drive_sdo_read_u32(0x60fe,1,0)==ESP_ERR_INVALID_ARG);
+    assert(canopen_drive_send_target_position_and_speed(-1.25f,2000)==ESP_OK);
     assert(id==0x301 && dlc==8 && word(0)==-12500 && word(4)==333333);
-    assert(ecvt_motor_send_profile_accel_decel(1666,2300)==ESP_OK);
+    assert(canopen_drive_send_profile_accel_decel(1666,2300)==ESP_OK);
     assert(id==0x401 && word(0)==277667 && word(4)==383333);
-    assert(ecvt_motor_send_controlword(0x010f)==ESP_OK && id==0x201 && dlc==2 && bytes[0]==15 && bytes[1]==1);
-    ecvt_motor_set_actual_position_feedback(12.5f);
-    ecvt_motor_capture_current_position_as_zero();
-    assert(ecvt_motor_send_target_position_and_speed(1,60)==ESP_OK);
+    assert(canopen_drive_send_controlword(0x010f)==ESP_OK && id==0x201 && dlc==2 && bytes[0]==15 && bytes[1]==1);
+    canopen_drive_set_actual_position_feedback(12.5f);
+    canopen_drive_capture_current_position_as_zero();
+    assert(canopen_drive_send_target_position_and_speed(1,60)==ESP_OK);
     assert(word(0)==135000 && word(4)==10000);
     unsigned before=transmissions;
-    assert(ecvt_motor_send_target_position_and_speed(300000,60)==ESP_ERR_INVALID_ARG && transmissions==before);
+    assert(canopen_drive_send_target_position_and_speed(300000,60)==ESP_ERR_INVALID_ARG && transmissions==before);
     allowed=false;
-    assert(ecvt_motor_send_target_position_and_speed(1,60)==ESP_ERR_INVALID_ARG && transmissions==before);
+    assert(canopen_drive_send_target_position_and_speed(1,60)==ESP_ERR_INVALID_ARG && transmissions==before);
     allowed=true; cancelled=true;
-    assert(ecvt_motor_enable_position()==ESP_ERR_INVALID_STATE && transmissions==before);
-    assert(ecvt_motor_send_target_position_and_speed(1,60)==ESP_ERR_INVALID_STATE && transmissions==before);
+    assert(canopen_drive_enable_position()==ESP_ERR_INVALID_STATE && transmissions==before);
+    assert(canopen_drive_send_target_position_and_speed(1,60)==ESP_ERR_INVALID_STATE && transmissions==before);
     // The stop path must still be able to send a Halt after cancellation.
-    assert(ecvt_motor_sdo_write_u16(0x6040,0,0x010f)==ESP_OK);
+    assert(canopen_drive_sdo_write_u16(0x6040,0,0x010f)==ESP_OK);
     cancelled=false; wait_fails=true;
-    assert(ecvt_motor_send_target_position_and_speed(2,60)==ESP_ERR_TIMEOUT);
+    assert(canopen_drive_send_target_position_and_speed(2,60)==ESP_ERR_TIMEOUT);
     uint8_t pending_copy[8]; memcpy(pending_copy,held_buffer,8); before=transmissions;
-    assert(ecvt_motor_send_target_position_and_speed(3,60)==ESP_ERR_TIMEOUT);
+    assert(canopen_drive_send_target_position_and_speed(3,60)==ESP_ERR_TIMEOUT);
     assert(transmissions==before && memcmp(pending_copy,held_buffer,8)==0);
     // Mapping failures propagate instead of aborting/rebooting.
-    assert(ecvt_motor_configure_rpdo2()==ESP_ERR_TIMEOUT);
+    assert(canopen_drive_configure_rpdo2()==ESP_ERR_TIMEOUT);
     wait_fails=false;
-    assert(ecvt_motor_configure_rpdo2()==ESP_OK);
+    assert(canopen_drive_configure_rpdo2()==ESP_OK);
 }
 '''
         with tempfile.TemporaryDirectory(prefix="ecvt-transport-") as directory:
@@ -165,7 +165,7 @@ int main(void) {
             source.write_text(harness)
             subprocess.run([
                 "cc", "-std=c11", "-I", str(tmp), "-I", str(PROJECT / "src"),
-                "-I", str(PROJECT / "src/servo"), str(PROJECT / "src/servo/ECVT_motor.c"),
+                "-I", str(PROJECT / "src/servo"), str(PROJECT / "src/canopen/drive.c"),
                 str(source), "-o", str(binary),
             ], check=True)
             subprocess.run([str(binary)], check=True)

@@ -1,3 +1,4 @@
+// Startup boundary for the standalone servo CAN bus, independent of DAQ traffic.
 #pragma once
 #include "esp_err.h"
 

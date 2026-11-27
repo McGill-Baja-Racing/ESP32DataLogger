@@ -1,11 +1,20 @@
-#include "console/command_parser.h"
-#include "console/line_input.h"
-#include "motor/limits.h"
-#include "motor/operation_gate.h"
+// Exercise complete-line parsing, command validation and shared drive-control policies.
+#include "console/console.h"
+#include "console/console.h"
+#include "drive/control_policy.h"
+#include "drive/control_policy.h"
 #include <cassert>
 #include <cstring>
 #include <thread>
 #include <vector>
+
+// The parser/policy checks do not execute the frontend's drive-facing functions.
+#include "drive/control.h"
+const char *esp_err_to_name(int) { assert(false); return "unused"; }
+int64_t esp_timer_get_time() { assert(false); return 0; }
+DriveStatus drive_control_status() { assert(false); return {}; }
+DriveReceipt drive_control_submit(const DriveRequest &) { assert(false); return {}; }
+void serial_console_print_help() { assert(false); }
 
 int main()
 {

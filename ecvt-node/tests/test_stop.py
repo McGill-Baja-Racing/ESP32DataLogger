@@ -22,9 +22,9 @@ class StopTests(unittest.TestCase):
         harness = (PROJECT/'tests/motor_core_harness.cpp').read_text()
         # Unused drive configuration calls succeed; state/target/object calls are
         # explicitly simulated by the harness. No motor-core function is stubbed.
-        custom = set(re.findall(r'int (ecvt_motor_\w+)\(', harness))
-        declarations = (PROJECT/'src/servo/ECVT_motor.h').read_text()
-        for name, args in re.findall(r'esp_err_t (ecvt_motor_\w+)\((.*?)\);', declarations, re.S):
+        custom = set(re.findall(r'int (canopen_drive_\w+)\(', harness))
+        declarations = (PROJECT/'src/canopen/drive.h').read_text()
+        for name, args in re.findall(r'esp_err_t (canopen_drive_\w+)\((.*?)\);', declarations, re.S):
             if name not in custom:
                 harness += f'\nint {name}({args}) {{return 0;}}\n'
         with tempfile.TemporaryDirectory(prefix='ecvt-core-') as directory:
@@ -33,8 +33,7 @@ class StopTests(unittest.TestCase):
                 path=tmp/name; path.parent.mkdir(parents=True,exist_ok=True); path.write_text(content)
             source=tmp/'harness.cpp'; source.write_text('#include <algorithm>\n'+harness)
             binary=tmp/'core'
-            sources=['motor/motor_core.cpp','motor/drive_operations.cpp','motor/parameters.cpp','experiments/motor_tests.cpp',
-                     'experiments/brake_probe.cpp','servo/drive_state.cpp','servo/velocity_zero.cpp','servo/servo_feedback.cpp']
+            sources=['drive/control.cpp','drive/operations.cpp','canopen/feedback.cpp']
             subprocess.run(['c++','-std=c++17','-I',str(tmp),'-I',str(PROJECT/'src'),
                             *[str(PROJECT/'src'/s) for s in sources],str(source),'-o',str(binary)],check=True)
             result=subprocess.run([str(binary)],capture_output=True,text=True,check=True)

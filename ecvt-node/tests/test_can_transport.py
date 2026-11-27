@@ -37,8 +37,8 @@ int twai_new_node_onchip(const twai_onchip_node_config_t*,twai_node_handle_t*);
 ''',
         }
         harness = r'''
-#include "can/can_transport.h"
-#include "servo/ECVT_motor.h"
+#include "can/transport.h"
+#include "canopen/drive.h"
 #include "esp_twai_onchip.h"
 #include <cassert>
 #include <cstring>
@@ -46,11 +46,11 @@ int twai_new_node_onchip(const twai_onchip_node_config_t*,twai_node_handle_t*);
 #include <vector>
 #include <cmath>
 struct Idle {};
-struct Queue { std::deque<ecvt_motor_can_rx_item_t> items; };
+struct Queue { std::deque<canopen_drive_can_rx_item_t> items; };
 static QueueHandle_t raw, sdo;
 static twai_event_callbacks_t callbacks;
 static void(*worker)(void*);
-static ecvt_motor_can_rx_item_t incoming;
+static canopen_drive_can_rx_item_t incoming;
 static unsigned queues, initializations;
 static float actual_position;
 struct Feedback {unsigned pdo; int32_t value; int64_t time;};
@@ -63,13 +63,13 @@ QueueHandle_t xQueueCreate(unsigned depth,unsigned size) {
     return q;
 }
 int xQueueSend(QueueHandle_t q,const void *value,unsigned) {
-    static_cast<Queue*>(q)->items.push_back(*static_cast<const ecvt_motor_can_rx_item_t*>(value));return 1;
+    static_cast<Queue*>(q)->items.push_back(*static_cast<const canopen_drive_can_rx_item_t*>(value));return 1;
 }
 int xQueueSendFromISR(QueueHandle_t q,const void *value,BaseType_t *woken) {*woken=1;return xQueueSend(q,value,0);}
 int xQueueReceive(QueueHandle_t q,void *value,unsigned) {
     auto &items=static_cast<Queue*>(q)->items;
     if(items.empty()) throw Idle{};
-    *static_cast<ecvt_motor_can_rx_item_t*>(value)=items.front();items.pop_front();return 1;
+    *static_cast<canopen_drive_can_rx_item_t*>(value)=items.front();items.pop_front();return 1;
 }
 int xTaskCreate(void(*fn)(void*),const char*,unsigned,void*,unsigned,void*) {worker=fn;return 1;}
 int twai_new_node_onchip(const twai_onchip_node_config_t *cfg,twai_node_handle_t *node) {
@@ -82,11 +82,11 @@ int twai_node_receive_from_isr(twai_node_handle_t,twai_frame_t *frame) {
     frame->header.id=incoming.id;frame->header.dlc=incoming.dlc;
     std::memcpy(frame->buffer,incoming.data,8);return 0;
 }
-int ecvt_motor_init(twai_node_handle_t,QueueHandle_t q,uint8_t node,const char*) {
+int canopen_drive_init(twai_node_handle_t,QueueHandle_t q,uint8_t node,const char*) {
     assert(q==sdo && node==1);++initializations;return 0;
 }
-int ecvt_motor_set_actual_position_feedback(float value) {actual_position=value;return 0;}
-void servo_feedback_record(unsigned pdo,int32_t value,int64_t time) {feedback.push_back({pdo,value,time});}
+int canopen_drive_set_actual_position_feedback(float value) {actual_position=value;return 0;}
+void drive_feedback_record(unsigned pdo,int32_t value,int64_t time) {feedback.push_back({pdo,value,time});}
 void frame(uint32_t id,uint8_t length,uint32_t value) {
     incoming={};incoming.id=id;incoming.dlc=length;
     for(unsigned i=0;i<4;++i)incoming.data[i]=uint8_t(value>>(8*i));
@@ -120,5 +120,5 @@ int main() {
             source=tmp/'can.cpp';source.write_text(harness)
             binary=tmp/'can'
             subprocess.run(['c++','-std=c++17','-I',str(tmp),'-I',str(PROJECT/'src'),
-                            str(PROJECT/'src/can/can_transport.cpp'),str(source),'-o',str(binary)],check=True)
+                            str(PROJECT/'src/can/transport.cpp'),str(source),'-o',str(binary)],check=True)
             subprocess.run([str(binary)],check=True)
