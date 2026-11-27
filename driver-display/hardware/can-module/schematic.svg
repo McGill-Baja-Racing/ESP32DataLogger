@@ -1,0 +1,239 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1720" height="1160" viewBox="0 0 1720 1160" font-family="Helvetica, Arial, sans-serif">
+  <style>
+    .wire { stroke: #000; stroke-width: 2; fill: none; }
+    .board { stroke: #555; stroke-width: 1.5; fill: none; }
+    .part { stroke: #000; stroke-width: 2; fill: #fff; }
+    .ic { stroke: #000; stroke-width: 2; fill: #fafafa; }
+    .dot { fill: #000; }
+    .t { font-size: 13px; fill: #000; }
+    .s { font-size: 11px; fill: #333; }
+    .pin { font-size: 11px; fill: #1a4fb3; }
+    .h { font-size: 15px; font-weight: bold; fill: #000; }
+    .warn { font-size: 12px; font-weight: bold; fill: #c62828; }
+    .note { font-size: 13px; fill: #000; }
+  </style>
+  <defs>
+    <!-- Ground symbol, anchored at its top. -->
+    <g id="gnd"><line x1="0" y1="0" x2="0" y2="8" class="wire"/><line x1="-10" y1="8" x2="10" y2="8" class="wire"/><line x1="-6" y1="13" x2="6" y2="13" class="wire"/><line x1="-2" y1="18" x2="2" y2="18" class="wire"/></g>
+  </defs>
+  <rect width="1720" height="1160" fill="#fff"/>
+
+  <text x="60" y="50" font-size="22" font-weight="bold">Driver display: Raspberry Pi 3 B+ to MCP2515 CAN module</text>
+  <text x="60" y="76" class="t">Rev B · 2026-11-06 · resistors 1/4 W · not yet built or tested · Raspberry Pi pin numbers are physical J8 header numbers (1 to 40)</text>
+
+  <!-- ===================== Raspberry Pi ===================== -->
+  <rect x="60" y="110" width="250" height="560" class="ic"/>
+  <text x="185" y="138" text-anchor="middle" class="h">Raspberry Pi 3 B+</text>
+  <text x="185" y="156" text-anchor="middle" class="s">J8 GPIO header</text>
+  <g class="t" text-anchor="end">
+    <text x="300" y="204">5V</text>
+    <text x="300" y="264">GND</text>
+    <text x="300" y="344">GPIO8 · SPI0 CE0</text>
+    <text x="300" y="404">GPIO11 · SPI0 SCLK</text>
+    <text x="300" y="464">GPIO10 · SPI0 MOSI</text>
+    <text x="300" y="544">GPIO9 · SPI0 MISO</text>
+    <text x="300" y="624">GPIO25 · CAN interrupt</text>
+  </g>
+  <g class="pin">
+    <text x="316" y="194">2</text><text x="316" y="254">6</text><text x="316" y="334">24</text>
+    <text x="316" y="394">23</text><text x="316" y="454">19</text><text x="316" y="534">21</text><text x="316" y="614">22</text>
+  </g>
+
+  <!-- ===================== Direct wires ===================== -->
+  <line x1="310" y1="200" x2="910" y2="200" class="wire"/>
+  <line x1="310" y1="260" x2="910" y2="260" class="wire"/>
+  <line x1="310" y1="340" x2="910" y2="340" class="wire"/>
+  <line x1="310" y1="400" x2="910" y2="400" class="wire"/>
+  <line x1="310" y1="460" x2="910" y2="460" class="wire"/>
+  <g class="s">
+    <text x="600" y="194">+5 V</text><text x="600" y="254">GND</text><text x="800" y="334">CS</text>
+    <text x="800" y="394">SCK</text><text x="800" y="454">SI (MOSI)</text>
+  </g>
+  <!-- GND net marker on the Pi to module ground wire -->
+  <circle cx="860" cy="260" r="4" class="dot"/><line x1="860" y1="260" x2="860" y2="276" class="wire"/><use href="#gnd" x="860" y="276"/>
+
+  <!-- ===================== SO divider: R1-R4 over R5 ===================== -->
+  <line x1="310" y1="540" x2="540" y2="540" class="wire"/>
+  <circle cx="470" cy="540" r="4.5" class="dot"/>
+  <rect x="540" y="532" width="44" height="16" class="part"/>
+  <line x1="584" y1="540" x2="596" y2="540" class="wire"/>
+  <rect x="596" y="532" width="44" height="16" class="part"/>
+  <line x1="640" y1="540" x2="652" y2="540" class="wire"/>
+  <rect x="652" y="532" width="44" height="16" class="part"/>
+  <line x1="696" y1="540" x2="708" y2="540" class="wire"/>
+  <rect x="708" y="532" width="44" height="16" class="part"/>
+  <line x1="752" y1="540" x2="910" y2="540" class="wire"/>
+  <g class="s" text-anchor="middle">
+    <text x="562" y="526">R1</text><text x="562" y="563">330</text>
+    <text x="618" y="526">R2</text><text x="618" y="563">330</text>
+    <text x="674" y="526">R3</text><text x="674" y="563">330</text>
+    <text x="730" y="526">R4</text><text x="730" y="563">220</text>
+  </g>
+  <text x="800" y="534" class="s">SO (MISO)</text>
+  <text x="350" y="534" class="s">3.1 V</text>
+  <!-- bottom leg; the INT wire hops over it at y 620 -->
+  <line x1="470" y1="540" x2="470" y2="560" class="wire"/>
+  <rect x="462" y="560" width="16" height="40" class="part"/>
+  <line x1="470" y1="600" x2="470" y2="650" class="wire"/>
+  <use href="#gnd" x="470" y="650"/>
+  <text x="486" y="584" class="s">R5 2 kΩ</text>
+
+  <!-- ===================== INT divider: R6-R9 over R10 ===================== -->
+  <path d="M310,620 L462,620 A8,8 0 0 1 478,620 L540,620" class="wire"/>
+  <circle cx="400" cy="620" r="4.5" class="dot"/>
+  <rect x="540" y="612" width="44" height="16" class="part"/>
+  <line x1="584" y1="620" x2="596" y2="620" class="wire"/>
+  <rect x="596" y="612" width="44" height="16" class="part"/>
+  <line x1="640" y1="620" x2="652" y2="620" class="wire"/>
+  <rect x="652" y="612" width="44" height="16" class="part"/>
+  <line x1="696" y1="620" x2="708" y2="620" class="wire"/>
+  <rect x="708" y="612" width="44" height="16" class="part"/>
+  <line x1="752" y1="620" x2="910" y2="620" class="wire"/>
+  <g class="s" text-anchor="middle">
+    <text x="562" y="606">R6</text><text x="562" y="643">330</text>
+    <text x="618" y="606">R7</text><text x="618" y="643">330</text>
+    <text x="674" y="606">R8</text><text x="674" y="643">330</text>
+    <text x="730" y="606">R9</text><text x="730" y="643">220</text>
+  </g>
+  <text x="800" y="614" class="s">INT</text>
+  <text x="350" y="614" class="s">3.1 V</text>
+  <line x1="400" y1="620" x2="400" y2="640" class="wire"/>
+  <rect x="392" y="640" width="16" height="40" class="part"/>
+  <line x1="400" y1="680" x2="400" y2="695" class="wire"/>
+  <use href="#gnd" x="400" y="695"/>
+  <text x="384" y="664" text-anchor="end" class="s">R10 2 kΩ</text>
+
+  <!-- ===================== CAN module ===================== -->
+  <rect x="890" y="110" width="680" height="655" stroke="#555" stroke-width="1.5" stroke-dasharray="8 6" fill="none"/>
+  <text x="1230" y="102" text-anchor="middle" class="h">MCP2515 CAN module (8 MHz crystal, TJA1050)</text>
+  <text x="1560" y="128" text-anchor="end" class="s">inside the dashed line: on the module, from datasheets, not traced on our board</text>
+
+  <!-- header P1 -->
+  <rect x="910" y="170" width="40" height="480" class="ic"/>
+  <text x="930" y="166" text-anchor="middle" class="s">P1</text>
+  <g class="s" text-anchor="middle">
+    <text x="930" y="204">VCC</text><text x="930" y="264">GND</text><text x="930" y="344">CS</text><text x="930" y="404">SCK</text>
+    <text x="930" y="464">SI</text><text x="930" y="544">SO</text><text x="930" y="624">INT</text>
+  </g>
+
+  <!-- module traces -->
+  <line x1="950" y1="200" x2="1010" y2="200" class="board"/>
+  <circle cx="980" cy="200" r="3.5" fill="#555"/>
+  <polyline points="980,200 980,140 1330,140 1330,360" class="board"/>
+  <line x1="950" y1="260" x2="1010" y2="260" class="board"/>
+  <line x1="950" y1="340" x2="1010" y2="340" class="board"/>
+  <line x1="950" y1="400" x2="1010" y2="400" class="board"/>
+  <line x1="950" y1="460" x2="1010" y2="460" class="board"/>
+  <line x1="950" y1="540" x2="1010" y2="540" class="board"/>
+  <line x1="950" y1="620" x2="1010" y2="620" class="board"/>
+
+  <!-- U2 MCP2515 -->
+  <rect x="1010" y="160" width="160" height="520" class="ic"/>
+  <text x="1090" y="186" text-anchor="middle" class="h">U2</text>
+  <text x="1090" y="290" text-anchor="middle" class="t">MCP2515</text>
+  <text x="1090" y="306" text-anchor="middle" class="s">CAN controller, SPI</text>
+  <g class="s">
+    <text x="1016" y="204">VDD</text><text x="1016" y="264">VSS</text><text x="1016" y="344">CS</text><text x="1016" y="404">SCK</text>
+    <text x="1016" y="464">SI</text><text x="1016" y="544">SO</text><text x="1016" y="624">INT</text>
+    <text x="1164" y="404" text-anchor="end">TXCAN</text><text x="1164" y="464" text-anchor="end">RXCAN</text>
+    <text x="1060" y="672" text-anchor="middle">OSC1</text><text x="1120" y="672" text-anchor="middle">OSC2</text>
+  </g>
+  <g class="pin">
+    <text x="994" y="194">18</text><text x="998" y="254">9</text><text x="994" y="334">16</text><text x="994" y="394">13</text>
+    <text x="994" y="454">14</text><text x="994" y="534">15</text><text x="994" y="614">12</text>
+    <text x="1176" y="394">1</text><text x="1176" y="454">2</text><text x="1046" y="696">8</text><text x="1126" y="696">7</text>
+  </g>
+  <!-- crystal -->
+  <polyline points="1060,680 1060,720 1078,720" class="board"/>
+  <polyline points="1120,680 1120,720 1102,720" class="board"/>
+  <rect x="1078" y="710" width="24" height="20" class="part"/>
+  <text x="1090" y="748" text-anchor="middle" class="s">Y1 8.000 MHz (load caps on module)</text>
+
+  <!-- U2 to U1 -->
+  <line x1="1170" y1="400" x2="1260" y2="400" class="board"/>
+  <line x1="1170" y1="460" x2="1260" y2="460" class="board"/>
+
+  <!-- U1 TJA1050 -->
+  <rect x="1260" y="360" width="140" height="200" class="ic"/>
+  <text x="1330" y="446" text-anchor="middle" class="h">U1</text>
+  <text x="1330" y="510" text-anchor="middle" class="t">TJA1050</text>
+  <text x="1330" y="526" text-anchor="middle" class="s">CAN transceiver, 5 V</text>
+  <g class="s">
+    <text x="1266" y="404">TXD</text><text x="1266" y="464">RXD</text>
+    <text x="1394" y="424" text-anchor="end">CANH</text><text x="1394" y="504" text-anchor="end">CANL</text>
+    <text x="1336" y="376">VCC</text><text x="1300" y="552" text-anchor="middle">GND</text><text x="1360" y="552" text-anchor="middle">S</text>
+  </g>
+  <g class="pin">
+    <text x="1246" y="394">1</text><text x="1246" y="454">4</text><text x="1406" y="414">7</text><text x="1406" y="494">6</text>
+    <text x="1316" y="352">3</text><text x="1286" y="576">2</text><text x="1366" y="576">8</text>
+  </g>
+  <line x1="1300" y1="560" x2="1300" y2="585" class="board"/><use href="#gnd" x="1300" y="585"/>
+  <line x1="1360" y1="560" x2="1360" y2="585" class="board"/><use href="#gnd" x="1360" y="585"/>
+  <text x="1380" y="600" class="s">S to GND: normal mode (assumed)</text>
+  
+  <!-- CAN lines, termination, J3 -->
+  <line x1="1400" y1="420" x2="1530" y2="420" class="board"/>
+  <line x1="1400" y1="500" x2="1530" y2="500" class="board"/>
+  <circle cx="1470" cy="420" r="3.5" fill="#555"/>
+  <circle cx="1470" cy="500" r="3.5" fill="#555"/>
+  <line x1="1470" y1="420" x2="1470" y2="430" class="board"/>
+  <circle cx="1470" cy="434" r="4" fill="#fff" stroke="#c62828" stroke-width="2"/>
+  <circle cx="1470" cy="448" r="4" fill="#fff" stroke="#c62828" stroke-width="2"/>
+  <line x1="1470" y1="452" x2="1470" y2="456" class="board"/>
+  <rect x="1462" y="456" width="16" height="36" class="part"/>
+  <line x1="1470" y1="492" x2="1470" y2="500" class="board"/>
+  <text x="1484" y="446" class="warn">J1</text>
+  <text x="1484" y="480" class="s">120 Ω</text>
+  <text x="1405" y="540" class="warn">J1: REMOVE the jumper</text>
+
+  <rect x="1530" y="400" width="30" height="120" class="ic"/>
+  <text x="1545" y="394" text-anchor="middle" class="s">J3</text>
+  <text x="1545" y="424" text-anchor="middle" class="t">H</text>
+  <text x="1545" y="504" text-anchor="middle" class="t">L</text>
+
+  <!-- ===================== Car bus ===================== -->
+  <line x1="1560" y1="420" x2="1610" y2="420" class="wire"/>
+  <line x1="1560" y1="500" x2="1610" y2="500" class="wire"/>
+  <line x1="1586" y1="590" x2="1610" y2="590" class="wire"/>
+  <circle cx="1586" cy="590" r="3.5" class="dot"/>
+  <line x1="1586" y1="590" x2="1586" y2="604" class="wire"/><use href="#gnd" x="1586" y="604"/>
+  <rect x="1610" y="370" width="90" height="270" class="ic"/>
+  <text x="1655" y="392" text-anchor="middle" class="h">Car CAN</text>
+  <text x="1655" y="408" text-anchor="middle" class="s">1 Mbit/s</text>
+  <text x="1616" y="424" class="t">CAN_H</text>
+  <text x="1616" y="504" class="t">CAN_L</text>
+  <text x="1616" y="594" class="t">DAQ GND</text>
+  <text x="1655" y="626" text-anchor="middle" class="s">ends terminated</text>
+
+  <!-- ===================== Notes and title block ===================== -->
+  <rect x="560" y="790" width="560" height="350" fill="#fff" stroke="#000" stroke-width="1"/>
+  <text x="576" y="814" class="h">Notes</text>
+  <g class="note">
+    <text x="576" y="840">1. Dividers: 3 × 330 Ω + 220 Ω over 2 kΩ = 1210 Ω / 2000 Ω.</text>
+    <text x="592" y="858">5 V gives 3.1 V on MISO and GPIO25 (3.27 V at 5.25 V).</text>
+    <text x="576" y="882">2. CS, SCK, SI are direct: the Pi drives 3.3 V, the MCP2515</text>
+    <text x="592" y="900">at 5 V wants 3.5 V (0.7 × VDD). Out of spec, cannot damage.</text>
+    <text x="576" y="924">3. GND symbols are one net: Pi pin 6, module GND, DAQ GND.</text>
+    <text x="576" y="948">4. P1 pin order on the board: INT SCK SI SO CS GND VCC.</text>
+    <text x="576" y="972">5. CAN_H and CAN_L: twisted pair, stub to the bus under 30 cm.</text>
+    <text x="576" y="996">6. 8 MHz crystal: 800 kbit/s maximum. Bench tests only;</text>
+    <text x="592" y="1014">the car bus runs at 1 Mbit/s.</text>
+    <text x="576" y="1038">7. /boot/firmware/config.txt:</text>
+    <g font-family="Menlo, Consolas, monospace" font-size="12">
+      <text x="592" y="1058">dtparam=spi=on</text>
+      <text x="592" y="1076">dtoverlay=mcp2515-can0,oscillator=8000000,</text>
+      <text x="592" y="1094">    interrupt=25,spimaxfrequency=1000000</text>
+    </g>
+  </g>
+
+  <rect x="1150" y="970" width="550" height="170" fill="#fff" stroke="#000" stroke-width="1"/>
+  <line x1="1150" y1="1004" x2="1700" y2="1004" stroke="#000"/>
+  <line x1="1150" y1="1038" x2="1700" y2="1038" stroke="#000"/>
+  <line x1="1150" y1="1072" x2="1700" y2="1072" stroke="#000"/>
+  <line x1="1150" y1="1106" x2="1700" y2="1106" stroke="#000"/>
+  <text x="1162" y="993" class="h">Baja DAQ · driver display</text>
+  <text x="1162" y="1027" class="t">Sheet: CAN module wiring (driver-display/hardware/can-module)</text>
+  <text x="1162" y="1061" class="t">Rev B · 2026-11-06 · status: design, not built</text>
+  <text x="1162" y="1095" class="t">Parts: 6 × 330 Ω, 2 × 220 Ω, 2 × 2 kΩ (R1 to R10), MCP2515 module</text>
+  <text x="1162" y="1129" class="t">Explanations and limitations: README.md in the same folder</text>
+</svg>

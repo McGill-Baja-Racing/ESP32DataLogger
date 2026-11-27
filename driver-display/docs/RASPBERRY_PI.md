@@ -32,8 +32,8 @@ sudo nmcli connection modify netplan-eth0 ipv6.method link-local ipv4.dhcp-timeo
 |---|---|
 | Display | KMS driver `vc4` active with `/dev/dri/card0`. HDMI showed as disconnected, so the screen has not been tested on this Pi. `/dev/fb0` does not exist while no screen is connected |
 | Graphics software | No X11, Wayland or browser. No Python UI libraries. `libdrm2` is installed but `libdrm-dev` is not, so [`deploy.sh`](../deploy.sh) brings the headers |
-| CAN | No `can0`, no MCP2515 overlay, no `can-utils` |
-| SPI and I2C | Both off |
+| CAN | `can0` from the MCP2515 overlay, 8 MHz crystal setting. Set up on 2026-11-27, see below. No `can-utils`: the repository's tools need only Python and `ip` |
+| SPI and I2C | SPI on, I2C off |
 | Internet | None over the ethernet cable to a laptop |
 | Wi-Fi | Radio on, country `CA`, not connected. Two saved phone hotspots |
 | Clock | About a month behind. It has no battery-backed clock and needs internet to sync |
@@ -49,21 +49,16 @@ The Pi still has `baja-monitor`, an older test of phone internet quality, with 4
 
 The installed program is newer than the `setup.sh` and `update.sh` scripts in the Pi's home folder. Running either script would replace it with an older version.
 
-## To set up for CAN
+## CAN setup
 
-Not done yet. Check [the MCP2515 module](../README.md#check-the-mcp2515-module-before-wiring) first, because `oscillator` must match its crystal and `interrupt` must match the GPIO you wire.
+Done on 2026-11-27 (the Pi's own clock read 2026-10-03). The module's wiring, bench results and every change are recorded in [the CAN module README](../hardware/can-module/README.md#current-state-on-the-pi).
 
-Add this to `/boot/firmware/config.txt`, then reboot:
+`/boot/firmware/config.txt` has SPI on and, at the end under `[all]`:
 
 ```text
-dtparam=spi=on
-dtoverlay=mcp2515-can0,oscillator=16000000,interrupt=25
+dtoverlay=mcp2515-can0,oscillator=8000000,interrupt=25,spimaxfrequency=1000000
 ```
 
-Install the tools and bring the bus up in listen-only mode:
+The copy from before the overlay line is `/boot/firmware/config.txt.bak-can`. `oscillator` must match the module's crystal: after fitting the 16 MHz crystal the car needs, change it to `oscillator=16000000` and reboot.
 
-```bash
-sudo apt install can-utils
-sudo ip link set can0 up type can bitrate 1000000 listen-only on
-candump can0
-```
+Bring the bus up listen-only at every power-up with `make can-on` (1 Mbit/s), or `make can-on BITRATE=500000` while the 8 MHz crystal is fitted. `./build/can-monitor` then shows the bus; see [Read the CAN bus](../README.md#read-the-can-bus). To check the module itself, run `sudo python3 tools/can_check.py`, with `--no-tx` on the car.

@@ -17,6 +17,10 @@ CPPFLAGS := -DLV_CONF_INCLUDE_SIMPLE -Isrc -I. -I.. -Ithird_party/lvgl \
 DRM_LIBS := -l:libdrm.so.2 -lm
 
 SERVICE := /etc/systemd/system/driver-display.service
+CAN_SERVICE := /etc/systemd/system/can0-listen.service
+# The DAQ bus runs at 1 Mbit/s. An MCP2515 with an 8 MHz crystal tops out at
+# 800 kbit/s, so bench tests with that module use: make can-on BITRATE=500000
+BITRATE ?= 1000000
 
 # On the Pi: the programs that draw on the screen. Elsewhere: the screenshots.
 ifeq ($(OS),Linux)
@@ -82,7 +86,21 @@ build/test-daq: tests/test_daq.c $(DAQ_SOURCES) $(wildcard src/can/*.h ../protoc
 	@mkdir -p build
 	$(CC) -std=gnu11 -O2 -Wall -Wextra -Werror -Isrc -I. -I.. tests/test_daq.c $(DAQ_SOURCES) -o $@
 
+# Bring can0 up listen-only at every power-up, and now.
+can-on:
+	sed -e 's|@BITRATE@|$(BITRATE)|' systemd/can0-listen.service.in | sudo tee $(CAN_SERVICE) > /dev/null
+	sudo systemctl daemon-reload
+	sudo systemctl enable can0-listen.service
+	sudo systemctl restart can0-listen.service
+	@ip -details link show can0 | grep -E "can |bitrate"
+
+can-off:
+	-sudo systemctl disable --now can0-listen.service
+	sudo rm -f $(CAN_SERVICE)
+	sudo systemctl daemon-reload
+	@echo "can0 is no longer brought up at power-up."
+
 clean:
 	rm -rf build
 
-.PHONY: all snapshots test autostart-on autostart-off clean
+.PHONY: all snapshots test autostart-on autostart-off can-on can-off clean

@@ -1,0 +1,16 @@
+# Brings can0 up listen-only at power-up, so the display reads the DAQ bus without
+# ever transmitting on it. Installed by "make can-on", which replaces @BITRATE@.
+[Unit]
+Description=CAN bus can0, listen-only
+BindsTo=sys-subsystem-net-devices-can0.device
+After=sys-subsystem-net-devices-can0.device
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStartPre=-/sbin/ip link set can0 down
+ExecStart=/sbin/ip link set can0 up type can bitrate @BITRATE@ listen-only on restart-ms 100
+ExecStop=/sbin/ip link set can0 down
+
+[Install]
+WantedBy=multi-user.target
